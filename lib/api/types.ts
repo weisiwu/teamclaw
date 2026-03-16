@@ -92,7 +92,54 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
   cancelled: "已取消",
 };
 
-// ========== 辅助能力类型 ==========
+// ========== 定时任务类型 ==========
+
+export type CronStatus = "running" | "stopped";
+
+export interface CronTask {
+  id: string;
+  name: string;
+  cron: string;
+  prompt: string;
+  status: CronStatus;
+  createdAt: string;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+}
+
+export interface CreateCronRequest {
+  name: string;
+  cron: string;
+  prompt: string;
+}
+
+export interface UpdateCronRequest {
+  name?: string;
+  cron?: string;
+  prompt?: string;
+}
+
+export interface CronListResponse {
+  data: CronTask[];
+  total: number;
+}
+
+// 状态选项
+export const CRON_STATUS_OPTIONS = [
+  { value: "all", label: "全部状态" },
+  { value: "running", label: "运行中" },
+  { value: "stopped", label: "已停止" },
+] as const;
+
+export const CRON_STATUS_LABELS: Record<CronStatus, string> = {
+  running: "运行中",
+  stopped: "已停止",
+};
+
+export const CRON_STATUS_BADGE_VARIANT: Record<CronStatus, "success" | "default"> = {
+  running: "success",
+  stopped: "default",
+};
 
 export interface Capability {
   id: string;
