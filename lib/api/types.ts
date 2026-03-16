@@ -141,6 +141,65 @@ export const CRON_STATUS_BADGE_VARIANT: Record<CronStatus, "success" | "default"
   stopped: "default",
 };
 
+// ========== Token 消费统计类型 ==========
+
+export interface TokenSummary {
+  totalTokens: number;
+  todayTokens: number;
+  weekTokens: number;
+  monthTokens: number;
+  taskCount: number;
+  avgTokensPerTask: number;
+}
+
+export interface DailyTokenUsage {
+  date: string;
+  tokens: number;
+  tasks: number;
+}
+
+export interface TaskTokenUsage {
+  taskId: string;
+  taskTitle: string;
+  tokens: number;
+  agents: string[];
+  completedAt: string | null;
+}
+
+export interface TrendDataPoint {
+  date: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
+export interface TokenFilters {
+  startDate?: string;
+  endDate?: string;
+  search?: string;
+}
+
+export interface TokenSummaryResponse {
+  data: TokenSummary;
+}
+
+export interface TokenDailyListResponse {
+  data: DailyTokenUsage[];
+  total: number;
+}
+
+export interface TokenTaskListResponse {
+  data: TaskTokenUsage[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface TokenTrendResponse {
+  data: TrendDataPoint[];
+}
+
 export interface Capability {
   id: string;
   name: string;
