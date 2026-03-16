@@ -185,6 +185,35 @@ export const CRON_STATUS_BADGE_VARIANT: Record<CronStatus, "success" | "default"
 
 // ========== Token 消费统计类型 ==========
 
+// 模型类型枚举
+export type ModelType = "gpt-4" | "gpt-4o" | "claude-3" | "claude-3.5" | "gemini" | "default";
+
+// 模型单价配置 (单位: 每1K token)
+export interface ModelPricing {
+  inputPrice: number;  // 输入单价 (每1K tokens)
+  outputPrice: number; // 输出单价 (每1K tokens)
+}
+
+// 模型单价映射
+export const MODEL_PRICING: Record<ModelType, ModelPricing> = {
+  "gpt-4": { inputPrice: 0.03, outputPrice: 0.06 },
+  "gpt-4o": { inputPrice: 0.005, outputPrice: 0.015 },
+  "claude-3": { inputPrice: 0.015, outputPrice: 0.075 },
+  "claude-3.5": { inputPrice: 0.003, outputPrice: 0.015 },
+  "gemini": { inputPrice: 0.00125, outputPrice: 0.005 },
+  "default": { inputPrice: 0.01, outputPrice: 0.03 },
+};
+
+// 成本汇总
+export interface CostSummary {
+  totalCost: number;
+  todayCost: number;
+  weekCost: number;
+  monthCost: number;
+  avgCostPerTask: number;
+}
+
+// Token 汇总 (扩展)
 export interface TokenSummary {
   totalTokens: number;
   todayTokens: number;
@@ -192,20 +221,32 @@ export interface TokenSummary {
   monthTokens: number;
   taskCount: number;
   avgTokensPerTask: number;
+  // 新增成本字段
+  cost?: CostSummary;
 }
 
+// 每日 Token 使用 (扩展)
 export interface DailyTokenUsage {
   date: string;
   tokens: number;
   tasks: number;
+  // 新增
+  inputTokens?: number;
+  outputTokens?: number;
+  cost?: number;
 }
 
+// 任务 Token 使用 (扩展)
 export interface TaskTokenUsage {
   taskId: string;
   taskTitle: string;
   tokens: number;
   agents: string[];
   completedAt: string | null;
+  // 新增
+  modelType?: ModelType;
+  status?: "pending" | "in_progress" | "completed" | "cancelled";
+  cost?: number;
 }
 
 export interface TrendDataPoint {
@@ -219,6 +260,15 @@ export interface TokenFilters {
   startDate?: string;
   endDate?: string;
   search?: string;
+  // 新增筛选字段
+  modelType?: ModelType | "all";
+  status?: "pending" | "in_progress" | "completed" | "cancelled" | "all";
+}
+
+// 增强筛选类型
+export interface TokenFiltersEnhanced extends TokenFilters {
+  modelType: ModelType | "all";
+  status: "pending" | "in_progress" | "completed" | "cancelled" | "all";
 }
 
 export interface TokenSummaryResponse {

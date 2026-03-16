@@ -1,6 +1,6 @@
 import { TokenSummary } from "@/lib/api/types";
 import { Card, CardContent } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, Coins, FileText, Calculator, Clock } from "lucide-react";
+import { TrendingUp, TrendingDown, Coins, FileText, Calculator, Clock, DollarSign } from "lucide-react";
 
 interface TokenSummaryCardsProps {
   data?: TokenSummary;
@@ -13,6 +13,14 @@ function formatNumber(num: number): string {
     return (num / 10000).toFixed(1) + "万";
   }
   return num.toLocaleString();
+}
+
+// 格式化金额
+function formatCost(num: number): string {
+  if (num >= 1) {
+    return "$" + num.toFixed(2);
+  }
+  return "$" + num.toFixed(4);
 }
 
 export function TokenSummaryCards({ data, isLoading }: TokenSummaryCardsProps) {
@@ -80,23 +88,86 @@ export function TokenSummaryCards({ data, isLoading }: TokenSummaryCardsProps) {
     },
   ];
 
+  // 如果有成本数据，添加成本卡片
+  const costCards = data.cost ? [
+    {
+      title: "总成本",
+      value: formatCost(data.cost.totalCost),
+      icon: DollarSign,
+      color: "text-emerald-600",
+      bgColor: "bg-emerald-50",
+    },
+    {
+      title: "今日成本",
+      value: formatCost(data.cost.todayCost),
+      icon: DollarSign,
+      color: "text-teal-600",
+      bgColor: "bg-teal-50",
+    },
+    {
+      title: "本周成本",
+      value: formatCost(data.cost.weekCost),
+      icon: DollarSign,
+      color: "text-cyan-600",
+      bgColor: "bg-cyan-50",
+    },
+    {
+      title: "本月成本",
+      value: formatCost(data.cost.monthCost),
+      icon: DollarSign,
+      color: "text-sky-600",
+      bgColor: "bg-sky-50",
+    },
+    {
+      title: "平均任务成本",
+      value: formatCost(data.cost.avgCostPerTask),
+      icon: DollarSign,
+      color: "text-lime-600",
+      bgColor: "bg-lime-50",
+    },
+  ] : [];
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-      {cards.map((card) => (
-        <Card key={card.title}>
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-gray-500 mb-1">{card.title}</p>
-                <p className="text-xl font-bold text-gray-900">{card.value}</p>
+    <div className="space-y-4">
+      {/* Token 消耗卡片 */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {cards.map((card) => (
+          <Card key={card.title}>
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">{card.title}</p>
+                  <p className="text-xl font-bold text-gray-900">{card.value}</p>
+                </div>
+                <div className={`p-2 rounded-lg ${card.bgColor}`}>
+                  <card.icon className={`w-5 h-5 ${card.color}`} />
+                </div>
               </div>
-              <div className={`p-2 rounded-lg ${card.bgColor}`}>
-                <card.icon className={`w-5 h-5 ${card.color}`} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* 成本卡片 */}
+      {costCards.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {costCards.map((card) => (
+            <Card key={card.title}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">{card.title}</p>
+                    <p className="text-xl font-bold text-gray-900">{card.value}</p>
+                  </div>
+                  <div className={`p-2 rounded-lg ${card.bgColor}`}>
+                    <card.icon className={`w-5 h-5 ${card.color}`} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { TrendDataPoint } from "@/lib/api/types";
+import { TrendDataPoint, DailyTokenUsage } from "@/lib/api/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AreaChart,
@@ -15,7 +15,7 @@ import {
 import { useMemo, useState } from "react";
 
 interface TokenTrendChartProps {
-  data?: TrendDataPoint[];
+  data?: TrendDataPoint[] | DailyTokenUsage[];
   isLoading?: boolean;
 }
 
@@ -25,6 +25,14 @@ function formatNumber(num: number): string {
     return (num / 1000).toFixed(0) + "k";
   }
   return num.toString();
+}
+
+// 格式化金额
+function formatCost(num: number): string {
+  if (num >= 1) {
+    return "$" + num.toFixed(2);
+  }
+  return "$" + num.toFixed(4);
 }
 
 // 自定义 Tooltip
@@ -41,7 +49,7 @@ function CustomTooltip({ active, payload, label }: TooltipProps) {
         <p className="font-medium text-gray-900 mb-2">{label}</p>
         {payload.map((entry, index: number) => (
           <p key={index} className="text-sm" style={{ color: entry.color }}>
-            {entry.name}: {entry.value.toLocaleString()}
+            {entry.name}: {entry.name.includes("成本") ? formatCost(entry.value) : entry.value.toLocaleString()}
           </p>
         ))}
       </div>
@@ -50,8 +58,10 @@ function CustomTooltip({ active, payload, label }: TooltipProps) {
   return null;
 }
 
+type ChartView = "total" | "input_output" | "cost";
+
 export function TokenTrendChart({ data, isLoading }: TokenTrendChartProps) {
-  const [chartType, setChartType] = useState<"total" | "input_output">("total");
+  const [chartType, setChartType] = useState<ChartView>("total");
 
   const chartData = useMemo(() => {
     if (!data) return [];
@@ -60,6 +70,9 @@ export function TokenTrendChart({ data, isLoading }: TokenTrendChartProps) {
       date: item.date.slice(5), // MM-DD 格式
     }));
   }, [data]);
+
+  // 检查数据是否包含成本信息
+  const hasCostData = data && data.length > 0 && "cost" in data[0];
 
   if (isLoading) {
     return (
@@ -114,6 +127,18 @@ export function TokenTrendChart({ data, isLoading }: TokenTrendChartProps) {
           >
             输入/输出
           </button>
+          {hasCostData && (
+            <button
+              onClick={() => setChartType("cost")}
+              className={`px-3 py-1 text-sm rounded-full transition-colors ${
+                chartType === "cost"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              成本
+            </button>
+          )}
         </div>
       </CardHeader>
       <CardContent>
@@ -150,7 +175,7 @@ export function TokenTrendChart({ data, isLoading }: TokenTrendChartProps) {
                 fill="url(#colorTotal)"
               />
             </AreaChart>
-          ) : (
+          ) : chartType === "input_output" ? (
             <AreaChart data={chartData}>
               <defs>
                 <linearGradient id="colorInput" x1="0" y1="0" x2="0" y2="1">
@@ -194,6 +219,38 @@ export function TokenTrendChart({ data, isLoading }: TokenTrendChartProps) {
                 strokeWidth={2}
                 fillOpacity={1}
                 fill="url(#colorOutput)"
+              />
+            </AreaChart>
+          ) : (
+            <AreaChart data={chartData}>
+              <defs>
+                <linearGradient id="colorCost" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 12 }}
+                tickLine={false}
+                axisLine={{ stroke: "#E5E7EB" }}
+              />
+              <YAxis
+                tickFormatter={formatCost}
+                tick={{ fontSize: 12 }}
+                tickLine={false}
+                axisLine={{ stroke: "#E5E7EB" }}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Area
+                type="monotone"
+                dataKey="cost"
+                name="成本"
+                stroke="#10B981"
+                strokeWidth={2}
+                fillOpacity={1}
+                fill="url(#colorCost)"
               />
             </AreaChart>
           )}
