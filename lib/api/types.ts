@@ -92,6 +92,48 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
   cancelled: "已取消",
 };
 
+// ========== 成员管理类型 ==========
+
+export type MemberRole = "admin" | "sub_admin" | "member";
+
+export interface Member {
+  id: string;
+  name: string;
+  role: MemberRole;
+  weight: number;
+  createdAt: string;
+}
+
+export interface CreateMemberRequest {
+  name: string;
+  role: MemberRole;
+  weight: number;
+}
+
+export interface UpdateMemberRequest {
+  name?: string;
+  role?: MemberRole;
+  weight?: number;
+}
+
+export interface MemberListResponse {
+  data: Member[];
+  total: number;
+}
+
+// 角色选项
+export const MEMBER_ROLE_OPTIONS = [
+  { value: "admin", label: "管理员" },
+  { value: "sub_admin", label: "副管理员" },
+  { value: "member", label: "普通员工" },
+] as const;
+
+export const ROLE_LABELS: Record<MemberRole, string> = {
+  admin: "管理员",
+  sub_admin: "副管理员",
+  member: "普通员工",
+};
+
 // ========== 定时任务类型 ==========
 
 export type CronStatus = "running" | "stopped";
