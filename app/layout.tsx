@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { ReactQueryProvider } from "@/components/providers/ReactQueryProvider";
 
 export const metadata: Metadata = {
   title: "TeamClaw 管理后台",
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body>
-        <AppLayout>{children}</AppLayout>
+        <ReactQueryProvider>
+          <AppLayout>{children}</AppLayout>
+        </ReactQueryProvider>
       </body>
     </html>
   );
