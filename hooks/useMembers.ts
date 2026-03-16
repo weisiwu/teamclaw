@@ -66,3 +66,15 @@ export function useDeleteMember() {
     },
   });
 }
+
+// 批量删除成员 Mutation
+export function useBatchDeleteMembers() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (ids: string[]) => Promise.all(ids.map(id => memberApi.delete(id))),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: memberKeys.lists() });
+    },
+  });
+}
