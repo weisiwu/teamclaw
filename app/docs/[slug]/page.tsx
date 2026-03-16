@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeSlug from 'rehype-slug';
 import { getDocBySlug, getAllDocs } from '@/lib/docs';
+import DownloadButton from '../components/DownloadButton';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -34,8 +35,11 @@ export default async function DocPage({ params }: PageProps) {
         <span className="text-gray-900">{doc.title}</span>
       </nav>
 
-      {/* Title */}
-      <h1 className="text-3xl font-bold text-gray-900 mb-6">{doc.title}</h1>
+      {/* Title with download button */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold text-gray-900">{doc.title}</h1>
+        <DownloadButton slug={slug} title={doc.title} />
+      </div>
 
       {/* Content */}
       <article className="prose prose-gray max-w-none">
