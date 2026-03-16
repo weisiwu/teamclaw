@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -159,7 +159,7 @@ function CronModal({
   const updateCron = useUpdateCron();
 
   // 当编辑的 cron 变化时更新表单
-  useState(() => {
+  useEffect(() => {
     if (editCron) {
       setFormData({
         name: editCron.name,
@@ -169,7 +169,7 @@ function CronModal({
     } else {
       setFormData({ name: "", cron: "", prompt: "" });
     }
-  });
+  }, [editCron]);
 
   const handleSubmit = async () => {
     if (!formData.name.trim() || !formData.cron.trim() || !formData.prompt.trim()) {
