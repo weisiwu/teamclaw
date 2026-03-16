@@ -1,7 +1,7 @@
 "use client";
 
+import { use } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,98 +16,18 @@ import {
   Bot,
   Coins,
   Tag,
-  RotateCcw
+  RotateCcw,
+  Loader2
 } from "lucide-react";
+import { useTaskDetail, useCompleteTask, useCancelTask, useReopenTask } from "@/hooks/useTasks";
+import { 
+  STATUS_BADGE_VARIANT,
+  STATUS_LABELS,
+  TaskStatus
+} from "@/lib/api/types";
 
-// 任务类型定义
-interface Task {
-  id: string;
-  title: string;
-  description: string;
-  status: "pending" | "in_progress" | "completed" | "cancelled";
-  priority: number;
-  creator: string;
-  createdAt: string;
-  completedAt: string | null;
-  duration: number | null;
-  changes: string;
-  changedFiles: string[];
-  commits: string[];
-  agents: string[];
-  tokenCost: number;
-  tags: string[];
-}
-
-// 模拟数据
-const tasksData: Record<string, Task> = {
-  "t_20260316_001": {
-    id: "t_20260316_001",
-    title: "首页按钮样式修改",
-    description: "修改首页主按钮背景色为 #1677FF，字号从 14px 调整为 16px",
-    status: "completed",
-    priority: 10,
-    creator: "管理员A",
-    createdAt: "2026-03-16 20:01:00",
-    completedAt: "2026-03-16 20:15:00",
-    duration: 14,
-    changes: "修改首页主按钮背景色为 #1677FF，字号从 14px 调整为 16px",
-    changedFiles: ["src/pages/Home/index.tsx", "src/styles/button.css"],
-    commits: ["a1b2c3d: 修改首页按钮样式", "e4f5g6h: 调整字号"],
-    agents: ["main", "pm", "coder1"],
-    tokenCost: 4200,
-    tags: ["UI", "首页", "样式"],
-  },
-  "t_20260316_002": {
-    id: "t_20260316_002",
-    title: "添加收藏功能",
-    description: "在商品详情页添加收藏按钮，支持本地存储",
-    status: "in_progress",
-    priority: 7,
-    creator: "管理员B",
-    createdAt: "2026-03-16 21:00:00",
-    completedAt: null,
-    duration: null,
-    changes: "正在开发中...",
-    changedFiles: [],
-    commits: [],
-    agents: ["pm", "coder1"],
-    tokenCost: 8500,
-    tags: ["功能", "收藏"],
-  },
-  "t_20260317_001": {
-    id: "t_20260317_001",
-    title: "修复登录页闪烁问题",
-    description: "登录页面加载时有短暂白屏，需要优化",
-    status: "pending",
-    priority: 8,
-    creator: "管理员A",
-    createdAt: "2026-03-17 09:00:00",
-    completedAt: null,
-    duration: null,
-    changes: "",
-    changedFiles: [],
-    commits: [],
-    agents: [],
-    tokenCost: 0,
-    tags: ["Bug", "登录"],
-  },
-};
-
-const statusBadgeVariant: Record<Task["status"], "default" | "success" | "warning" | "error" | "info"> = {
-  pending: "default",
-  in_progress: "info",
-  completed: "success",
-  cancelled: "error",
-};
-
-const statusLabels: Record<Task["status"], string> = {
-  pending: "待处理",
-  in_progress: "进行中",
-  completed: "已完成",
-  cancelled: "已取消",
-};
-
-const getStatusIcon = (status: Task["status"]) => {
+// 状态图标组件
+const getStatusIcon = (status: TaskStatus) => {
   switch (status) {
     case "completed": return <CheckCircle className="w-5 h-5 text-green-500" />;
     case "in_progress": return <PlayCircle className="w-5 h-5 text-blue-500" />;
@@ -120,12 +40,57 @@ const getStatusIcon = (status: Task["status"]) => {
 export default function TaskDetailPage({ 
   params 
 }: { 
-  params: { id: string } 
+  params: Promise<{ id: string }> 
 }) {
-  const router = useRouter();
-  const task = tasksData[params.id];
+  const { id } = use(params);
+  
+  // 使用 React Query 获取任务详情
+  const { data: task, isLoading, error } = useTaskDetail(id);
+  
+  // Mutations
+  const completeTask = useCompleteTask();
+  const cancelTask = useCancelTask();
+  const reopenTask = useReopenTask();
+  
+  // 处理完成
+  const handleComplete = async () => {
+    await completeTask.mutateAsync(id);
+  };
+  
+  // 处理取消
+  const handleCancel = async () => {
+    if (confirm("确定要取消这个任务吗？")) {
+      await cancelTask.mutateAsync(id);
+    }
+  };
+  
+  // 处理重新打开
+  const handleReopen = async () => {
+    await reopenTask.mutateAsync(id);
+  };
+  
+  const isPending = completeTask.isPending || cancelTask.isPending || reopenTask.isPending;
 
-  if (!task) {
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <Link href="/tasks">
+          <Button variant="ghost" className="mb-4">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            返回任务列表
+          </Button>
+        </Link>
+        <Card>
+          <CardContent className="py-12 text-center text-gray-500 flex items-center justify-center gap-2">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            加载中...
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (error || !task) {
     return (
       <div className="p-6">
         <Link href="/tasks">
@@ -160,9 +125,9 @@ export default function TaskDetailPage({
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <span className="font-mono text-sm text-gray-500">{task.id}</span>
-                <Badge variant={statusBadgeVariant[task.status]}>
+                <Badge variant={STATUS_BADGE_VARIANT[task.status]}>
                   {getStatusIcon(task.status)}
-                  <span className="ml-1">{statusLabels[task.status]}</span>
+                  <span className="ml-1">{STATUS_LABELS[task.status]}</span>
                 </Badge>
                 <span className="text-sm text-orange-600 font-medium">
                   优先级：{task.priority}
@@ -172,19 +137,19 @@ export default function TaskDetailPage({
             </div>
             <div className="flex gap-2">
               {task.status === "pending" && (
-                <Button onClick={() => router.push(`/tasks`)}>
-                  <CheckCircle className="w-4 h-4 mr-2" />
+                <Button onClick={handleComplete} disabled={isPending}>
+                  {isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-2" />}
                   完成
                 </Button>
               )}
               {(task.status === "pending" || task.status === "in_progress") && (
-                <Button variant="outline" onClick={() => router.push(`/tasks`)}>
+                <Button variant="outline" onClick={handleCancel} disabled={isPending}>
                   取消
                 </Button>
               )}
               {task.status === "completed" && (
-                <Button variant="outline" onClick={() => router.push(`/tasks`)}>
-                  <RotateCcw className="w-4 h-4 mr-2" />
+                <Button variant="outline" onClick={handleReopen} disabled={isPending}>
+                  {isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RotateCcw className="w-4 h-4 mr-2" />}
                   重新打开
                 </Button>
               )}
@@ -192,6 +157,7 @@ export default function TaskDetailPage({
           </div>
         </CardHeader>
         <CardContent>
+          <p className="text-gray-700 mb-4">{task.description}</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
               <span className="text-gray-500">创建人：</span>

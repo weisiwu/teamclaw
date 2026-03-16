@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ import {
   STATUS_LABELS,
   Task,
   TaskStatus,
+  TaskPriority,
   CreateTaskRequest
 } from "@/lib/api/types";
 
@@ -192,7 +193,7 @@ function TaskCard({
   );
 }
 
-// 创建任务弹窗
+// 创建任务弹窗组件
 function CreateTaskModal({
   isOpen,
   onClose
@@ -219,13 +220,11 @@ function CreateTaskModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* 遮罩层 */}
       <div 
         className="absolute inset-0 bg-black/50" 
         onClick={onClose}
       />
       
-      {/* 弹窗内容 */}
       <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">创建任务</h2>
@@ -267,7 +266,7 @@ function CreateTaskModal({
                 { value: "5", label: "低 (5)" },
               ]}
               value={String(formData.priority)}
-              onChange={(e) => setFormData({ ...formData, priority: Number(e.target.value) as any })}
+              onChange={(e) => setFormData({ ...formData, priority: Number(e.target.value) as TaskPriority })}
             />
           </div>
         </div>
@@ -288,8 +287,8 @@ function CreateTaskModal({
   );
 }
 
-// 主页面组件
-export default function TasksPage() {
+// 任务列表内容组件（使用 useSearchParams）
+function TasksContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -299,11 +298,12 @@ export default function TasksPage() {
   const status = searchParams.get("status") || "all";
   const priority = searchParams.get("priority") || "all";
   const page = Number(searchParams.get("page")) || 1;
+  const isCreateModalOpen = searchParams.get("create") === "true";
   
   // 构建筛选参数
   const filters = useMemo(() => ({
     search,
-    status: status as any,
+    status: status as TaskStatus | "all",
     priority,
     page,
     pageSize: 10,
@@ -358,6 +358,16 @@ export default function TasksPage() {
     const query = createQueryString({ page: newPage });
     router.push(`${pathname}?${query}`);
   };
+
+  const handleOpenCreateModal = () => {
+    const query = createQueryString({ create: "true" });
+    router.push(`${pathname}?${query}`);
+  };
+
+  const handleCloseCreateModal = () => {
+    const query = createQueryString({ create: null });
+    router.push(query ? `${pathname}?${query}` : pathname);
+  };
   
   // 操作处理函数
   const handleDelete = async (id: string) => {
@@ -381,88 +391,128 @@ export default function TasksPage() {
   };
 
   return (
+    <>
+      <div className="p-6 space-y-6">
+        {/* 页面标题 */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">任务管理</h1>
+            <p className="text-gray-500 mt-1">管理团队协作任务</p>
+          </div>
+          <Button onClick={handleOpenCreateModal}>
+            <Plus className="w-4 h-4 mr-2" />
+            创建任务
+          </Button>
+        </div>
+
+        {/* 筛选栏 */}
+        <FilterBar
+          search={search}
+          status={status}
+          priority={priority}
+          onSearchChange={handleSearchChange}
+          onStatusChange={handleStatusChange}
+          onPriorityChange={handlePriorityChange}
+          onClear={handleClearFilters}
+        />
+
+        {/* 任务列表 */}
+        <div className="space-y-3">
+          {isLoading ? (
+            <Card>
+              <CardContent className="py-12 text-center text-gray-500">
+                加载中...
+              </CardContent>
+            </Card>
+          ) : error ? (
+            <Card>
+              <CardContent className="py-12 text-center text-red-500">
+                加载失败，请稍后重试
+              </CardContent>
+            </Card>
+          ) : data?.data.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-gray-500">
+                暂无任务
+              </CardContent>
+            </Card>
+          ) : (
+            data?.data.map((task) => (
+              <TaskCard
+                key={task.id}
+                task={task}
+                onComplete={handleComplete}
+                onCancel={handleCancel}
+                onReopen={handleReopen}
+                onDelete={handleDelete}
+              />
+            ))
+          )}
+        </div>
+
+        {/* 分页 */}
+        {data && data.totalPages > 1 && (
+          <div className="flex justify-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => handlePageChange(page - 1)}
+            >
+              上一页
+            </Button>
+            <span className="flex items-center px-4 text-sm text-gray-600">
+              第 {page} / {data.totalPages} 页 (共 {data.total} 条)
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= data.totalPages}
+              onClick={() => handlePageChange(page + 1)}
+            >
+              下一页
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* 创建任务弹窗 */}
+      <CreateTaskModal
+        isOpen={isCreateModalOpen}
+        onClose={handleCloseCreateModal}
+      />
+    </>
+  );
+}
+
+// 加载中占位组件
+function TasksLoading() {
+  return (
     <div className="p-6 space-y-6">
-      {/* 页面标题 */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">任务管理</h1>
           <p className="text-gray-500 mt-1">管理团队协作任务</p>
         </div>
-        <Button onClick={() => router.push(`${pathname}?create=true`)}>
+        <Button disabled>
           <Plus className="w-4 h-4 mr-2" />
           创建任务
         </Button>
       </div>
-
-      {/* 筛选栏 */}
-      <FilterBar
-        search={search}
-        status={status}
-        priority={priority}
-        onSearchChange={handleSearchChange}
-        onStatusChange={handleStatusChange}
-        onPriorityChange={handlePriorityChange}
-        onClear={handleClearFilters}
-      />
-
-      {/* 任务列表 */}
-      <div className="space-y-3">
-        {isLoading ? (
-          <Card>
-            <CardContent className="py-12 text-center text-gray-500">
-              加载中...
-            </CardContent>
-          </Card>
-        ) : error ? (
-          <Card>
-            <CardContent className="py-12 text-center text-red-500">
-              加载失败，请稍后重试
-            </CardContent>
-          </Card>
-        ) : data?.data.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center text-gray-500">
-              暂无任务
-            </CardContent>
-          </Card>
-        ) : (
-          data?.data.map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              onComplete={handleComplete}
-              onCancel={handleCancel}
-              onReopen={handleReopen}
-              onDelete={handleDelete}
-            />
-          ))
-        )}
-      </div>
-
-      {/* 分页 */}
-      {data && data.totalPages > 1 && (
-        <div className="flex justify-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page <= 1}
-            onClick={() => handlePageChange(page - 1)}
-          >
-            上一页
-          </Button>
-          <span className="flex items-center px-4 text-sm text-gray-600">
-            第 {page} / {data.totalPages} 页 (共 {data.total} 条)
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page >= data.totalPages}
-            onClick={() => handlePageChange(page + 1)}
-          >
-            下一页
-          </Button>
-        </div>
-      )}
+      <Card>
+        <CardContent className="py-12 text-center text-gray-500">
+          加载中...
+        </CardContent>
+      </Card>
     </div>
+  );
+}
+
+// 默认导出组件（带 Suspense）
+export default function TasksPage() {
+  return (
+    <Suspense fallback={<TasksLoading />}>
+      <TasksContent />
+    </Suspense>
   );
 }

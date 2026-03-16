@@ -91,3 +91,24 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
   completed: "已完成",
   cancelled: "已取消",
 };
+
+// ========== 辅助能力类型 ==========
+
+export interface Capability {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  icon: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CapabilityListResponse {
+  data: Capability[];
+  total: number;
+}
+
+export interface UpdateCapabilityRequest {
+  enabled: boolean;
+}

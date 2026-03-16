@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { ChevronDown } from "lucide-react";
 
 export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
-  options: { value: string; label: string }[];
+  options: readonly { value: string; label: string }[] | { value: string; label: string }[];
 }
 
 const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
