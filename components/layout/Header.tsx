@@ -1,0 +1,26 @@
+import { Menu, Bell, User } from "lucide-react";
+
+export function Header() {
+  return (
+    <header className="h-16 border-b bg-white flex items-center justify-between px-6">
+      <div className="flex items-center gap-4">
+        <button className="lg:hidden p-2 hover:bg-gray-100 rounded-lg">
+          <Menu className="w-5 h-5" />
+        </button>
+        <h1 className="text-xl font-bold text-gray-900">TeamClaw</h1>
+      </div>
+      <div className="flex items-center gap-4">
+        <button className="p-2 hover:bg-gray-100 rounded-lg relative">
+          <Bell className="w-5 h-5 text-gray-600" />
+          <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+        </button>
+        <div className="flex items-center gap-2 pl-4 border-l">
+          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+            <User className="w-4 h-4 text-white" />
+          </div>
+          <span className="text-sm font-medium">管理员</span>
+        </div>
+      </div>
+    </header>
+  );
+}
