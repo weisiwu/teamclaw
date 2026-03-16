@@ -260,3 +260,61 @@ export interface CapabilityListResponse {
 export interface UpdateCapabilityRequest {
   enabled: boolean;
 }
+
+// ========== 版本管理类型 ==========
+
+export type VersionStatus = "draft" | "published" | "archived";
+
+export interface Version {
+  id: string;
+  version: string;
+  title: string;
+  description: string;
+  status: VersionStatus;
+  releasedAt: string | null;
+  createdAt: string;
+  changedFiles: string[];
+  commitCount: number;
+}
+
+export interface CreateVersionRequest {
+  version: string;
+  title: string;
+  description: string;
+  status: VersionStatus;
+}
+
+export interface UpdateVersionRequest {
+  version?: string;
+  title?: string;
+  description?: string;
+  status?: VersionStatus;
+}
+
+export interface VersionListResponse {
+  data: Version[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+// 状态选项
+export const VERSION_STATUS_OPTIONS = [
+  { value: "all", label: "全部状态" },
+  { value: "draft", label: "草稿" },
+  { value: "published", label: "已发布" },
+  { value: "archived", label: "已归档" },
+] as const;
+
+export const VERSION_STATUS_LABELS: Record<VersionStatus, string> = {
+  draft: "草稿",
+  published: "已发布",
+  archived: "已归档",
+};
+
+export const VERSION_STATUS_BADGE_VARIANT: Record<VersionStatus, "default" | "success" | "warning"> = {
+  draft: "default",
+  published: "success",
+  archived: "warning",
+};
