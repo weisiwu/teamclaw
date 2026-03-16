@@ -17,7 +17,9 @@ import {
   PlayCircle,
   XCircle,
   AlertCircle,
-  X
+  X,
+  CheckSquare,
+  Square
 } from "lucide-react";
 import { 
   useTaskList, 
@@ -53,20 +55,28 @@ function FilterBar({
   search,
   status,
   priority,
+  sortBy,
+  sortOrder,
   onSearchChange,
   onStatusChange,
   onPriorityChange,
+  onSortByChange,
+  onSortOrderChange,
   onClear
 }: {
   search: string;
   status: string;
   priority: string;
+  sortBy: string;
+  sortOrder: string;
   onSearchChange: (value: string) => void;
   onStatusChange: (value: string) => void;
   onPriorityChange: (value: string) => void;
+  onSortByChange: (value: string) => void;
+  onSortOrderChange: (value: string) => void;
   onClear: () => void;
 }) {
-  const hasFilters = search || status !== "all" || priority !== "all";
+  const hasFilters = search || status !== "all" || priority !== "all" || sortBy !== "createdAt";
   
   return (
     <Card>
@@ -93,6 +103,25 @@ function FilterBar({
             onChange={(e) => onPriorityChange(e.target.value)}
             className="w-36"
           />
+          <Select
+            options={[
+              { value: "createdAt", label: "创建时间" },
+              { value: "completedAt", label: "完成时间" },
+              { value: "priority", label: "优先级" },
+            ]}
+            value={sortBy}
+            onChange={(e) => onSortByChange(e.target.value)}
+            className="w-36"
+          />
+          <Select
+            options={[
+              { value: "desc", label: "倒序" },
+              { value: "asc", label: "正序" },
+            ]}
+            value={sortOrder}
+            onChange={(e) => onSortOrderChange(e.target.value)}
+            className="w-28"
+          />
           {hasFilters && (
             <Button variant="ghost" size="sm" onClick={onClear}>
               <X className="w-4 h-4 mr-1" />
@@ -108,12 +137,16 @@ function FilterBar({
 // 任务卡片组件
 function TaskCard({
   task,
+  isSelected,
+  onSelect,
   onComplete,
   onCancel,
   onReopen,
   onDelete
 }: {
   task: Task;
+  isSelected: boolean;
+  onSelect: (id: string, checked: boolean) => void;
   onComplete: (id: string) => void;
   onCancel: (id: string) => void;
   onReopen: (id: string) => void;
@@ -123,32 +156,44 @@ function TaskCard({
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="font-mono text-sm text-gray-500">{task.id}</span>
-              <Badge variant={STATUS_BADGE_VARIANT[task.status]}>
-                {getStatusIcon(task.status)}
-                <span className="ml-1">{STATUS_LABELS[task.status]}</span>
-              </Badge>
-              <span className="text-xs text-orange-600 font-medium">
-                优先级：{task.priority}
-              </span>
-            </div>
-            <h3 className="font-semibold text-gray-900 mb-1">{task.title}</h3>
-            <div className="flex items-center gap-4 text-sm text-gray-500">
-              <span>创建：{task.createdAt}</span>
-              {task.completedAt && <span>完成：{task.completedAt}</span>}
-              {task.duration && <span>耗时：{task.duration} 分钟</span>}
-            </div>
-            {task.tags.length > 0 && (
-              <div className="flex gap-1 mt-2">
-                {task.tags.map(tag => (
-                  <Badge key={tag} variant="default" className="text-xs">
-                    {tag}
-                  </Badge>
-                ))}
+          <div className="flex items-start gap-3">
+            <button
+              onClick={() => onSelect(task.id, !isSelected)}
+              className="mt-1 text-gray-400 hover:text-gray-600"
+            >
+              {isSelected ? (
+                <CheckSquare className="w-5 h-5 text-blue-500" />
+              ) : (
+                <Square className="w-5 h-5" />
+              )}
+            </button>
+            <div className="min-w-0">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="font-mono text-sm text-gray-500">{task.id}</span>
+                <Badge variant={STATUS_BADGE_VARIANT[task.status]}>
+                  {getStatusIcon(task.status)}
+                  <span className="ml-1">{STATUS_LABELS[task.status]}</span>
+                </Badge>
+                <span className="text-xs text-orange-600 font-medium">
+                  优先级：{task.priority}
+                </span>
               </div>
-            )}
+              <h3 className="font-semibold text-gray-900 mb-1">{task.title}</h3>
+              <div className="flex items-center gap-4 text-sm text-gray-500">
+                <span>创建：{task.createdAt}</span>
+                {task.completedAt && <span>完成：{task.completedAt}</span>}
+                {task.duration && <span>耗时：{task.duration} 分钟</span>}
+              </div>
+              {task.tags.length > 0 && (
+                <div className="flex gap-1 mt-2">
+                  {task.tags.map(tag => (
+                    <Badge key={tag} variant="default" className="text-xs">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {task.status === "pending" && (
@@ -293,10 +338,16 @@ function TasksContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   
+  // 批量删除状态
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [batchDeleteConfirm, setBatchDeleteConfirm] = useState(false);
+  
   // 从 URL 获取筛选参数
   const search = searchParams.get("search") || "";
   const status = searchParams.get("status") || "all";
   const priority = searchParams.get("priority") || "all";
+  const sortBy = searchParams.get("sortBy") || "createdAt";
+  const sortOrder = searchParams.get("sortOrder") || "desc";
   const page = Number(searchParams.get("page")) || 1;
   const isCreateModalOpen = searchParams.get("create") === "true";
   
@@ -306,7 +357,7 @@ function TasksContent() {
     status: status as TaskStatus | "all",
     priority,
     page,
-    pageSize: 10,
+    pageSize: 20,
   }), [search, status, priority, page]);
   
   // 使用 React Query 获取数据
@@ -354,6 +405,16 @@ function TasksContent() {
     router.push(pathname);
   };
   
+  const handleSortByChange = (value: string) => {
+    const query = createQueryString({ sortBy: value, page: 1 });
+    router.push(`${pathname}?${query}`);
+  };
+  
+  const handleSortOrderChange = (value: string) => {
+    const query = createQueryString({ sortOrder: value, page: 1 });
+    router.push(`${pathname}?${query}`);
+  };
+  
   const handlePageChange = (newPage: number) => {
     const query = createQueryString({ page: newPage });
     router.push(`${pathname}?${query}`);
@@ -370,6 +431,36 @@ function TasksContent() {
   };
   
   // 操作处理函数
+  const handleSelectTask = (id: string, checked: boolean) => {
+    const newSelected = new Set(selectedTaskIds);
+    if (checked) {
+      newSelected.add(id);
+    } else {
+      newSelected.delete(id);
+    }
+    setSelectedTaskIds(newSelected);
+  };
+  
+  const handleSelectAll = (checked: boolean) => {
+    if (checked && data?.data) {
+      setSelectedTaskIds(new Set(data.data.map(t => t.id)));
+    } else {
+      setSelectedTaskIds(new Set());
+    }
+  };
+  
+  const handleBatchDelete = async () => {
+    try {
+      for (const id of Array.from(selectedTaskIds)) {
+        await deleteTask.mutateAsync(id);
+      }
+      setSelectedTaskIds(new Set());
+      setBatchDeleteConfirm(false);
+    } catch (err) {
+      console.error("Failed to batch delete tasks:", err);
+    }
+  };
+  
   const handleDelete = async (id: string) => {
     if (confirm("确定要删除这个任务吗？")) {
       await deleteTask.mutateAsync(id);
@@ -410,11 +501,43 @@ function TasksContent() {
           search={search}
           status={status}
           priority={priority}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
           onSearchChange={handleSearchChange}
           onStatusChange={handleStatusChange}
           onPriorityChange={handlePriorityChange}
+          onSortByChange={handleSortByChange}
+          onSortOrderChange={handleSortOrderChange}
           onClear={handleClearFilters}
         />
+
+        {/* 批量操作栏 */}
+        {selectedTaskIds.size > 0 && (
+          <Card className="bg-blue-50 border-blue-200">
+            <CardContent className="p-3 flex items-center justify-between">
+              <span className="text-sm text-blue-700">
+                已选择 {selectedTaskIds.size} 个任务
+              </span>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setSelectedTaskIds(new Set())}
+                >
+                  取消选择
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  size="sm"
+                  onClick={() => setBatchDeleteConfirm(true)}
+                >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  批量删除
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* 任务列表 */}
         <div className="space-y-3">
@@ -437,16 +560,53 @@ function TasksContent() {
               </CardContent>
             </Card>
           ) : (
-            data?.data.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onComplete={handleComplete}
-                onCancel={handleCancel}
-                onReopen={handleReopen}
-                onDelete={handleDelete}
-              />
-            ))
+            <>
+              {/* 全选行 */}
+              <div className="flex items-center gap-2 px-2 py-1 text-sm text-gray-500">
+                <button
+                  onClick={() => handleSelectAll(selectedTaskIds.size !== data?.data.length)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  {selectedTaskIds.size === data?.data.length ? (
+                    <CheckSquare className="w-5 h-5 text-blue-500" />
+                  ) : (
+                    <Square className="w-5 h-5" />
+                  )}
+                </button>
+                <span>全选</span>
+              </div>
+              {data?.data
+                .slice()
+                .sort((a, b) => {
+                  let comparison = 0;
+                  switch (sortBy) {
+                    case "createdAt":
+                      comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+                      break;
+                    case "completedAt":
+                      const aTime = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+                      const bTime = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+                      comparison = aTime - bTime;
+                      break;
+                    case "priority":
+                      comparison = b.priority - a.priority;
+                      break;
+                  }
+                  return sortOrder === "asc" ? comparison : -comparison;
+                })
+                .map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    isSelected={selectedTaskIds.has(task.id)}
+                    onSelect={handleSelectTask}
+                    onComplete={handleComplete}
+                    onCancel={handleCancel}
+                    onReopen={handleReopen}
+                    onDelete={handleDelete}
+                  />
+                ))}
+            </>
           )}
         </div>
 
@@ -481,6 +641,42 @@ function TasksContent() {
         isOpen={isCreateModalOpen}
         onClose={handleCloseCreateModal}
       />
+
+      {/* 批量删除确认弹窗 */}
+      {batchDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div 
+            className="absolute inset-0 bg-black/50" 
+            onClick={() => setBatchDeleteConfirm(false)}
+          />
+          
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">批量删除任务</h2>
+              <Button variant="ghost" size="icon" onClick={() => setBatchDeleteConfirm(false)}>
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            
+            <p className="text-gray-600 mb-6">
+              确定要删除选中的 {selectedTaskIds.size} 个任务吗？此操作不可恢复。
+            </p>
+            
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setBatchDeleteConfirm(false)}>
+                取消
+              </Button>
+              <Button 
+                variant="destructive"
+                onClick={handleBatchDelete}
+                disabled={deleteTask.isPending}
+              >
+                {deleteTask.isPending ? "删除中..." : "确认删除"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
