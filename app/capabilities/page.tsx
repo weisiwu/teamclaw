@@ -15,10 +15,18 @@ import {
   Loader2,
   Settings,
   Search,
-  ArrowUpDown
+  ArrowUpDown,
+  Eye,
+  CheckSquare,
+  Square
 } from "lucide-react";
 import { useCapabilityList, useUpdateCapability } from "@/hooks/useCapabilities";
 import { Capability } from "@/lib/api/types";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 // 加载状态组件
 function CapabilitiesLoading() {
@@ -56,68 +64,179 @@ const categoryMap: Record<string, string> = {
   "下载文件": "文件操作",
 };
 
+// 能力详情弹窗
+function CapabilityDetailDialog({
+  capability,
+  open,
+  onClose
+}: {
+  capability: Capability | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  if (!capability) return null;
+  
+  const Icon = iconMap[capability.icon] || Settings;
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent title={capability.name} onClose={onClose}>
+        <div className="space-y-4 py-4">
+          <div className="flex items-center justify-center mb-4">
+            <div className={`w-16 h-16 rounded-xl flex items-center justify-center ${
+              capability.enabled ? "bg-blue-50" : "bg-gray-100"
+            }`}>
+              <Icon className={`w-8 h-8 ${capability.enabled ? "text-blue-600" : "text-gray-400"}`} />
+            </div>
+          </div>
+          
+          <div className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">能力ID</span>
+              <span className="font-mono text-xs break-all max-w-[200px]">{capability.id}</span>
+            </div>
+            
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">描述</span>
+              <span className="text-right max-w-[200px]">{capability.description}</span>
+            </div>
+            
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">图标</span>
+              <span>{capability.icon}</span>
+            </div>
+            
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">状态</span>
+              <Badge variant={capability.enabled ? "success" : "default"}>
+                {capability.enabled ? "已启用" : "已禁用"}
+              </Badge>
+            </div>
+            
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">创建时间</span>
+              <span>{capability.createdAt}</span>
+            </div>
+            
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">更新时间</span>
+              <span>{capability.updatedAt}</span>
+            </div>
+          </div>
+        </div>
+        
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            关闭
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // 能力卡片组件
 function CapabilityCard({
   capability,
   onToggle,
-  isUpdating
+  isUpdating,
+  selected,
+  onSelect
 }: {
   capability: Capability;
   onToggle: (id: string, enabled: boolean) => void;
   isUpdating: boolean;
+  selected: boolean;
+  onSelect: (id: string) => void;
 }) {
   const Icon = iconMap[capability.icon] || Settings;
+  const [showDetail, setShowDetail] = useState(false);
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-              capability.enabled ? "bg-blue-50" : "bg-gray-100"
-            }`}>
-              <Icon className={`w-5 h-5 ${capability.enabled ? "text-blue-600" : "text-gray-400"}`} />
+    <>
+      <Card className="hover:shadow-md transition-shadow">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              {/* 复选框 */}
+              <button
+                onClick={() => onSelect(capability.id)}
+                className="text-blue-600 hover:text-blue-700"
+              >
+                {selected ? (
+                  <CheckSquare className="w-5 h-5" />
+                ) : (
+                  <Square className="w-5 h-5 text-gray-400" />
+                )}
+              </button>
+              
+              {/* 图标 */}
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                capability.enabled ? "bg-blue-50" : "bg-gray-100"
+              }`}>
+                <Icon className={`w-5 h-5 ${capability.enabled ? "text-blue-600" : "text-gray-400"}`} />
+              </div>
+              
+              {/* 信息 */}
+              <div>
+                <h3 className="font-semibold text-gray-900">{capability.name}</h3>
+                <p className="text-sm text-gray-500">{capability.description}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  更新时间：{capability.updatedAt}
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-semibold text-gray-900">{capability.name}</h3>
-              <p className="text-sm text-gray-500">{capability.description}</p>
-              <p className="text-xs text-gray-400 mt-1">
-                更新时间：{capability.updatedAt}
-              </p>
+            
+            <div className="flex items-center gap-3">
+              {/* 详情按钮 */}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowDetail(true)}
+                title="查看详情"
+              >
+                <Eye className="w-4 h-4" />
+              </Button>
+              
+              <Badge variant={capability.enabled ? "success" : "default"}>
+                {capability.enabled ? (
+                  <>
+                    <CheckCircle className="w-3 h-3 mr-1" />
+                    已启用
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-3 h-3 mr-1" />
+                    已禁用
+                  </>
+                )}
+              </Badge>
+              <Button
+                size="sm"
+                variant={capability.enabled ? "outline" : "default"}
+                onClick={() => onToggle(capability.id, !capability.enabled)}
+                disabled={isUpdating}
+              >
+                {isUpdating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : capability.enabled ? (
+                  "禁用"
+                ) : (
+                  "启用"
+                )}
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Badge variant={capability.enabled ? "success" : "default"}>
-              {capability.enabled ? (
-                <>
-                  <CheckCircle className="w-3 h-3 mr-1" />
-                  已启用
-                </>
-              ) : (
-                <>
-                  <XCircle className="w-3 h-3 mr-1" />
-                  已禁用
-                </>
-              )}
-            </Badge>
-            <Button
-              size="sm"
-              variant={capability.enabled ? "outline" : "default"}
-              onClick={() => onToggle(capability.id, !capability.enabled)}
-              disabled={isUpdating}
-            >
-              {isUpdating ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : capability.enabled ? (
-                "禁用"
-              ) : (
-                "启用"
-              )}
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+      
+      {/* 详情弹窗 */}
+      <CapabilityDetailDialog
+        capability={showDetail ? capability : null}
+        open={showDetail}
+        onClose={() => setShowDetail(false)}
+      />
+    </>
   );
 }
 
@@ -128,9 +247,60 @@ function CapabilitiesContent() {
   const [searchKeyword, setSearchKeyword] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "status" | "updatedAt">("name");
   const [groupByCategory, setGroupByCategory] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchUpdating, setBatchUpdating] = useState(false);
 
   const handleToggle = async (id: string, enabled: boolean) => {
     await updateCapability.mutateAsync({ id, enabled });
+  };
+
+  // 全选/取消全选
+  const handleSelectAll = () => {
+    if (!data?.data) return;
+    if (selectedIds.size === filteredCapabilities.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredCapabilities.map(cap => cap.id)));
+    }
+  };
+
+  // 单选/取消单选
+  const handleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  // 批量启用
+  const handleBatchEnable = async () => {
+    if (selectedIds.size === 0) return;
+    setBatchUpdating(true);
+    try {
+      for (const id of Array.from(selectedIds)) {
+        await updateCapability.mutateAsync({ id, enabled: true });
+      }
+      setSelectedIds(new Set());
+    } finally {
+      setBatchUpdating(false);
+    }
+  };
+
+  // 批量禁用
+  const handleBatchDisable = async () => {
+    if (selectedIds.size === 0) return;
+    setBatchUpdating(true);
+    try {
+      for (const id of Array.from(selectedIds)) {
+        await updateCapability.mutateAsync({ id, enabled: false });
+      }
+      setSelectedIds(new Set());
+    } finally {
+      setBatchUpdating(false);
+    }
   };
 
   // 过滤和排序后的能力列表
@@ -241,6 +411,54 @@ function CapabilitiesContent() {
         </CardContent>
       </Card>
 
+      {/* 批量操作工具栏 */}
+      {selectedIds.size > 0 && (
+        <Card className="bg-blue-50 border-blue-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-blue-700">
+                已选择 {selectedIds.size} 项能力
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={handleBatchEnable}
+                  disabled={batchUpdating}
+                >
+                  {batchUpdating ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                  ) : (
+                    <CheckCircle className="w-4 h-4 mr-1" />
+                  )}
+                  批量启用
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleBatchDisable}
+                  disabled={batchUpdating}
+                >
+                  {batchUpdating ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                  ) : (
+                    <XCircle className="w-4 h-4 mr-1" />
+                  )}
+                  批量禁用
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelectedIds(new Set())}
+                >
+                  取消选择
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* 能力列表 */}
       <div className="space-y-4">
         {isLoading ? (
@@ -266,7 +484,21 @@ function CapabilitiesContent() {
           // 分组展示
           Object.entries(groupedCapabilities).map(([category, caps]) => (
             <div key={category}>
-              <h3 className="text-sm font-medium text-gray-500 mb-2 px-1">{category}</h3>
+              <div className="flex items-center gap-2 mb-2 px-1">
+                {selectedIds.size > 0 && (
+                  <button
+                    onClick={handleSelectAll}
+                    className="text-blue-600 hover:text-blue-700"
+                  >
+                    {selectedIds.size === filteredCapabilities.length ? (
+                      <CheckSquare className="w-4 h-4" />
+                    ) : (
+                      <Square className="w-4 h-4 text-gray-400" />
+                    )}
+                  </button>
+                )}
+                <h3 className="text-sm font-medium text-gray-500">{category}</h3>
+              </div>
               <div className="space-y-2">
                 {caps.map((capability) => (
                   <CapabilityCard
@@ -274,6 +506,8 @@ function CapabilitiesContent() {
                     capability={capability}
                     onToggle={handleToggle}
                     isUpdating={updateCapability.isPending}
+                    selected={selectedIds.has(capability.id)}
+                    onSelect={handleSelect}
                   />
                 ))}
               </div>
@@ -281,14 +515,41 @@ function CapabilitiesContent() {
           ))
         ) : (
           // 列表展示
-          filteredCapabilities.map((capability) => (
-            <CapabilityCard
-              key={capability.id}
-              capability={capability}
-              onToggle={handleToggle}
-              isUpdating={updateCapability.isPending}
-            />
-          ))
+          <>
+            {/* 全选行 */}
+            {filteredCapabilities.length > 0 && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg mb-2">
+                <button
+                  onClick={handleSelectAll}
+                  className="text-blue-600 hover:text-blue-700 flex items-center gap-2"
+                >
+                  {selectedIds.size === filteredCapabilities.length && selectedIds.size > 0 ? (
+                    <CheckSquare className="w-4 h-4" />
+                  ) : (
+                    <Square className="w-4 h-4 text-gray-400" />
+                  )}
+                  <span className="text-sm text-gray-600">
+                    {selectedIds.size === filteredCapabilities.length && selectedIds.size > 0 
+                      ? "取消全选" 
+                      : "全选"}
+                  </span>
+                </button>
+                <span className="text-sm text-gray-400">
+                  ({selectedIds.size}/{filteredCapabilities.length})
+                </span>
+              </div>
+            )}
+            {filteredCapabilities.map((capability) => (
+              <CapabilityCard
+                key={capability.id}
+                capability={capability}
+                onToggle={handleToggle}
+                isUpdating={updateCapability.isPending}
+                selected={selectedIds.has(capability.id)}
+                onSelect={handleSelect}
+              />
+            ))}
+          </>
         )}
       </div>
 
