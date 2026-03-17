@@ -348,3 +348,27 @@ export function useDownloadArtifact() {
     mutationFn: (versionId: string) => downloadArtifact(versionId),
   });
 }
+
+export function useAddVersionTag() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ versionId, tag }: { versionId: string; tag: VersionTag }) =>
+      addVersionTag(versionId, tag),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["versions"] });
+    },
+  });
+}
+
+export function useRemoveVersionTag() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ versionId, tag }: { versionId: string; tag: VersionTag }) =>
+      removeVersionTag(versionId, tag),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["versions"] });
+    },
+  });
+}
