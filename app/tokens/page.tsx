@@ -4,7 +4,7 @@ import { useMemo, Suspense } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Download } from "lucide-react";
 import {
   TokenSummaryCards,
   TokenTrendChart,
@@ -60,6 +60,41 @@ function TokensContent() {
     window.location.reload();
   };
 
+  // 导出数据
+  const handleExport = () => {
+    const exportData = dailyData?.data;
+    if (!exportData || exportData.length === 0) {
+      alert("暂无数据可导出");
+      return;
+    }
+    interface DailyRecord {
+      date: string;
+      inputTokens?: number;
+      outputTokens?: number;
+      totalTokens?: number;
+      cost?: number;
+    }
+    const headers = ["日期", "输入Token", "输出Token", "总Token", "预估成本(元)"];
+    const rows = (exportData as DailyRecord[]).map((item) => [
+      item.date,
+      item.inputTokens?.toLocaleString() || "0",
+      item.outputTokens?.toLocaleString() || "0",
+      item.totalTokens?.toLocaleString() || "0",
+      item.cost?.toFixed(4) || "0.0000",
+    ]);
+    const csvContent = [headers, ...rows].map((row) => row.join(",")).join("\n");
+    const BOM = "\uFEFF";
+    const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `token-stats-${startDate || "all"}-${endDate || "all"}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // 构建新的 URL 参数
   const createQueryString = (
     params: Record<string, string | number | null>
@@ -112,10 +147,16 @@ function TokensContent() {
           <h1 className="text-2xl font-bold text-gray-900">Token 消费统计</h1>
           <p className="text-gray-500 mt-1">查看 Token 消耗明细与趋势</p>
         </div>
-        <Button variant="outline" onClick={handleRefresh} disabled={isLoading}>
-          <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-          刷新数据
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExport} disabled={isLoading}>
+            <Download className="w-4 h-4 mr-2" />
+            导出CSV
+          </Button>
+          <Button variant="outline" onClick={handleRefresh} disabled={isLoading}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            刷新数据
+          </Button>
+        </div>
       </div>
 
       {/* Token 汇总卡片 */}
