@@ -27,7 +27,7 @@ import {
   VERSION_TAG_OPTIONS,
   VersionTag,
 } from "@/lib/api/types";
-import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch, Star, Play, Download, Calendar, Clock, FileText } from "lucide-react";
+import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch, Star, Play, Download, Calendar, Clock, FileText, GitCompare } from "lucide-react";
 
 export default function VersionsPage() {
   const [page, setPage] = useState(1);
@@ -38,6 +38,7 @@ export default function VersionsPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [selectedVersion, setSelectedVersion] = useState<Version | null>(null);
+  const [compareVersions, setCompareVersions] = useState<[string, string] | null>(null);
 
   const pageSize = 10;
 
@@ -166,10 +167,25 @@ export default function VersionsPage() {
       {/* 页面标题 */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">版本管理</h1>
-        <Button onClick={handleAdd} className="gap-2">
-          <Plus className="w-4 h-4" />
-          新建版本
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              if (versions.length >= 2) {
+                setCompareVersions([versions[0].id, versions[1].id]);
+              }
+            }} 
+            disabled={versions.length < 2}
+            className="gap-2"
+          >
+            <GitCompare className="w-4 h-4" />
+            版本对比
+          </Button>
+          <Button onClick={handleAdd} className="gap-2">
+            <Plus className="w-4 h-4" />
+            新建版本
+          </Button>
+        </div>
       </div>
 
       {/* 筛选器 */}
@@ -470,6 +486,15 @@ export default function VersionsPage() {
           onClose={() => setSelectedVersion(null)}
         />
       )}
+
+      {/* 版本对比弹窗 */}
+      {compareVersions && (
+        <VersionCompareDialog
+          versionIds={compareVersions}
+          versions={versions}
+          onClose={() => setCompareVersions(null)}
+        />
+      )}
     </div>
   );
 }
@@ -606,6 +631,193 @@ function VersionDetailDialog({
             </div>
           )}
         </div>
+
+        <div className="mt-6 flex justify-end">
+          <Button variant="outline" onClick={onClose}>
+            关闭
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 版本对比弹窗组件
+function VersionCompareDialog({ 
+  versionIds, 
+  versions,
+  onClose 
+}: { 
+  versionIds: [string, string]; 
+  versions: Version[];
+  onClose: () => void;
+}) {
+  const v1 = versions.find(v => v.id === versionIds[0]);
+  const v2 = versions.find(v => v.id === versionIds[1]);
+
+  if (!v1 || !v2) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl p-6 max-w-4xl w-full mx-4 max-h-[85vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-semibold">版本对比</h3>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
+
+        {/* 对比表格 */}
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 border-b w-1/4">属性</th>
+                <th className="text-left px-4 py-3 text-sm font-medium text-gray-900 border-b w-3/8">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono">{v1.version}</span>
+                    {v1.isMain && <Badge variant="success" className="text-xs">主版本</Badge>}
+                  </div>
+                </th>
+                <th className="text-left px-4 py-3 text-sm font-medium text-gray-900 border-b w-3/8">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono">{v2.version}</span>
+                    {v2.isMain && <Badge variant="success" className="text-xs">主版本</Badge>}
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {/* 标题 */}
+              <tr>
+                <td className="px-4 py-3 text-sm font-medium text-gray-500">标题</td>
+                <td className="px-4 py-3 text-sm text-gray-900">{v1.title}</td>
+                <td className="px-4 py-3 text-sm text-gray-900">{v2.title}</td>
+              </tr>
+              {/* 描述 */}
+              <tr>
+                <td className="px-4 py-3 text-sm font-medium text-gray-500">描述</td>
+                <td className="px-4 py-3 text-sm text-gray-600">{v1.description || '-'}</td>
+                <td className="px-4 py-3 text-sm text-gray-600">{v2.description || '-'}</td>
+              </tr>
+              {/* 状态 */}
+              <tr>
+                <td className="px-4 py-3 text-sm font-medium text-gray-500">状态</td>
+                <td className="px-4 py-3">
+                  <Badge variant={VERSION_STATUS_BADGE_VARIANT[v1.status]}>
+                    {VERSION_STATUS_LABELS[v1.status]}
+                  </Badge>
+                </td>
+                <td className="px-4 py-3">
+                  <Badge variant={VERSION_STATUS_BADGE_VARIANT[v2.status]}>
+                    {VERSION_STATUS_LABELS[v2.status]}
+                  </Badge>
+                </td>
+              </tr>
+              {/* 构建状态 */}
+              <tr>
+                <td className="px-4 py-3 text-sm font-medium text-gray-500">构建状态</td>
+                <td className="px-4 py-3">
+                  <Badge variant={BUILD_STATUS_BADGE_VARIANT[v1.buildStatus]}>
+                    {BUILD_STATUS_LABELS[v1.buildStatus]}
+                  </Badge>
+                </td>
+                <td className="px-4 py-3">
+                  <Badge variant={BUILD_STATUS_BADGE_VARIANT[v2.buildStatus]}>
+                    {BUILD_STATUS_LABELS[v2.buildStatus]}
+                  </Badge>
+                </td>
+              </tr>
+              {/* 标签 */}
+              <tr>
+                <td className="px-4 py-3 text-sm font-medium text-gray-500">标签</td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-wrap gap-1">
+                    {v1.tags.map((tag) => {
+                      const tagOption = VERSION_TAG_OPTIONS.find((t) => t.value === tag);
+                      return (
+                        <span key={tag} className={`px-2 py-0.5 rounded-full text-xs ${tagOption?.color || 'bg-gray-100'}`}>
+                          {tagOption?.label || tag}
+                        </span>
+                      );
+                    })}
+                    {v1.tags.length === 0 && <span className="text-gray-400 text-sm">无</span>}
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-wrap gap-1">
+                    {v2.tags.map((tag) => {
+                      const tagOption = VERSION_TAG_OPTIONS.find((t) => t.value === tag);
+                      return (
+                        <span key={tag} className={`px-2 py-0.5 rounded-full text-xs ${tagOption?.color || 'bg-gray-100'}`}>
+                          {tagOption?.label || tag}
+                        </span>
+                      );
+                    })}
+                    {v2.tags.length === 0 && <span className="text-gray-400 text-sm">无</span>}
+                  </div>
+                </td>
+              </tr>
+              {/* 发布时间 */}
+              <tr>
+                <td className="px-4 py-3 text-sm font-medium text-gray-500">发布时间</td>
+                <td className="px-4 py-3 text-sm text-gray-900">
+                  {v1.releasedAt ? new Date(v1.releasedAt).toLocaleString('zh-CN') : '-'}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-900">
+                  {v2.releasedAt ? new Date(v2.releasedAt).toLocaleString('zh-CN') : '-'}
+                </td>
+              </tr>
+              {/* 变更文件数 */}
+              <tr>
+                <td className="px-4 py-3 text-sm font-medium text-gray-500">变更文件</td>
+                <td className="px-4 py-3 text-sm text-gray-900">{v1.changedFiles.length} 个文件</td>
+                <td className="px-4 py-3 text-sm text-gray-900">{v2.changedFiles.length} 个文件</td>
+              </tr>
+              {/* 提交数 */}
+              <tr>
+                <td className="px-4 py-3 text-sm font-medium text-gray-500">提交数</td>
+                <td className="px-4 py-3 text-sm text-gray-900">{v1.commitCount} 次</td>
+                <td className="px-4 py-3 text-sm text-gray-900">{v2.commitCount} 次</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* 差异文件列表 */}
+        {(v1.changedFiles.length > 0 || v2.changedFiles.length > 0) && (
+          <div className="mt-6">
+            <h4 className="text-sm font-medium text-gray-500 mb-3">差异文件</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-gray-50 rounded-lg p-4 max-h-48 overflow-y-auto">
+                <div className="text-xs font-medium text-gray-500 mb-2">{v1.version} 独有文件</div>
+                {v1.changedFiles.filter(f => !v2.changedFiles.includes(f)).length > 0 ? (
+                  <ul className="space-y-1">
+                    {v1.changedFiles.filter(f => !v2.changedFiles.includes(f)).map((file, index) => (
+                      <li key={index} className="text-sm text-green-600 font-mono truncate">+ {file}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="text-gray-400 text-sm">无独有文件</span>
+                )}
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 max-h-48 overflow-y-auto">
+                <div className="text-xs font-medium text-gray-500 mb-2">{v2.version} 独有文件</div>
+                {v2.changedFiles.filter(f => !v1.changedFiles.includes(f)).length > 0 ? (
+                  <ul className="space-y-1">
+                    {v2.changedFiles.filter(f => !v1.changedFiles.includes(f)).map((file, index) => (
+                      <li key={index} className="text-sm text-red-600 font-mono truncate">- {file}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="text-gray-400 text-sm">无独有文件</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="mt-6 flex justify-end">
           <Button variant="outline" onClick={onClose}>
