@@ -7,6 +7,9 @@ export interface DocMeta {
   slug: string;
   title: string;
   description?: string;
+  category?: string;
+  created?: string;
+  updated?: string;
 }
 
 export interface Doc extends DocMeta {
@@ -35,8 +38,12 @@ function extractFrontmatter(content: string): { meta: Partial<DocMeta>; content:
     const [key, ...valueParts] = line.split(':');
     if (key && valueParts.length > 0) {
       const value = valueParts.join(':').trim();
-      if (key.trim() === 'title') meta.title = value;
-      if (key.trim() === 'description') meta.description = value;
+      const trimmedKey = key.trim();
+      if (trimmedKey === 'title') meta.title = value;
+      if (trimmedKey === 'description') meta.description = value;
+      if (trimmedKey === 'category') meta.category = value;
+      if (trimmedKey === 'created') meta.created = value;
+      if (trimmedKey === 'updated') meta.updated = value;
     }
   });
 
@@ -63,6 +70,9 @@ export function getAllDocs(): DocMeta[] {
       slug,
       title: meta.title || slug,
       description: meta.description || '',
+      category: meta.category,
+      created: meta.created,
+      updated: meta.updated,
     };
   });
 }
@@ -81,6 +91,9 @@ export function getDocBySlug(slug: string): Doc | null {
     slug,
     title: meta.title || slug,
     description: meta.description || '',
+    category: meta.category,
+    created: meta.created,
+    updated: meta.updated,
     content,
   };
 }
