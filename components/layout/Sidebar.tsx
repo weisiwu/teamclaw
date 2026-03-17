@@ -11,12 +11,14 @@ import {
   Key, 
   Users,
   Home,
-  Settings
+  Settings,
+  FolderPlus
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const menuItems = [
   { href: "/", label: "控制台", icon: Home },
+  { href: "/import", label: "项目导入", icon: FolderPlus },
   { href: "/tasks", label: "任务管理", icon: Layers },
   { href: "/versions", label: "版本管理", icon: GitBranch },
   { href: "/capabilities", label: "能力配置", icon: Zap },
