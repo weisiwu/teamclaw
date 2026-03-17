@@ -27,7 +27,7 @@ import {
   VERSION_TAG_OPTIONS,
   VersionTag,
 } from "@/lib/api/types";
-import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch, Star, Play, Download } from "lucide-react";
+import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch, Star, Play, Download, Calendar, Clock, FileText } from "lucide-react";
 
 export default function VersionsPage() {
   const [page, setPage] = useState(1);
@@ -37,6 +37,7 @@ export default function VersionsPage() {
   const [editingVersion, setEditingVersion] = useState<Version | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [selectedVersion, setSelectedVersion] = useState<Version | null>(null);
 
   const pageSize = 10;
 
@@ -262,7 +263,11 @@ export default function VersionsPage() {
               </thead>
               <tbody className="divide-y">
                 {filteredVersions.map((version) => (
-                  <tr key={version.id} className="hover:bg-gray-50">
+                  <tr 
+                    key={version.id} 
+                    className="hover:bg-gray-50 cursor-pointer transition-colors"
+                    onClick={() => setSelectedVersion(version)}
+                  >
                     <td className="px-4 py-3">
                       <span className="font-mono font-medium text-gray-900">{version.version}</span>
                     </td>
@@ -457,6 +462,157 @@ export default function VersionsPage() {
           </div>
         </div>
       )}
+
+      {/* 版本详情弹窗 */}
+      {selectedVersion && (
+        <VersionDetailDialog
+          version={selectedVersion}
+          onClose={() => setSelectedVersion(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// 版本详情弹窗组件
+function VersionDetailDialog({ 
+  version, 
+  onClose 
+}: { 
+  version: Version; 
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <h3 className="text-xl font-semibold">版本详情</h3>
+            <Badge variant={VERSION_STATUS_BADGE_VARIANT[version.status]}>
+              {VERSION_STATUS_LABELS[version.status]}
+            </Badge>
+            {version.isMain && (
+              <Badge variant="success">
+                <Star className="w-3 h-3 mr-1" />主版本
+              </Badge>
+            )}
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
+
+        <div className="space-y-6">
+          {/* 基本信息 */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-500 mb-3">基本信息</h4>
+            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">版本号</span>
+                <span className="font-mono font-medium text-gray-900">{version.version}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">标题</span>
+                <span className="font-medium text-gray-900">{version.title}</span>
+              </div>
+              <div className="flex items-start justify-between">
+                <span className="text-gray-600">描述</span>
+                <span className="text-gray-900 text-right max-w-[60%]">{version.description || '-'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 标签 */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-500 mb-3">标签</h4>
+            <div className="flex flex-wrap gap-2">
+              {version.tags.length > 0 ? version.tags.map((tag) => {
+                const tagOption = VERSION_TAG_OPTIONS.find((t) => t.value === tag);
+                return (
+                  <span
+                    key={tag}
+                    className={`px-3 py-1 rounded-full text-sm font-medium ${tagOption?.color || 'bg-gray-100 text-gray-800'}`}
+                  >
+                    {tagOption?.label || tag}
+                  </span>
+                );
+              }) : <span className="text-gray-400">无标签</span>}
+            </div>
+          </div>
+
+          {/* 构建信息 */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-500 mb-3">构建信息</h4>
+            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">构建状态</span>
+                <Badge variant={BUILD_STATUS_BADGE_VARIANT[version.buildStatus]}>
+                  {BUILD_STATUS_LABELS[version.buildStatus]}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">产物URL</span>
+                <span className="text-gray-900 truncate max-w-[60%]">
+                  {version.artifactUrl || '-'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 时间线 */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-500 mb-3">时间线</h4>
+            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <Calendar className="w-4 h-4 text-gray-400" />
+                <span className="text-gray-600 w-20">创建时间</span>
+                <span className="text-gray-900">
+                  {version.createdAt ? new Date(version.createdAt).toLocaleString('zh-CN') : '-'}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Clock className="w-4 h-4 text-gray-400" />
+                <span className="text-gray-600 w-20">发布时间</span>
+                <span className="text-gray-900">
+                  {version.releasedAt ? new Date(version.releasedAt).toLocaleString('zh-CN') : '-'}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <FileText className="w-4 h-4 text-gray-400" />
+                <span className="text-gray-600 w-20">变更文件</span>
+                <span className="text-gray-900">{version.changedFiles.length} 个文件</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <GitBranch className="w-4 h-4 text-gray-400" />
+                <span className="text-gray-600 w-20">提交数</span>
+                <span className="text-gray-900">{version.commitCount} 次提交</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 变更文件列表 */}
+          {version.changedFiles.length > 0 && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-500 mb-3">变更文件</h4>
+              <div className="bg-gray-50 rounded-lg p-4 max-h-40 overflow-y-auto">
+                <ul className="space-y-1">
+                  {version.changedFiles.map((file, index) => (
+                    <li key={index} className="text-sm text-gray-600 font-mono truncate">
+                      {file}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <Button variant="outline" onClick={onClose}>
+            关闭
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
