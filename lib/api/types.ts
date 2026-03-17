@@ -20,6 +20,15 @@ export interface Task {
   tags: string[];
 }
 
+// 任务评论类型
+export interface TaskComment {
+  id: string;
+  taskId: string;
+  author: string;
+  content: string;
+  createdAt: string;
+}
+
 // API 请求类型
 export interface CreateTaskRequest {
   title: string;

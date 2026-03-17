@@ -106,3 +106,45 @@ export function useReopenTask() {
     },
   });
 }
+
+// 评论 Query Keys
+export const commentKeys = {
+  all: ["comments"] as const,
+  lists: () => [...commentKeys.all, "list"] as const,
+  list: (taskId: string) => [...commentKeys.lists(), taskId] as const,
+};
+
+// 获取任务评论列表 Hook
+export function useTaskComments(taskId: string) {
+  return useQuery({
+    queryKey: commentKeys.list(taskId),
+    queryFn: () => taskApi.getComments(taskId),
+    enabled: !!taskId,
+  });
+}
+
+// 添加评论 Mutation
+export function useAddComment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ taskId, content, author }: { taskId: string; content: string; author?: string }) =>
+      taskApi.addComment(taskId, content, author),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: commentKeys.list(variables.taskId) });
+    },
+  });
+}
+
+// 删除评论 Mutation
+export function useDeleteComment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ commentId, taskId }: { commentId: string; taskId: string }) =>
+      taskApi.deleteComment(commentId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: commentKeys.list(variables.taskId) });
+    },
+  });
+}

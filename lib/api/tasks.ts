@@ -1,4 +1,13 @@
-import { Task, TaskFilters, TaskListResponse, CreateTaskRequest, UpdateTaskRequest } from "./types";
+import { Task, TaskFilters, TaskListResponse, CreateTaskRequest, UpdateTaskRequest, TaskComment } from "./types";
+
+// 模拟评论数据
+const mockComments: TaskComment[] = [
+  { id: "c_001", taskId: "t_20260316_001", author: "管理员A", content: "建议使用 CSS 变量统一管理颜色", createdAt: "2026-03-16 20:05:00" },
+  { id: "c_002", taskId: "t_20260316_001", author: "coder1", content: "已采用 CSS 变量实现", createdAt: "2026-03-16 20:10:00" },
+  { id: "c_003", taskId: "t_20260316_002", author: "pm", content: "需要考虑未登录用户的收藏功能", createdAt: "2026-03-16 21:15:00" },
+];
+
+let comments = [...mockComments];
 
 // 模拟数据
 const mockTasks: Task[] = [
@@ -252,6 +261,34 @@ export const taskApi = {
       duration: null,
     };
     return tasks[index];
+  },
+
+  // 获取任务评论列表
+  async getComments(taskId: string): Promise<TaskComment[]> {
+    await delay(200);
+    return comments.filter((c) => c.taskId === taskId).sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  },
+
+  // 添加任务评论
+  async addComment(taskId: string, content: string, author: string = "当前用户"): Promise<TaskComment> {
+    await delay(300);
+    const newComment: TaskComment = {
+      id: `c_${Date.now()}`,
+      taskId,
+      author,
+      content,
+      createdAt: new Date().toLocaleString("zh-CN"),
+    };
+    comments.push(newComment);
+    return newComment;
+  },
+
+  // 删除评论
+  async deleteComment(commentId: string): Promise<void> {
+    await delay(200);
+    comments = comments.filter((c) => c.id !== commentId);
   },
 };
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,9 +17,12 @@ import {
   Coins,
   Tag,
   RotateCcw,
-  Loader2
+  Loader2,
+  MessageCircle,
+  Send,
+  Trash2
 } from "lucide-react";
-import { useTaskDetail, useCompleteTask, useCancelTask, useReopenTask } from "@/hooks/useTasks";
+import { useTaskDetail, useCompleteTask, useCancelTask, useReopenTask, useTaskComments, useAddComment, useDeleteComment } from "@/hooks/useTasks";
 import { 
   STATUS_BADGE_VARIANT,
   STATUS_LABELS,
@@ -70,6 +73,27 @@ export default function TaskDetailPage({
   };
   
   const isPending = completeTask.isPending || cancelTask.isPending || reopenTask.isPending;
+
+  // 评论相关
+  const { data: comments = [] } = useTaskComments(id);
+  const addComment = useAddComment();
+  const deleteComment = useDeleteComment();
+  const [newComment, setNewComment] = useState("");
+
+  // 处理添加评论
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComment.trim()) return;
+    await addComment.mutateAsync({ taskId: id, content: newComment });
+    setNewComment("");
+  };
+
+  // 处理删除评论
+  const handleDeleteComment = async (commentId: string) => {
+    if (confirm("确定要删除这条评论吗？")) {
+      await deleteComment.mutateAsync({ commentId, taskId: id });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -311,6 +335,66 @@ export default function TaskDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      {/* 评论功能 */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center">
+            <MessageCircle className="w-4 h-4 mr-2" />
+            任务评论 ({comments.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {/* 评论列表 */}
+          {comments.length > 0 ? (
+            <div className="space-y-4 mb-4">
+              {comments.map((comment) => (
+                <div key={comment.id} className="border-b pb-3 last:border-0">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{comment.author}</span>
+                      <span className="text-xs text-gray-400">{comment.createdAt}</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteComment(comment.id)}
+                      className="text-red-500 hover:text-red-700 h-6 px-2"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                  <p className="text-sm text-gray-700 mt-1">{comment.content}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm mb-4">暂无评论</p>
+          )}
+
+          {/* 添加评论表单 */}
+          <form onSubmit={handleAddComment} className="flex gap-2">
+            <input
+              type="text"
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              placeholder="添加评论..."
+              className="flex-1 px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <Button
+              type="submit"
+              disabled={!newComment.trim() || addComment.isPending}
+              size="sm"
+            >
+              {addComment.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
