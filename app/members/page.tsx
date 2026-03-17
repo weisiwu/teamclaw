@@ -8,7 +8,7 @@ import { Select } from "@/components/ui/select";
 import { MemberForm } from "@/components/members";
 import { useMemberList, useCreateMember, useUpdateMember, useDeleteMember, useBatchDeleteMembers } from "@/hooks/useMembers";
 import { Member, ROLE_LABELS, MEMBER_ROLE_OPTIONS, MemberRole, MemberStatus, CreateMemberRequest, UpdateMemberRequest } from "@/lib/api/types";
-import { Pencil, Trash2, UserPlus, Loader2, Search, ArrowUpDown, ArrowUp, ArrowDown, Download, Upload, X, Power, PowerOff } from "lucide-react";
+import { Pencil, Trash2, UserPlus, Loader2, Search, ArrowUpDown, ArrowUp, ArrowDown, Download, Upload, X, Power, PowerOff, Eye } from "lucide-react";
 import * as XLSX from "xlsx";
 
 type SortField = "name" | "role" | "weight" | "createdAt";
@@ -26,6 +26,7 @@ export default function MembersPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchDeleteConfirm, setBatchDeleteConfirm] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [viewingMember, setViewingMember] = useState<Member | null>(null);
 
   const { data, isLoading, error } = useMemberList();
   const createMember = useCreateMember();
@@ -436,6 +437,14 @@ export default function MembersPage() {
                         <Button
                           size="icon"
                           variant="ghost"
+                          onClick={() => setViewingMember(member)}
+                          title="查看详情"
+                        >
+                          <Eye className="w-4 h-4 text-blue-500" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
                           onClick={() => handleEdit(member)}
                         >
                           <Pencil className="w-4 h-4" />
@@ -522,6 +531,77 @@ export default function MembersPage() {
                 disabled={batchDeleteMembers.isPending}
               >
                 {batchDeleteMembers.isPending ? "删除中..." : "删除"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Member Detail Dialog */}
+      {viewingMember && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div 
+            className="fixed inset-0 bg-black/50" 
+            onClick={() => setViewingMember(null)}
+          />
+          <div className="relative z-50 bg-white rounded-xl shadow-lg w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold">成员详情</h3>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setViewingMember(null)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between py-3 border-b">
+                <span className="text-gray-500">ID</span>
+                <span className="text-sm font-mono text-gray-700">{viewingMember.id}</span>
+              </div>
+              <div className="flex items-center justify-between py-3 border-b">
+                <span className="text-gray-500">姓名</span>
+                <span className="text-gray-900 font-medium">{viewingMember.name}</span>
+              </div>
+              <div className="flex items-center justify-between py-3 border-b">
+                <span className="text-gray-500">角色</span>
+                <Badge variant={getRoleBadgeVariant(viewingMember.role)}>
+                  {ROLE_LABELS[viewingMember.role]}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between py-3 border-b">
+                <span className="text-gray-500">权重</span>
+                <span className="text-gray-900">{viewingMember.weight}</span>
+              </div>
+              <div className="flex items-center justify-between py-3 border-b">
+                <span className="text-gray-500">状态</span>
+                <Badge variant={viewingMember.status === "active" ? "success" : "info"}>
+                  {viewingMember.status === "active" ? "启用" : "禁用"}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between py-3 border-b">
+                <span className="text-gray-500">加入时间</span>
+                <span className="text-gray-700">{viewingMember.createdAt}</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setViewingMember(null);
+                  handleEdit(viewingMember);
+                }}
+              >
+                <Pencil className="w-4 h-4 mr-2" />
+                编辑
+              </Button>
+              <Button
+                onClick={() => setViewingMember(null)}
+              >
+                关闭
               </Button>
             </div>
           </div>
