@@ -61,7 +61,8 @@ import {
   useDeleteTask, 
   useCompleteTask, 
   useCancelTask,
-  useReopenTask 
+  useReopenTask,
+  useUpdateTask 
 } from "@/hooks/useTasks";
 import { 
   TASK_STATUS_OPTIONS, 
@@ -176,7 +177,8 @@ function TaskCard({
   onComplete,
   onCancel,
   onReopen,
-  onDelete
+  onDelete,
+  onStatusChange
 }: {
   task: Task;
   isSelected: boolean;
@@ -185,6 +187,7 @@ function TaskCard({
   onCancel: (id: string) => void;
   onReopen: (id: string) => void;
   onDelete: (id: string) => void;
+  onStatusChange: (id: string, status: TaskStatus) => void;
 }) {
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -204,10 +207,22 @@ function TaskCard({
             <div className="min-w-0">
               <div className="flex items-center gap-3 mb-2">
                 <span className="font-mono text-sm text-gray-500">{task.id}</span>
-                <Badge variant={STATUS_BADGE_VARIANT[task.status]}>
-                  {getStatusIcon(task.status)}
-                  <span className="ml-1">{STATUS_LABELS[task.status]}</span>
-                </Badge>
+                <button
+                  onClick={() => {
+                    // 快速切换状态
+                    const statusFlow: TaskStatus[] = ["pending", "in_progress", "completed", "cancelled"];
+                    const currentIndex = statusFlow.indexOf(task.status);
+                    const nextStatus = statusFlow[(currentIndex + 1) % statusFlow.length];
+                    onStatusChange(task.id, nextStatus);
+                  }}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                  title="点击切换状态"
+                >
+                  <Badge variant={STATUS_BADGE_VARIANT[task.status]}>
+                    {getStatusIcon(task.status)}
+                    <span className="ml-1">{STATUS_LABELS[task.status]}</span>
+                  </Badge>
+                </button>
                 <span className="text-xs text-orange-600 font-medium">
                   优先级：{task.priority}
                 </span>
@@ -385,6 +400,9 @@ function TasksContent() {
   const page = Number(searchParams.get("page")) || 1;
   const isCreateModalOpen = searchParams.get("create") === "true";
   
+  // 视图模式
+  const [viewMode, setViewMode] = useState<"list" | "timeline">("list");
+  
   // 构建筛选参数
   const filters = useMemo(() => ({
     search,
@@ -402,6 +420,10 @@ function TasksContent() {
   const completeTask = useCompleteTask();
   const cancelTask = useCancelTask();
   const reopenTask = useReopenTask();
+  const updateTask = useUpdateTask();
+  
+  // 批量操作状态
+  const [batchPriority, setBatchPriority] = useState<string>("");
   
   // 任务统计
   const taskStats = useMemo(() => {
@@ -511,6 +533,38 @@ function TasksContent() {
     }
   };
   
+  // 批量更新优先级
+  const handleBatchUpdatePriority = async () => {
+    if (!batchPriority) return;
+    try {
+      const priorityNum = parseInt(batchPriority);
+      for (const id of Array.from(selectedTaskIds)) {
+        await updateTask.mutateAsync({ id, data: { priority: priorityNum as TaskPriority } });
+      }
+      setSelectedTaskIds(new Set());
+      setBatchPriority("");
+    } catch (err) {
+      console.error("Failed to batch update priority:", err);
+    }
+  };
+  
+  // 快速切换任务状态
+  const handleQuickStatusChange = async (id: string, newStatus: TaskStatus) => {
+    try {
+      if (newStatus === "completed") {
+        await completeTask.mutateAsync(id);
+      } else if (newStatus === "cancelled") {
+        await cancelTask.mutateAsync(id);
+      } else if (newStatus === "in_progress") {
+        await updateTask.mutateAsync({ id, data: { status: newStatus } });
+      } else if (newStatus === "pending") {
+        await reopenTask.mutateAsync(id);
+      }
+    } catch (err) {
+      console.error("Failed to change status:", err);
+    }
+  };
+  
   const handleDelete = async (id: string) => {
     if (confirm("确定要删除这个任务吗？")) {
       await deleteTask.mutateAsync(id);
@@ -557,19 +611,38 @@ function TasksContent() {
         </div>
 
         {/* 筛选栏 */}
-        <FilterBar
-          search={search}
-          status={status}
-          priority={priority}
-          sortBy={sortBy}
-          sortOrder={sortOrder}
-          onSearchChange={handleSearchChange}
-          onStatusChange={handleStatusChange}
-          onPriorityChange={handlePriorityChange}
-          onSortByChange={handleSortByChange}
-          onSortOrderChange={handleSortOrderChange}
-          onClear={handleClearFilters}
-        />
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <FilterBar
+            search={search}
+            status={status}
+            priority={priority}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            onSearchChange={handleSearchChange}
+            onStatusChange={handleStatusChange}
+            onPriorityChange={handlePriorityChange}
+            onSortByChange={handleSortByChange}
+            onSortOrderChange={handleSortOrderChange}
+            onClear={handleClearFilters}
+          />
+          {/* 视图切换 */}
+          <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+            <Button
+              variant={viewMode === "list" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("list")}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </Button>
+            <Button
+              variant={viewMode === "timeline" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("timeline")}
+            >
+              <Clock className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
 
         {/* 任务统计概览 */}
         {taskStats && (
@@ -659,11 +732,36 @@ function TasksContent() {
         {/* 批量操作栏 */}
         {selectedTaskIds.size > 0 && (
           <Card className="bg-blue-50 border-blue-200">
-            <CardContent className="p-3 flex items-center justify-between">
+            <CardContent className="p-3 flex items-center justify-between flex-wrap gap-2">
               <span className="text-sm text-blue-700">
                 已选择 {selectedTaskIds.size} 个任务
               </span>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
+                {/* 批量修改优先级 */}
+                <div className="flex items-center gap-1">
+                  <Select
+                    options={[
+                      { value: "", label: "修改优先级" },
+                      { value: "10", label: "紧急 (10)" },
+                      { value: "8", label: "高 (8-9)" },
+                      { value: "5", label: "中 (5-7)" },
+                      { value: "3", label: "低 (1-4)" },
+                    ]}
+                    value={batchPriority}
+                    onChange={(e) => setBatchPriority(e.target.value)}
+                    className="w-36 h-8 text-sm"
+                  />
+                  {batchPriority && (
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={handleBatchUpdatePriority}
+                      disabled={updateTask.isPending}
+                    >
+                      {updateTask.isPending ? "..." : "应用"}
+                    </Button>
+                  )}
+                </div>
                 <Button 
                   variant="outline" 
                   size="sm"
@@ -685,7 +783,87 @@ function TasksContent() {
         )}
 
         {/* 任务列表 */}
-        <div className="space-y-3">
+        {viewMode === "timeline" ? (
+          // 时间线视图
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-700">任务时间线</h3>
+            {isLoading ? (
+              <Card><CardContent className="py-12 text-center text-gray-500">加载中...</CardContent></Card>
+            ) : error ? (
+              <Card><CardContent className="py-12 text-center text-red-500">加载失败</CardContent></Card>
+            ) : data?.data.length === 0 ? (
+              <Card><CardContent className="py-12 text-center text-gray-500">暂无任务</CardContent></Card>
+            ) : (
+              <div className="relative">
+                {/* 时间线竖线 */}
+                <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200" />
+                
+                {data?.data
+                  .slice()
+                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                  .map((task) => (
+                    <div key={task.id} className="relative flex gap-4 pb-6">
+                      {/* 时间线节点 */}
+                      <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                        task.status === "completed" ? "bg-green-500" :
+                        task.status === "in_progress" ? "bg-blue-500" :
+                        task.status === "cancelled" ? "bg-red-500" : "bg-gray-400"
+                      }`}>
+                        {task.status === "completed" ? (
+                          <CheckCircle className="w-5 h-5 text-white" />
+                        ) : task.status === "in_progress" ? (
+                          <PlayCircle className="w-5 h-5 text-white" />
+                        ) : task.status === "cancelled" ? (
+                          <XCircle className="w-5 h-5 text-white" />
+                        ) : (
+                          <AlertCircle className="w-5 h-5 text-white" />
+                        )}
+                      </div>
+                      
+                      {/* 时间线内容 */}
+                      <Card className="flex-1">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-mono text-sm text-gray-500">{task.id}</span>
+                                <Badge variant={STATUS_BADGE_VARIANT[task.status]}>
+                                  {STATUS_LABELS[task.status]}
+                                </Badge>
+                                <span className="text-xs text-orange-600">P{task.priority}</span>
+                              </div>
+                              <h3 className="font-semibold">{task.title}</h3>
+                              <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  {task.createdAt}
+                                </span>
+                                {task.completedAt && (
+                                  <span>完成于: {task.completedAt}</span>
+                                )}
+                                {task.duration && (
+                                  <span>耗时: {task.duration}分钟</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Link href={`/tasks/${task.id}`}>
+                                <Button size="sm" variant="ghost">
+                                  <ArrowRight className="w-4 h-4" />
+                                </Button>
+                              </Link>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          // 列表视图
+          <div className="space-y-3">
           {isLoading ? (
             <Card>
               <CardContent className="py-12 text-center text-gray-500">
@@ -749,11 +927,13 @@ function TasksContent() {
                     onCancel={handleCancel}
                     onReopen={handleReopen}
                     onDelete={handleDelete}
+                    onStatusChange={handleQuickStatusChange}
                   />
                 ))}
             </>
           )}
         </div>
+        )}
 
         {/* 分页 */}
         {data && data.totalPages > 1 && (
