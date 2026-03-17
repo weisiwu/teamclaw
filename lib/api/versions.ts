@@ -1,4 +1,4 @@
-import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest } from "./types";
+import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag } from "./types";
 
 // Mock 数据
 const mockVersions: Version[] = [
@@ -15,6 +15,7 @@ const mockVersions: Version[] = [
     isMain: true,
     buildStatus: "success",
     artifactUrl: "https://example.com/artifacts/v1.0.0.zip",
+    tags: ["stable", "latest"],
   },
   {
     id: "v2",
@@ -29,6 +30,7 @@ const mockVersions: Version[] = [
     isMain: false,
     buildStatus: "success",
     artifactUrl: "https://example.com/artifacts/v1.1.0.zip",
+    tags: ["stable"],
   },
   {
     id: "v3",
@@ -43,6 +45,7 @@ const mockVersions: Version[] = [
     isMain: false,
     buildStatus: "success",
     artifactUrl: "https://example.com/artifacts/v1.2.0.zip",
+    tags: ["beta"],
   },
   {
     id: "v4",
@@ -57,6 +60,7 @@ const mockVersions: Version[] = [
     isMain: false,
     buildStatus: "success",
     artifactUrl: "https://example.com/artifacts/v1.3.0.zip",
+    tags: ["latest"],
   },
   {
     id: "v5",
@@ -71,6 +75,7 @@ const mockVersions: Version[] = [
     isMain: false,
     buildStatus: "pending",
     artifactUrl: null,
+    tags: ["beta", "draft"],
   },
 ];
 
@@ -127,6 +132,7 @@ export async function createVersion(request: CreateVersionRequest): Promise<Vers
     isMain: false,
     buildStatus: "pending",
     artifactUrl: null,
+    tags: request.tags || [],
   };
 
   mockVersions.unshift(newVersion);
@@ -165,6 +171,30 @@ export async function deleteVersion(id: string): Promise<boolean> {
 
   mockVersions.splice(index, 1);
   return true;
+}
+
+// 为版本添加标签
+export async function addVersionTag(versionId: string, tag: VersionTag): Promise<Version | null> {
+  await delay(200);
+
+  const version = mockVersions.find((v) => v.id === versionId);
+  if (!version) return null;
+
+  if (!version.tags.includes(tag)) {
+    version.tags.push(tag);
+  }
+  return version;
+}
+
+// 移除版本标签
+export async function removeVersionTag(versionId: string, tag: VersionTag): Promise<Version | null> {
+  await delay(200);
+
+  const version = mockVersions.find((v) => v.id === versionId);
+  if (!version) return null;
+
+  version.tags = version.tags.filter((t) => t !== tag);
+  return version;
 }
 
 // 创建分支

@@ -316,6 +316,17 @@ export interface UpdateCapabilityRequest {
 export type VersionStatus = "draft" | "published" | "archived";
 export type BuildStatus = "pending" | "building" | "success" | "failed";
 
+// 预设标签
+export const VERSION_TAG_OPTIONS = [
+  { value: "stable", label: "stable", color: "bg-green-100 text-green-800" },
+  { value: "beta", label: "beta", color: "bg-blue-100 text-blue-800" },
+  { value: "latest", label: "latest", color: "bg-purple-100 text-purple-800" },
+  { value: "deprecated", label: "deprecated", color: "bg-red-100 text-red-800" },
+  { value: "draft", label: "draft", color: "bg-gray-100 text-gray-800" },
+] as const;
+
+export type VersionTag = typeof VERSION_TAG_OPTIONS[number]["value"];
+
 export interface Version {
   id: string;
   version: string;
@@ -329,6 +340,7 @@ export interface Version {
   isMain: boolean;
   buildStatus: BuildStatus;
   artifactUrl: string | null;
+  tags: VersionTag[];
 }
 
 export interface CreateVersionRequest {
@@ -336,6 +348,7 @@ export interface CreateVersionRequest {
   title: string;
   description: string;
   status: VersionStatus;
+  tags?: VersionTag[];
 }
 
 export interface UpdateVersionRequest {
@@ -343,6 +356,7 @@ export interface UpdateVersionRequest {
   title?: string;
   description?: string;
   status?: VersionStatus;
+  tags?: VersionTag[];
 }
 
 export interface VersionListResponse {

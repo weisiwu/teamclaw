@@ -24,12 +24,15 @@ import {
   CreateVersionRequest,
   UpdateVersionRequest,
   VersionStatus,
+  VERSION_TAG_OPTIONS,
+  VersionTag,
 } from "@/lib/api/types";
 import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch, Star, Play, Download } from "lucide-react";
 
 export default function VersionsPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [tagFilter, setTagFilter] = useState<string>("all");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingVersion, setEditingVersion] = useState<Version | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -48,6 +51,10 @@ export default function VersionsPage() {
   const downloadArtifact = useDownloadArtifact();
 
   const versions = data?.data || [];
+  // 前端标签筛选
+  const filteredVersions = tagFilter === "all" 
+    ? versions 
+    : versions.filter((v) => v.tags.includes(tagFilter as VersionTag));
   const totalPages = data?.totalPages || 1;
   const total = data?.total || 0;
 
@@ -166,10 +173,10 @@ export default function VersionsPage() {
 
       {/* 筛选器 */}
       <div className="bg-white rounded-xl border p-4 mb-6">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <Search className="w-4 h-4 text-gray-400" />
-            <span className="text-sm text-gray-600">状态筛选:</span>
+            <span className="text-sm text-gray-600">状态:</span>
           </div>
           <div className="flex gap-2">
             {VERSION_STATUS_OPTIONS.map((option) => (
@@ -181,6 +188,35 @@ export default function VersionsPage() {
                   setStatusFilter(option.value);
                   setPage(1);
                 }}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 ml-6">
+            <span className="text-sm text-gray-600">标签:</span>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant={tagFilter === "all" ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setTagFilter("all");
+                setPage(1);
+              }}
+            >
+              全部
+            </Button>
+            {VERSION_TAG_OPTIONS.map((option) => (
+              <Button
+                key={option.value}
+                variant={tagFilter === option.value ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setTagFilter(option.value);
+                  setPage(1);
+                }}
+                className={tagFilter === option.value ? "" : `${option.color.replace('bg-', 'border-').replace(' text-', ' border-')}`}
               >
                 {option.label}
               </Button>
@@ -206,7 +242,7 @@ export default function VersionsPage() {
             <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
             <span className="ml-2 text-gray-500">加载中...</span>
           </div>
-        ) : versions.length === 0 ? (
+        ) : filteredVersions.length === 0 ? (
           <div className="text-center py-12 text-gray-500">暂无版本记录</div>
         ) : (
           <>
@@ -215,6 +251,7 @@ export default function VersionsPage() {
                 <tr>
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">版本</th>
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">标题</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">标签</th>
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">状态</th>
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">构建</th>
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">发布时间</th>
@@ -224,7 +261,7 @@ export default function VersionsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {versions.map((version) => (
+                {filteredVersions.map((version) => (
                   <tr key={version.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
                       <span className="font-mono font-medium text-gray-900">{version.version}</span>
@@ -233,6 +270,21 @@ export default function VersionsPage() {
                       <div className="max-w-[200px]">
                         <div className="font-medium text-gray-900 truncate">{version.title}</div>
                         <div className="text-sm text-gray-500 truncate">{version.description}</div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {version.tags.map((tag) => {
+                          const tagOption = VERSION_TAG_OPTIONS.find((t) => t.value === tag);
+                          return (
+                            <span
+                              key={tag}
+                              className={`px-2 py-0.5 rounded-full text-xs font-medium ${tagOption?.color || 'bg-gray-100 text-gray-800'}`}
+                            >
+                              {tag}
+                            </span>
+                          );
+                        })}
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -423,6 +475,7 @@ function VersionForm({ version, onSubmit, onClose, isPending }: VersionFormProps
     title: version?.title || "",
     description: version?.description || "",
     status: version?.status || "draft",
+    tags: version?.tags || [],
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -493,6 +546,35 @@ function VersionForm({ version, onSubmit, onClose, isPending }: VersionFormProps
               <option value="published">已发布</option>
               <option value="archived">已归档</option>
             </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">标签</label>
+            <div className="flex flex-wrap gap-2">
+              {VERSION_TAG_OPTIONS.map((option) => {
+                const isSelected = formData.tags?.includes(option.value);
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      const currentTags = formData.tags || [];
+                      const newTags = isSelected
+                        ? currentTags.filter((t) => t !== option.value)
+                        : [...currentTags, option.value];
+                      setFormData({ ...formData, tags: newTags });
+                    }}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                      isSelected
+                        ? option.color
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="flex gap-3 justify-end pt-4">
