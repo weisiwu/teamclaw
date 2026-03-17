@@ -19,8 +19,39 @@ import {
   AlertCircle,
   X,
   CheckSquare,
-  Square
+  Square,
+  Download
 } from "lucide-react";
+
+// CSV 导出函数
+function convertToCSV(tasks: Task[]): string {
+  const headers = ["任务ID", "标题", "描述", "状态", "优先级", "创建时间", "完成时间", "耗时(分钟)", "标签"];
+  const rows = tasks.map(task => [
+    task.id,
+    `"${(task.title || "").replace(/"/g, '""')}"`,
+    `"${(task.description || "").replace(/"/g, '""')}"`,
+    STATUS_LABELS[task.status],
+    String(task.priority),
+    task.createdAt,
+    task.completedAt || "",
+    task.duration || "",
+    task.tags.join("; ")
+  ]);
+  return [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+}
+
+function downloadCSV(tasks: Task[], filename: string = "tasks.csv") {
+  const csv = convertToCSV(tasks);
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 import { 
   useTaskList, 
   useCreateTask, 
@@ -490,10 +521,20 @@ function TasksContent() {
             <h1 className="text-2xl font-bold text-gray-900">任务管理</h1>
             <p className="text-gray-500 mt-1">管理团队协作任务</p>
           </div>
-          <Button onClick={handleOpenCreateModal}>
-            <Plus className="w-4 h-4 mr-2" />
-            创建任务
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => data?.data && downloadCSV(data.data, `tasks-${new Date().toISOString().split('T')[0]}.csv`)}
+              disabled={!data?.data || data.data.length === 0}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              导出 CSV
+            </Button>
+            <Button onClick={handleOpenCreateModal}>
+              <Plus className="w-4 h-4 mr-2" />
+              创建任务
+            </Button>
+          </div>
         </div>
 
         {/* 筛选栏 */}
