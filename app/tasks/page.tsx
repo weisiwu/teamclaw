@@ -20,7 +20,10 @@ import {
   X,
   CheckSquare,
   Square,
-  Download
+  Download,
+  LayoutGrid,
+  Clock,
+  Target
 } from "lucide-react";
 
 // CSV 导出函数
@@ -400,6 +403,22 @@ function TasksContent() {
   const cancelTask = useCancelTask();
   const reopenTask = useReopenTask();
   
+  // 任务统计
+  const taskStats = useMemo(() => {
+    if (!data?.data) return null;
+    const tasks = data.data;
+    return {
+      total: tasks.length,
+      pending: tasks.filter(t => t.status === "pending").length,
+      inProgress: tasks.filter(t => t.status === "in_progress").length,
+      completed: tasks.filter(t => t.status === "completed").length,
+      cancelled: tasks.filter(t => t.status === "cancelled").length,
+      avgPriority: tasks.length > 0 
+        ? Math.round(tasks.reduce((sum, t) => sum + t.priority, 0) / tasks.length * 10) / 10 
+        : 0,
+    };
+  }, [data]);
+  
   // 创建新的 URL 参数
   const createQueryString = useCallback(
     (params: Record<string, string | number | null>) => {
@@ -551,6 +570,91 @@ function TasksContent() {
           onSortOrderChange={handleSortOrderChange}
           onClear={handleClearFilters}
         />
+
+        {/* 任务统计概览 */}
+        {taskStats && (
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+            <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="p-2 bg-blue-500 rounded-lg">
+                  <LayoutGrid className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs text-blue-600 font-medium">总计</p>
+                  <p className="text-lg font-bold text-blue-900">{taskStats.total}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="p-2 bg-gray-400 rounded-lg">
+                  <AlertCircle className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-600 font-medium">待处理</p>
+                  <p className="text-lg font-bold text-gray-900">{taskStats.pending}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="p-2 bg-blue-500 rounded-lg">
+                  <PlayCircle className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs text-blue-600 font-medium">进行中</p>
+                  <p className="text-lg font-bold text-blue-900">{taskStats.inProgress}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="p-2 bg-green-500 rounded-lg">
+                  <CheckCircle className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs text-green-600 font-medium">已完成</p>
+                  <p className="text-lg font-bold text-green-900">{taskStats.completed}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="p-2 bg-red-500 rounded-lg">
+                  <XCircle className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs text-red-600 font-medium">已取消</p>
+                  <p className="text-lg font-bold text-red-900">{taskStats.cancelled}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="p-2 bg-purple-500 rounded-lg">
+                  <Target className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs text-purple-600 font-medium">平均优先级</p>
+                  <p className="text-lg font-bold text-purple-900">{taskStats.avgPriority}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="p-2 bg-orange-500 rounded-lg">
+                  <Clock className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs text-orange-600 font-medium">完成率</p>
+                  <p className="text-lg font-bold text-orange-900">
+                    {taskStats.total > 0 ? Math.round(taskStats.completed / taskStats.total * 100) : 0}%
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* 批量操作栏 */}
         {selectedTaskIds.size > 0 && (
