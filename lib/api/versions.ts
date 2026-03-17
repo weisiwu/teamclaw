@@ -12,6 +12,9 @@ const mockVersions: Version[] = [
     createdAt: "2026-01-10T08:00:00Z",
     changedFiles: ["app/layout.tsx", "app/page.tsx", "lib/api/tasks.ts"],
     commitCount: 12,
+    isMain: true,
+    buildStatus: "success",
+    artifactUrl: "https://example.com/artifacts/v1.0.0.zip",
   },
   {
     id: "v2",
@@ -23,6 +26,9 @@ const mockVersions: Version[] = [
     createdAt: "2026-01-25T09:00:00Z",
     changedFiles: ["app/tasks/page.tsx", "lib/api/tasks.ts", "components/TaskCard.tsx"],
     commitCount: 8,
+    isMain: false,
+    buildStatus: "success",
+    artifactUrl: "https://example.com/artifacts/v1.1.0.zip",
   },
   {
     id: "v3",
@@ -34,6 +40,9 @@ const mockVersions: Version[] = [
     createdAt: "2026-02-10T11:00:00Z",
     changedFiles: ["app/cron/page.tsx", "lib/api/cron.ts", "components/CronModal.tsx"],
     commitCount: 6,
+    isMain: false,
+    buildStatus: "success",
+    artifactUrl: "https://example.com/artifacts/v1.2.0.zip",
   },
   {
     id: "v4",
@@ -45,6 +54,9 @@ const mockVersions: Version[] = [
     createdAt: "2026-02-25T08:00:00Z",
     changedFiles: ["app/tokens/page.tsx", "lib/api/tokens.ts"],
     commitCount: 5,
+    isMain: false,
+    buildStatus: "success",
+    artifactUrl: "https://example.com/artifacts/v1.3.0.zip",
   },
   {
     id: "v5",
@@ -56,6 +68,9 @@ const mockVersions: Version[] = [
     createdAt: "2026-03-15T09:00:00Z",
     changedFiles: ["app/members/page.tsx", "lib/api/members.ts"],
     commitCount: 3,
+    isMain: false,
+    buildStatus: "pending",
+    artifactUrl: null,
   },
 ];
 
@@ -109,6 +124,9 @@ export async function createVersion(request: CreateVersionRequest): Promise<Vers
     createdAt: new Date().toISOString(),
     changedFiles: [],
     commitCount: 0,
+    isMain: false,
+    buildStatus: "pending",
+    artifactUrl: null,
   };
 
   mockVersions.unshift(newVersion);
@@ -147,6 +165,55 @@ export async function deleteVersion(id: string): Promise<boolean> {
 
   mockVersions.splice(index, 1);
   return true;
+}
+
+// 创建分支
+export async function createBranch(versionId: string, branchName: string): Promise<{ success: boolean; branchName: string }> {
+  await delay(500);
+  return { success: true, branchName: `feature/${branchName || 'new-branch'}` };
+}
+
+// 指定主版本
+export async function setMainVersion(versionId: string): Promise<Version | null> {
+  await delay(300);
+  
+  // 先清除其他版本的主版本标记
+  mockVersions.forEach(v => { v.isMain = false; });
+  
+  const index = mockVersions.findIndex((v) => v.id === versionId);
+  if (index === -1) return null;
+  
+  mockVersions[index].isMain = true;
+  return mockVersions[index];
+}
+
+// 触发构建
+export async function triggerBuild(versionId: string): Promise<{ success: boolean; buildId: string }> {
+  await delay(300);
+  
+  const index = mockVersions.findIndex((v) => v.id === versionId);
+  if (index === -1) return { success: false, buildId: '' };
+  
+  mockVersions[index].buildStatus = "building";
+  return { success: true, buildId: `build-${Date.now()}` };
+}
+
+// 重新构建
+export async function rebuildVersion(versionId: string): Promise<{ success: boolean; buildId: string }> {
+  await delay(500);
+  return triggerBuild(versionId);
+}
+
+// 下载产物
+export async function downloadArtifact(versionId: string): Promise<{ success: boolean; url: string }> {
+  await delay(200);
+  
+  const version = mockVersions.find((v) => v.id === versionId);
+  if (!version || !version.artifactUrl) {
+    return { success: false, url: '' };
+  }
+  
+  return { success: true, url: version.artifactUrl };
 }
 
 // React Query hooks
@@ -198,5 +265,56 @@ export function useDeleteVersion() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["versions"] });
     },
+  });
+}
+
+export function useCreateBranch() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ versionId, branchName }: { versionId: string; branchName: string }) =>
+      createBranch(versionId, branchName),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["versions"] });
+    },
+  });
+}
+
+export function useSetMainVersion() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (versionId: string) => setMainVersion(versionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["versions"] });
+    },
+  });
+}
+
+export function useTriggerBuild() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (versionId: string) => triggerBuild(versionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["versions"] });
+    },
+  });
+}
+
+export function useRebuildVersion() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (versionId: string) => rebuildVersion(versionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["versions"] });
+    },
+  });
+}
+
+export function useDownloadArtifact() {
+  return useMutation({
+    mutationFn: (versionId: string) => downloadArtifact(versionId),
   });
 }

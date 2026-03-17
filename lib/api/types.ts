@@ -314,6 +314,7 @@ export interface UpdateCapabilityRequest {
 // ========== 版本管理类型 ==========
 
 export type VersionStatus = "draft" | "published" | "archived";
+export type BuildStatus = "pending" | "building" | "success" | "failed";
 
 export interface Version {
   id: string;
@@ -325,6 +326,9 @@ export interface Version {
   createdAt: string;
   changedFiles: string[];
   commitCount: number;
+  isMain: boolean;
+  buildStatus: BuildStatus;
+  artifactUrl: string | null;
 }
 
 export interface CreateVersionRequest {
@@ -367,4 +371,18 @@ export const VERSION_STATUS_BADGE_VARIANT: Record<VersionStatus, "default" | "su
   draft: "default",
   published: "success",
   archived: "warning",
+};
+
+export const BUILD_STATUS_LABELS: Record<BuildStatus, string> = {
+  pending: "待构建",
+  building: "构建中",
+  success: "构建成功",
+  failed: "构建失败",
+};
+
+export const BUILD_STATUS_BADGE_VARIANT: Record<BuildStatus, "default" | "info" | "success" | "error"> = {
+  pending: "default",
+  building: "info",
+  success: "success",
+  failed: "error",
 };

@@ -8,17 +8,24 @@ import {
   useCreateVersion,
   useUpdateVersion,
   useDeleteVersion,
+  useCreateBranch,
+  useSetMainVersion,
+  useTriggerBuild,
+  useRebuildVersion,
+  useDownloadArtifact,
 } from "@/lib/api/versions";
 import {
   Version,
   VERSION_STATUS_LABELS,
   VERSION_STATUS_BADGE_VARIANT,
   VERSION_STATUS_OPTIONS,
+  BUILD_STATUS_LABELS,
+  BUILD_STATUS_BADGE_VARIANT,
   CreateVersionRequest,
   UpdateVersionRequest,
   VersionStatus,
 } from "@/lib/api/types";
-import { Pencil, Trash2, Plus, Loader2, Search, X } from "lucide-react";
+import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch, Star, Play, Download } from "lucide-react";
 
 export default function VersionsPage() {
   const [page, setPage] = useState(1);
@@ -26,6 +33,7 @@ export default function VersionsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingVersion, setEditingVersion] = useState<Version | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const pageSize = 10;
 
@@ -33,6 +41,11 @@ export default function VersionsPage() {
   const createVersion = useCreateVersion();
   const updateVersion = useUpdateVersion();
   const deleteVersion = useDeleteVersion();
+  const createBranch = useCreateBranch();
+  const setMainVersion = useSetMainVersion();
+  const triggerBuild = useTriggerBuild();
+  const rebuildVersion = useRebuildVersion();
+  const downloadArtifact = useDownloadArtifact();
 
   const versions = data?.data || [];
   const totalPages = data?.totalPages || 1;
@@ -71,6 +84,57 @@ export default function VersionsPage() {
       setDeleteConfirmId(null);
     } catch (err) {
       console.error("Failed to delete version:", err);
+    }
+  };
+
+  const handleCreateBranch = async (version: Version) => {
+    try {
+      const branchName = `v${version.version.replace(/\./g, '-')}-branch`;
+      await createBranch.mutateAsync({ versionId: version.id, branchName });
+      setActionMessage({ type: 'success', text: `分支创建成功: feature/${branchName}` });
+    } catch {
+      setActionMessage({ type: 'error', text: '创建分支失败' });
+    }
+  };
+
+  const handleSetMain = async (version: Version) => {
+    try {
+      await setMainVersion.mutateAsync(version.id);
+      setActionMessage({ type: 'success', text: `已将 ${version.version} 设为主版本` });
+    } catch {
+      setActionMessage({ type: 'error', text: '设置主版本失败' });
+    }
+  };
+
+  const handleBuild = async (version: Version) => {
+    try {
+      await triggerBuild.mutateAsync(version.id);
+      setActionMessage({ type: 'success', text: `已触发 ${version.version} 构建` });
+    } catch {
+      setActionMessage({ type: 'error', text: '触发构建失败' });
+    }
+  };
+
+  const handleRebuild = async (version: Version) => {
+    try {
+      await rebuildVersion.mutateAsync(version.id);
+      setActionMessage({ type: 'success', text: `已重新构建 ${version.version}` });
+    } catch {
+      setActionMessage({ type: 'error', text: '重新构建失败' });
+    }
+  };
+
+  const handleDownload = async (version: Version) => {
+    try {
+      const result = await downloadArtifact.mutateAsync(version.id);
+      if (result.success && result.url) {
+        window.open(result.url, '_blank');
+        setActionMessage({ type: 'success', text: '开始下载产物' });
+      } else {
+        setActionMessage({ type: 'error', text: '下载链接不存在' });
+      }
+    } catch {
+      setActionMessage({ type: 'error', text: '下载失败' });
     }
   };
 
@@ -125,6 +189,16 @@ export default function VersionsPage() {
         </div>
       </div>
 
+      {/* 操作消息提示 */}
+      {actionMessage && (
+        <div className={`mb-4 p-3 rounded-lg ${actionMessage.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          {actionMessage.text}
+          <button onClick={() => setActionMessage(null)} className="ml-2 underline">
+            关闭
+          </button>
+        </div>
+      )}
+
       {/* 版本列表 */}
       <div className="bg-white rounded-xl border overflow-hidden">
         {isLoading ? (
@@ -142,6 +216,7 @@ export default function VersionsPage() {
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">版本</th>
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">标题</th>
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">状态</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">构建</th>
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">发布时间</th>
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">变更文件</th>
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">提交数</th>
@@ -177,14 +252,70 @@ export default function VersionsPage() {
                       {version.commitCount} 次提交
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
+                      <Badge variant={BUILD_STATUS_BADGE_VARIANT[version.buildStatus]}>
+                        {BUILD_STATUS_LABELS[version.buildStatus]}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        {version.isMain && (
+                          <Badge variant="success" className="mr-1">
+                            <Star className="w-3 h-3 mr-1" />主版本
+                          </Badge>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleEdit(version)}
                           disabled={updateVersion.isPending}
+                          title="编辑"
                         >
                           <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCreateBranch(version)}
+                          disabled={createBranch.isPending}
+                          title="创建分支"
+                        >
+                          <GitBranch className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleSetMain(version)}
+                          disabled={version.isMain || setMainVersion.isPending}
+                          title="设为主版本"
+                        >
+                          <Star className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleBuild(version)}
+                          disabled={version.buildStatus === 'building' || triggerBuild.isPending}
+                          title="构建"
+                        >
+                          <Play className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRebuild(version)}
+                          disabled={rebuildVersion.isPending}
+                          title="重新构建"
+                        >
+                          <Loader2 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDownload(version)}
+                          disabled={!version.artifactUrl || downloadArtifact.isPending}
+                          title="下载产物"
+                        >
+                          <Download className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -192,6 +323,7 @@ export default function VersionsPage() {
                           onClick={() => setDeleteConfirmId(version.id)}
                           disabled={deleteVersion.isPending}
                           className="text-red-600 hover:text-red-700"
+                          title="删除"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
