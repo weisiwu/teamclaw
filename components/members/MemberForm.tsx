@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
-import { Member, MemberRole, MEMBER_ROLE_OPTIONS, CreateMemberRequest, UpdateMemberRequest } from "@/lib/api/types";
+import { Member, MemberRole, MemberStatus, MEMBER_ROLE_OPTIONS, CreateMemberRequest, UpdateMemberRequest } from "@/lib/api/types";
 
 interface MemberFormProps {
   open: boolean;
@@ -19,6 +19,7 @@ export function MemberForm({ open, onOpenChange, member, onSubmit, isLoading }: 
   const [name, setName] = useState("");
   const [role, setRole] = useState<MemberRole>("member");
   const [weight, setWeight] = useState(50);
+  const [status, setStatus] = useState<MemberStatus>("active");
 
   // Reset form when opening/closing or when member changes
   useEffect(() => {
@@ -27,10 +28,12 @@ export function MemberForm({ open, onOpenChange, member, onSubmit, isLoading }: 
         setName(member.name);
         setRole(member.role);
         setWeight(member.weight);
+        setStatus(member.status || "active");
       } else {
         setName("");
         setRole("member");
         setWeight(50);
+        setStatus("active");
       }
     }
   }, [open, member]);
@@ -44,12 +47,14 @@ export function MemberForm({ open, onOpenChange, member, onSubmit, isLoading }: 
         name: name.trim(),
         role,
         weight,
+        status,
       } as UpdateMemberRequest);
     } else {
       onSubmit({
         name: name.trim(),
         role,
         weight,
+        status,
       } as CreateMemberRequest);
     }
   };
@@ -98,6 +103,20 @@ export function MemberForm({ open, onOpenChange, member, onSubmit, isLoading }: 
                 placeholder="请输入权重 (0-100)"
               />
               <p className="text-xs text-gray-500 mt-1">权重范围: 0-100</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                状态
+              </label>
+              <Select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as MemberStatus)}
+                options={[
+                  { value: "active", label: "启用" },
+                  { value: "inactive", label: "禁用" },
+                ]}
+              />
             </div>
           </div>
 

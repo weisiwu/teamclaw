@@ -4,10 +4,11 @@ import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { MemberForm } from "@/components/members";
 import { useMemberList, useCreateMember, useUpdateMember, useDeleteMember, useBatchDeleteMembers } from "@/hooks/useMembers";
-import { Member, ROLE_LABELS, MemberRole, CreateMemberRequest, UpdateMemberRequest } from "@/lib/api/types";
-import { Pencil, Trash2, UserPlus, Loader2, Search, ArrowUpDown, ArrowUp, ArrowDown, Download, Upload, X } from "lucide-react";
+import { Member, ROLE_LABELS, MEMBER_ROLE_OPTIONS, MemberRole, MemberStatus, CreateMemberRequest, UpdateMemberRequest } from "@/lib/api/types";
+import { Pencil, Trash2, UserPlus, Loader2, Search, ArrowUpDown, ArrowUp, ArrowDown, Download, Upload, X, Power, PowerOff } from "lucide-react";
 import * as XLSX from "xlsx";
 
 type SortField = "name" | "role" | "weight" | "createdAt";
@@ -18,6 +19,8 @@ export default function MembersPage() {
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<MemberRole | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<MemberStatus | "all">("all");
   const [sortBy, setSortBy] = useState<SortField>("createdAt");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -41,6 +44,16 @@ export default function MembersPage() {
       result = result.filter(m => m.name.includes(searchQuery));
     }
     
+    // Filter by role
+    if (roleFilter !== "all") {
+      result = result.filter(m => m.role === roleFilter);
+    }
+    
+    // Filter by status
+    if (statusFilter !== "all") {
+      result = result.filter(m => m.status === statusFilter);
+    }
+    
     // Sort
     result.sort((a, b) => {
       let comparison = 0;
@@ -62,7 +75,7 @@ export default function MembersPage() {
     });
     
     return result;
-  }, [members, searchQuery, sortBy, sortOrder]);
+  }, [members, searchQuery, roleFilter, statusFilter, sortBy, sortOrder]);
 
   const handleSort = (field: SortField) => {
     if (sortBy === field) {
@@ -101,6 +114,7 @@ export default function MembersPage() {
       姓名: m.name,
       角色: ROLE_LABELS[m.role],
       权重: m.weight,
+      状态: m.status === "active" ? "启用" : "禁用",
       加入时间: m.createdAt,
     }));
     
@@ -128,6 +142,7 @@ export default function MembersPage() {
           name: row.姓名,
           role,
           weight: row.权重 || 1,
+          status: "active",
         });
       }
       
@@ -144,6 +159,28 @@ export default function MembersPage() {
       setBatchDeleteConfirm(false);
     } catch (err) {
       console.error("Failed to batch delete members:", err);
+    }
+  };
+
+  const handleToggleStatus = async (member: Member) => {
+    try {
+      const newStatus: MemberStatus = member.status === "active" ? "inactive" : "active";
+      await updateMember.mutateAsync({ id: member.id, data: { status: newStatus } });
+    } catch (err) {
+      console.error("Failed to toggle member status:", err);
+    }
+  };
+
+  const handleBatchRoleChange = async (newRole: MemberRole) => {
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map(id => 
+          updateMember.mutateAsync({ id, data: { role: newRole } })
+        )
+      );
+      setSelectedIds(new Set());
+    } catch (err) {
+      console.error("Failed to batch change role:", err);
     }
   };
 
@@ -224,6 +261,26 @@ export default function MembersPage() {
           />
         </div>
         
+        {/* Role Filter */}
+        <Select 
+          value={roleFilter} 
+          onChange={(e) => setRoleFilter(e.target.value as MemberRole | "all")}
+          className="w-36"
+          options={[{ value: "all", label: "全部角色" }, ...MEMBER_ROLE_OPTIONS]}
+        />
+        
+        {/* Status Filter */}
+        <Select 
+          value={statusFilter} 
+          onChange={(e) => setStatusFilter(e.target.value as MemberStatus | "all")}
+          className="w-36"
+          options={[
+            { value: "all", label: "全部状态" },
+            { value: "active", label: "启用" },
+            { value: "inactive", label: "禁用" },
+          ]}
+        />
+        
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="w-4 h-4 mr-2" />
@@ -257,10 +314,18 @@ export default function MembersPage() {
           )}
           
           {selectedIds.size > 0 && (
-            <Button variant="destructive" size="sm" onClick={() => setBatchDeleteConfirm(true)}>
-              <Trash2 className="w-4 h-4 mr-2" />
-              批量删除 ({selectedIds.size})
-            </Button>
+            <>
+              <Select 
+                onChange={(e) => e.target.value && handleBatchRoleChange(e.target.value as MemberRole)}
+                className="w-36 h-8"
+                value=""
+                options={[{ value: "", label: "批量修改角色" }, ...MEMBER_ROLE_OPTIONS]}
+              />
+              <Button variant="destructive" size="sm" onClick={() => setBatchDeleteConfirm(true)}>
+                <Trash2 className="w-4 h-4 mr-2" />
+                批量删除 ({selectedIds.size})
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -324,6 +389,7 @@ export default function MembersPage() {
                       {getSortIcon("createdAt")}
                     </div>
                   </th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">状态</th>
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">操作</th>
                 </tr>
               </thead>
@@ -346,6 +412,25 @@ export default function MembersPage() {
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">{member.weight}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{member.createdAt}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <Badge variant={member.status === "active" ? "success" : "info"}>
+                          {member.status === "active" ? "启用" : "禁用"}
+                        </Badge>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => handleToggleStatus(member)}
+                          title={member.status === "active" ? "禁用" : "启用"}
+                        >
+                          {member.status === "active" ? (
+                            <PowerOff className="w-4 h-4 text-orange-500" />
+                          ) : (
+                            <Power className="w-4 h-4 text-green-500" />
+                          )}
+                        </Button>
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <Button

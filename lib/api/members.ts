@@ -7,6 +7,7 @@ const mockMembers: Member[] = [
     name: "卫思伍",
     role: "admin",
     weight: 100,
+    status: "active",
     createdAt: "2026-01-15 10:00:00",
   },
   {
@@ -14,6 +15,7 @@ const mockMembers: Member[] = [
     name: "张三",
     role: "sub_admin",
     weight: 80,
+    status: "active",
     createdAt: "2026-01-20 14:30:00",
   },
   {
@@ -21,6 +23,7 @@ const mockMembers: Member[] = [
     name: "李四",
     role: "member",
     weight: 60,
+    status: "active",
     createdAt: "2026-02-01 09:15:00",
   },
   {
@@ -28,6 +31,7 @@ const mockMembers: Member[] = [
     name: "王五",
     role: "member",
     weight: 50,
+    status: "inactive",
     createdAt: "2026-02-10 16:45:00",
   },
   {
@@ -35,6 +39,7 @@ const mockMembers: Member[] = [
     name: "赵六",
     role: "member",
     weight: 40,
+    status: "active",
     createdAt: "2026-03-01 11:20:00",
   },
 ];
@@ -69,6 +74,7 @@ export const memberApi = {
       name: data.name,
       role: data.role,
       weight: data.weight,
+      status: data.status,
       createdAt: new Date().toLocaleString("zh-CN"),
     };
     members = [newMember, ...members];

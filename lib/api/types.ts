@@ -95,12 +95,14 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
 // ========== 成员管理类型 ==========
 
 export type MemberRole = "admin" | "sub_admin" | "member";
+export type MemberStatus = "active" | "inactive";
 
 export interface Member {
   id: string;
   name: string;
   role: MemberRole;
   weight: number;
+  status: MemberStatus;
   createdAt: string;
 }
 
@@ -108,12 +110,14 @@ export interface CreateMemberRequest {
   name: string;
   role: MemberRole;
   weight: number;
+  status: MemberStatus;
 }
 
 export interface UpdateMemberRequest {
   name?: string;
   role?: MemberRole;
   weight?: number;
+  status?: MemberStatus;
 }
 
 export interface MemberListResponse {
