@@ -141,6 +141,17 @@ export const ROLE_LABELS: Record<MemberRole, string> = {
 // ========== 定时任务类型 ==========
 
 export type CronStatus = "running" | "stopped";
+export type CronRunStatus = "success" | "failed" | "running";
+
+export interface CronRunLog {
+  id: string;
+  cronId: string;
+  startTime: string;
+  endTime: string | null;
+  status: CronRunStatus;
+  output: string;
+  error: string | null;
+}
 
 export interface CronTask {
   id: string;
@@ -151,6 +162,7 @@ export interface CronTask {
   createdAt: string;
   lastRunAt: string | null;
   nextRunAt: string | null;
+  runs?: CronRunLog[];
 }
 
 export interface CreateCronRequest {

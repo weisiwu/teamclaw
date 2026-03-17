@@ -89,3 +89,12 @@ export function useStopCron() {
     },
   });
 }
+
+// 运行日志 Hook
+export function useCronRuns(cronId: string) {
+  return useQuery({
+    queryKey: [...cronKeys.all, "runs", cronId] as const,
+    queryFn: () => cronApi.getRuns(cronId),
+    enabled: !!cronId,
+  });
+}

@@ -1,4 +1,4 @@
-import { CronTask, CreateCronRequest, UpdateCronRequest, CronListResponse } from "./types";
+import { CronTask, CreateCronRequest, UpdateCronRequest, CronListResponse, CronRunLog } from "./types";
 
 // 模拟数据
 const mockCronTasks: CronTask[] = [
@@ -11,6 +11,7 @@ const mockCronTasks: CronTask[] = [
     createdAt: "2026-03-01 10:00:00",
     lastRunAt: "2026-03-16 02:00:00",
     nextRunAt: "2026-03-17 02:00:00",
+    runs: [],
   },
   {
     id: "cron_002",
@@ -21,6 +22,7 @@ const mockCronTasks: CronTask[] = [
     createdAt: "2026-03-01 10:00:00",
     lastRunAt: "2026-03-09 09:00:00",
     nextRunAt: "2026-03-23 09:00:00",
+    runs: [],
   },
   {
     id: "cron_003",
@@ -31,6 +33,7 @@ const mockCronTasks: CronTask[] = [
     createdAt: "2026-03-05 14:00:00",
     lastRunAt: "2026-03-15 08:00:00",
     nextRunAt: null,
+    runs: [],
   },
   {
     id: "cron_004",
@@ -41,7 +44,19 @@ const mockCronTasks: CronTask[] = [
     createdAt: "2026-03-10 16:00:00",
     lastRunAt: "2026-03-16 00:00:00",
     nextRunAt: "2026-03-17 00:00:00",
+    runs: [],
   },
+];
+
+// 模拟运行日志数据
+const mockCronRunLogs: CronRunLog[] = [
+  { id: "run_001", cronId: "cron_001", startTime: "2026-03-16 02:00:00", endTime: "2026-03-16 02:05:30", status: "success", output: "汇总完成：销售总额 125,680 元，订单数 328 笔", error: null },
+  { id: "run_002", cronId: "cron_001", startTime: "2026-03-15 02:00:00", endTime: "2026-03-15 02:03:45", status: "success", output: "汇总完成：销售总额 98,450 元，订单数 256 笔", error: null },
+  { id: "run_003", cronId: "cron_001", startTime: "2026-03-14 02:00:00", endTime: "2026-03-14 02:08:20", status: "failed", output: "", error: "API 请求超时" },
+  { id: "run_004", cronId: "cron_002", startTime: "2026-03-09 09:00:00", endTime: "2026-03-09 09:12:30", status: "success", output: "周报已生成，共完成任务 45 个", error: null },
+  { id: "run_005", cronId: "cron_003", startTime: "2026-03-15 08:00:00", endTime: "2026-03-15 08:01:15", status: "success", output: "发现 5 个商品需要补货", error: null },
+  { id: "run_006", cronId: "cron_004", startTime: "2026-03-16 00:00:00", endTime: "2026-03-16 00:03:20", status: "success", output: "活跃用户 1,256 人，同比增长 12%", error: null },
+  { id: "run_007", cronId: "cron_004", startTime: "2026-03-15 00:00:00", endTime: "2026-03-15 00:02:50", status: "success", output: "活跃用户 1,120 人，同比增长 8%", error: null },
 ];
 
 // 模拟延迟
@@ -125,6 +140,14 @@ export const cronApi = {
       nextRunAt: null,
     };
     return cronTasks[index];
+  },
+
+  // 获取运行日志
+  async getRuns(cronId: string): Promise<CronRunLog[]> {
+    await delay(200);
+    return mockCronRunLogs
+      .filter((log) => log.cronId === cronId)
+      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
   },
 };
 

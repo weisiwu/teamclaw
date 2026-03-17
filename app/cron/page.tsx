@@ -13,6 +13,7 @@ import {
   Edit,
   X,
   Clock,
+  History,
 } from "lucide-react";
 import {
   useCronList,
@@ -21,6 +22,7 @@ import {
   useStartCron,
   useStopCron,
   useUpdateCron,
+  useCronRuns,
 } from "@/hooks/useCron";
 import {
   CronTask,
@@ -36,12 +38,14 @@ function CronCard({
   onStart,
   onStop,
   onDelete,
+  onViewLogs,
 }: {
   cron: CronTask;
   onEdit: (cron: CronTask) => void;
   onStart: (id: string) => void;
   onStop: (id: string) => void;
   onDelete: (id: string) => void;
+  onViewLogs: (cron: CronTask) => void;
 }) {
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -81,6 +85,14 @@ function CronCard({
             >
               <Edit className="w-4 h-4 mr-1" />
               编辑
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onViewLogs(cron)}
+            >
+              <History className="w-4 h-4 mr-1" />
+              日志
             </Button>
             {cron.status === "running" ? (
               <Button
@@ -261,9 +273,85 @@ function CronModal({
   );
 }
 
+// 运行日志弹窗组件
+function CronRunLogModal({
+  isOpen,
+  cron,
+  onClose,
+}: {
+  isOpen: boolean;
+  cron: CronTask | null;
+  onClose: () => void;
+}) {
+  const { data: runs, isLoading, error } = useCronRuns(cron?.id || "");
+
+  if (!isOpen || !cron) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+
+      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 p-6 max-h-[80vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-semibold">运行日志</h2>
+            <p className="text-sm text-gray-500">{cron.name}</p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto space-y-3">
+          {isLoading ? (
+            <div className="py-8 text-center text-gray-500">加载中...</div>
+          ) : error ? (
+            <div className="py-8 text-center text-red-500">加载失败</div>
+          ) : runs && runs.length > 0 ? (
+            runs.map((run) => (
+              <Card key={run.id} className="bg-gray-50">
+                <CardContent className="p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500">{run.startTime}</span>
+                      <Badge
+                        variant={run.status === "success" ? "success" : run.status === "failed" ? "error" : "info"}
+                      >
+                        {run.status === "success" ? "成功" : run.status === "failed" ? "失败" : "运行中"}
+                      </Badge>
+                    </div>
+                    {run.endTime && (
+                      <span className="text-xs text-gray-400">
+                        耗时：{Math.round((new Date(run.endTime).getTime() - new Date(run.startTime).getTime()) / 1000)}秒
+                      </span>
+                    )}
+                  </div>
+                  {run.output && (
+                    <p className="text-sm text-gray-600 bg-white p-2 rounded border border-gray-200 line-clamp-2">
+                      {run.output}
+                    </p>
+                  )}
+                  {run.error && (
+                    <p className="text-sm text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                      错误：{run.error}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <div className="py-8 text-center text-gray-500">暂无运行记录</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CronPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editCron, setEditCron] = useState<CronTask | null>(null);
+  const [viewLogsCron, setViewLogsCron] = useState<CronTask | null>(null);
   const [searchName, setSearchName] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "running" | "stopped">("all");
 
@@ -298,6 +386,16 @@ export default function CronPage() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditCron(null);
+  };
+
+  // 打开日志弹窗
+  const handleViewLogs = (cron: CronTask) => {
+    setViewLogsCron(cron);
+  };
+
+  // 关闭日志弹窗
+  const handleCloseLogsModal = () => {
+    setViewLogsCron(null);
   };
 
   // 删除处理
@@ -382,6 +480,7 @@ export default function CronPage() {
                 onStart={handleStart}
                 onStop={handleStop}
                 onDelete={handleDelete}
+                onViewLogs={handleViewLogs}
               />
             ))
           )}
@@ -393,6 +492,13 @@ export default function CronPage() {
         isOpen={isModalOpen}
         editCron={editCron}
         onClose={handleCloseModal}
+      />
+
+      {/* 运行日志弹窗 */}
+      <CronRunLogModal
+        isOpen={!!viewLogsCron}
+        cron={viewLogsCron}
+        onClose={handleCloseLogsModal}
       />
     </>
   );
