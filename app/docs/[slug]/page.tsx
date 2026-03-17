@@ -6,6 +6,7 @@ import rehypeHighlight from 'rehype-highlight';
 import rehypeSlug from 'rehype-slug';
 import { getDocBySlug, getAllDocs } from '@/lib/docs';
 import DownloadButton from '../components/DownloadButton';
+import 'highlight.js/styles/github-dark.css';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
