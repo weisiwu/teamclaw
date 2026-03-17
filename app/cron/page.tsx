@@ -264,6 +264,8 @@ function CronModal({
 export default function CronPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editCron, setEditCron] = useState<CronTask | null>(null);
+  const [searchName, setSearchName] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"all" | "running" | "stopped">("all");
 
   // 使用 React Query 获取数据
   const { data, isLoading, error } = useCronList();
@@ -272,6 +274,13 @@ export default function CronPage() {
   const deleteCron = useDeleteCron();
   const startCron = useStartCron();
   const stopCron = useStopCron();
+
+  // 筛选后的任务列表
+  const filteredData = data?.data.filter((cron) => {
+    const matchName = searchName === "" || cron.name.toLowerCase().includes(searchName.toLowerCase());
+    const matchStatus = filterStatus === "all" || cron.status === filterStatus;
+    return matchName && matchStatus;
+  }) || [];
 
   // 打开创建弹窗
   const handleOpenCreateModal = () => {
@@ -323,6 +332,27 @@ export default function CronPage() {
           </Button>
         </div>
 
+        {/* 搜索和筛选 */}
+        <div className="flex items-center gap-4">
+          <div className="flex-1 max-w-xs">
+            <Input
+              value={searchName}
+              onChange={(e) => setSearchName(e.target.value)}
+              placeholder="搜索任务名称..."
+              className="w-full"
+            />
+          </div>
+          <select
+            value={filterStatus}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterStatus(e.target.value as "all" | "running" | "stopped")}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          >
+            <option value="all">全部状态</option>
+            <option value="running">运行中</option>
+            <option value="stopped">已停止</option>
+          </select>
+        </div>
+
         {/* 定时任务列表 */}
         <div className="space-y-3">
           {isLoading ? (
@@ -337,14 +367,14 @@ export default function CronPage() {
                 加载失败，请稍后重试
               </CardContent>
             </Card>
-          ) : data?.data.length === 0 ? (
+          ) : filteredData.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center text-gray-500">
-                暂无定时任务
+                {searchName || filterStatus !== "all" ? "暂无匹配结果" : "暂无定时任务"}
               </CardContent>
             </Card>
           ) : (
-            data?.data.map((cron) => (
+            filteredData.map((cron) => (
               <CronCard
                 key={cron.id}
                 cron={cron}
