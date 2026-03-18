@@ -1,4 +1,4 @@
-import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag } from "./types";
+import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest } from "./types";
 
 // Mock 数据
 const mockVersions: Version[] = [
@@ -84,6 +84,49 @@ const mockVersions: Version[] = [
     buildStatus: "pending",
     artifactUrl: null,
     tags: ["beta", "draft"],
+  },
+];
+
+// Mock 快照数据
+const mockSnapshots: VersionSnapshot[] = [
+  {
+    id: "snap-v1-1",
+    versionId: "v1",
+    version: "v1.0.0",
+    name: "初始快照 v1.0.0",
+    description: "发布前快照",
+    tags: ["stable"],
+    status: "published",
+    buildStatus: "success",
+    artifactUrl: "https://example.com/artifacts/v1.0.0.zip",
+    gitBranch: "main",
+    createdAt: "2026-01-14T18:00:00Z",
+  },
+  {
+    id: "snap-v1-2",
+    versionId: "v1",
+    version: "v1.0.0",
+    name: "修复快照 v1.0.1",
+    description: "修复 bug 后快照",
+    tags: ["stable"],
+    status: "published",
+    buildStatus: "success",
+    artifactUrl: "https://example.com/artifacts/v1.0.1.zip",
+    gitBranch: "main",
+    createdAt: "2026-01-20T10:00:00Z",
+  },
+  {
+    id: "snap-v2-1",
+    versionId: "v2",
+    version: "v1.1.0",
+    name: "功能完成快照",
+    description: "任务管理功能完成后快照",
+    tags: ["stable"],
+    status: "published",
+    buildStatus: "success",
+    artifactUrl: "https://example.com/artifacts/v1.1.0.zip",
+    gitBranch: "main",
+    createdAt: "2026-01-30T16:00:00Z",
   },
 ];
 
@@ -305,6 +348,71 @@ export async function downloadArtifact(versionId: string): Promise<{ success: bo
   return { success: true, url: version.artifactUrl };
 }
 
+// ========== 快照管理 API ==========
+
+// 获取版本快照列表
+export async function getVersionSnapshots(versionId: string): Promise<SnapshotListResponse> {
+  await delay(300);
+  
+  const snapshots = mockSnapshots.filter(s => s.versionId === versionId);
+  return {
+    data: snapshots,
+    total: snapshots.length,
+  };
+}
+
+// 创建快照
+export async function createSnapshot(versionId: string, request: CreateSnapshotRequest): Promise<VersionSnapshot> {
+  await delay(300);
+  
+  const version = mockVersions.find((v) => v.id === versionId);
+  if (!version) {
+    throw new Error("Version not found");
+  }
+  
+  const newSnapshot: VersionSnapshot = {
+    id: `snap-${versionId}-${Date.now()}`,
+    versionId,
+    version: version.version,
+    name: request.name,
+    description: request.description || '',
+    tags: [...version.tags],
+    status: version.status,
+    buildStatus: version.buildStatus,
+    artifactUrl: version.artifactUrl,
+    gitBranch: "main",
+    createdAt: new Date().toISOString(),
+  };
+  
+  mockSnapshots.unshift(newSnapshot);
+  return newSnapshot;
+}
+
+// 恢复快照
+export async function restoreSnapshot(snapshotId: string): Promise<Version> {
+  await delay(500);
+  
+  const snapshot = mockSnapshots.find(s => s.id === snapshotId);
+  if (!snapshot) {
+    throw new Error("Snapshot not found");
+  }
+  
+  const version = mockVersions.find(v => v.id === snapshot.versionId);
+  if (!version) {
+    throw new Error("Version not found");
+  }
+  
+  // 恢复快照内容到版本
+  version.title = snapshot.name;
+  version.description = snapshot.description;
+  version.tags = [...snapshot.tags];
+  version.status = snapshot.status;
+  version.buildStatus = snapshot.buildStatus;
+  version.artifactUrl = snapshot.artifactUrl;
+  
+  return version;
+}
+
 // React Query hooks
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -438,6 +546,40 @@ export function useCreateGitTag() {
 
   return useMutation({
     mutationFn: (versionId: string) => createGitTag(versionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["versions"] });
+    },
+  });
+}
+
+// ========== 快照 Hooks ==========
+
+export function useVersionSnapshots(versionId: string) {
+  return useQuery({
+    queryKey: ["versionSnapshots", versionId],
+    queryFn: () => getVersionSnapshots(versionId),
+    enabled: !!versionId,
+  });
+}
+
+export function useCreateSnapshot() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ versionId, request }: { versionId: string; request: CreateSnapshotRequest }) =>
+      createSnapshot(versionId, request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["versionSnapshots"] });
+      queryClient.invalidateQueries({ queryKey: ["versions"] });
+    },
+  });
+}
+
+export function useRestoreSnapshot() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (snapshotId: string) => restoreSnapshot(snapshotId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["versions"] });
     },

@@ -15,6 +15,9 @@ import {
   useRebuildVersion,
   useDownloadArtifact,
   useCreateGitTag,
+  useVersionSnapshots,
+  useCreateSnapshot,
+  useRestoreSnapshot,
 } from "@/lib/api/versions";
 import {
   Version,
@@ -28,6 +31,7 @@ import {
   VersionStatus,
   VERSION_TAG_OPTIONS,
   VersionTag,
+  CreateSnapshotRequest,
 } from "@/lib/api/types";
 import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag } from "lucide-react";
 
@@ -76,6 +80,9 @@ export default function VersionsPage() {
   const rebuildVersion = useRebuildVersion();
   const downloadArtifact = useDownloadArtifact();
   const createGitTag = useCreateGitTag();
+  const versionSnapshots = useVersionSnapshots(selectedVersion?.id || "");
+  const createSnapshot = useCreateSnapshot();
+  const restoreSnapshot = useRestoreSnapshot();
 
   const versions = data?.data || [];
   // 前端标签筛选
@@ -592,8 +599,18 @@ export default function VersionsPage() {
           version={selectedVersion}
           onClose={() => setSelectedVersion(null)}
           onDownload={handleDownload}
+          onCreateSnapshot={(data) => {
+            createSnapshot.mutate({ versionId: selectedVersion.id, request: data });
+          }}
+          onRestoreSnapshot={(snapshotId) => {
+            restoreSnapshot.mutate(snapshotId);
+          }}
           downloadProgress={downloadProgress[selectedVersion.id]}
           downloadHistory={downloadHistory.filter(h => h.versionId === selectedVersion.id)}
+          snapshots={versionSnapshots.data?.data}
+          isLoadingSnapshots={versionSnapshots.isLoading}
+          isCreatingSnapshot={createSnapshot.isPending}
+          isRestoringSnapshot={restoreSnapshot.isPending}
         />
       )}
 
@@ -626,15 +643,59 @@ function VersionDetailDialog({
   version, 
   onClose,
   onDownload,
+  onCreateSnapshot,
+  onRestoreSnapshot,
   downloadProgress,
   downloadHistory,
+  snapshots,
+  isLoadingSnapshots,
+  isCreatingSnapshot,
+  isRestoringSnapshot,
 }: { 
   version: Version; 
   onClose: () => void;
   onDownload?: (version: Version) => void;
+  onCreateSnapshot?: (data: CreateSnapshotRequest) => void;
+  onRestoreSnapshot?: (snapshotId: string) => void;
   downloadProgress?: number;
   downloadHistory?: Array<{versionId: string; version: string; time: string; url: string}>;
+  snapshots?: Array<{
+    id: string;
+    versionId: string;
+    version: string;
+    name: string;
+    description: string;
+    tags: VersionTag[];
+    status: VersionStatus;
+    buildStatus: "pending" | "building" | "success" | "failed";
+    artifactUrl: string | null;
+    gitBranch: string;
+    createdAt: string;
+  }>;
+  isLoadingSnapshots?: boolean;
+  isCreatingSnapshot?: boolean;
+  isRestoringSnapshot?: boolean;
 }) {
+  const [activeTab, setActiveTab] = useState<"info" | "snapshots">("info");
+  const [isCreateSnapshotOpen, setIsCreateSnapshotOpen] = useState(false);
+  const [restoreConfirmId, setRestoreConfirmId] = useState<string | null>(null);
+  const [snapshotForm, setSnapshotForm] = useState<CreateSnapshotRequest>({
+    name: "",
+    description: "",
+  });
+
+  const handleCreateSnapshot = () => {
+    if (snapshotForm.name.trim()) {
+      onCreateSnapshot?.(snapshotForm);
+      setSnapshotForm({ name: "", description: "" });
+      setIsCreateSnapshotOpen(false);
+    }
+  };
+
+  const handleRestore = (snapshotId: string) => {
+    onRestoreSnapshot?.(snapshotId);
+    setRestoreConfirmId(null);
+  };
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
@@ -814,6 +875,114 @@ function VersionDetailDialog({
               </div>
             </div>
           )}
+
+          {/* 快照管理 */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-medium text-gray-500">版本快照</h4>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsCreateSnapshotOpen(true)}
+                disabled={isCreatingSnapshot}
+              >
+                {isCreatingSnapshot ? (
+                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                ) : null}
+                创建快照
+              </Button>
+            </div>
+            
+            {/* Tab 切换 */}
+            <div className="flex border-b mb-3">
+              <button
+                className={`px-4 py-2 text-sm font-medium ${activeTab === "info" ? "border-b-2 border-blue-500 text-blue-600" : "text-gray-500"}`}
+                onClick={() => setActiveTab("info")}
+              >
+                信息
+              </button>
+              <button
+                className={`px-4 py-2 text-sm font-medium ${activeTab === "snapshots" ? "border-b-2 border-blue-500 text-blue-600" : "text-gray-500"}`}
+                onClick={() => setActiveTab("snapshots")}
+              >
+                快照 ({snapshots?.length || 0})
+              </button>
+            </div>
+
+            {/* 快照列表 */}
+            {activeTab === "snapshots" && (
+              <div className="space-y-2">
+                {isLoadingSnapshots ? (
+                  <div className="text-center py-4 text-gray-500">
+                    <Loader2 className="w-5 h-5 mx-auto animate-spin" />
+                    加载中...
+                  </div>
+                ) : snapshots && snapshots.length > 0 ? (
+                  snapshots.map((snapshot) => (
+                    <div key={snapshot.id} className="bg-gray-50 rounded-lg p-3 flex items-center justify-between">
+                      <div>
+                        <div className="font-medium">{snapshot.name}</div>
+                        <div className="text-xs text-gray-500">{snapshot.description || '无描述'}</div>
+                        <div className="text-xs text-gray-400">{new Date(snapshot.createdAt).toLocaleString('zh-CN')}</div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setRestoreConfirmId(snapshot.id)}
+                        disabled={isRestoringSnapshot}
+                      >
+                        恢复
+                      </Button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-4 text-gray-500">暂无快照</div>
+                )}
+              </div>
+            )}
+
+            {/* 创建快照对话框 */}
+            {isCreateSnapshotOpen && (
+              <div className="mt-3 bg-gray-50 rounded-lg p-3">
+                <input
+                  type="text"
+                  placeholder="快照名称"
+                  className="w-full px-3 py-2 border rounded mb-2"
+                  value={snapshotForm.name}
+                  onChange={(e) => setSnapshotForm({ ...snapshotForm, name: e.target.value })}
+                />
+                <textarea
+                  placeholder="描述（可选）"
+                  className="w-full px-3 py-2 border rounded mb-2"
+                  value={snapshotForm.description}
+                  onChange={(e) => setSnapshotForm({ ...snapshotForm, description: e.target.value })}
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={handleCreateSnapshot} disabled={!snapshotForm.name.trim()}>
+                    确认
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setIsCreateSnapshotOpen(false)}>
+                    取消
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* 恢复确认对话框 */}
+            {restoreConfirmId && (
+              <div className="mt-3 bg-red-50 rounded-lg p-3">
+                <p className="text-sm mb-2">确定要恢复此快照吗？</p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="destructive" onClick={() => handleRestore(restoreConfirmId)}>
+                    确认恢复
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setRestoreConfirmId(null)}>
+                    取消
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="mt-6 flex justify-end">

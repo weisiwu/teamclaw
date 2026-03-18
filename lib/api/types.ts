@@ -352,6 +352,35 @@ export const VERSION_TAG_OPTIONS = [
 
 export type VersionTag = typeof VERSION_TAG_OPTIONS[number]["value"];
 
+// ========== 版本快照类型 ==========
+
+export interface VersionSnapshot {
+  id: string;
+  versionId: string;
+  version: string;
+  name: string;
+  description: string;
+  tags: VersionTag[];
+  status: VersionStatus;
+  buildStatus: BuildStatus;
+  artifactUrl: string | null;
+  gitBranch: string;
+  createdAt: string;
+}
+
+// 创建快照请求
+export interface CreateSnapshotRequest {
+  name: string;
+  description?: string;
+}
+
+// 快照列表响应
+export interface SnapshotListResponse {
+  data: VersionSnapshot[];
+  total: number;
+}
+
+// 扩展 Version 接口添加快照
 export interface Version {
   id: string;
   version: string;
@@ -369,6 +398,8 @@ export interface Version {
   // Git Tag 信息
   gitTag?: string;
   gitTagCreatedAt?: string;
+  // 快照列表
+  snapshots?: VersionSnapshot[];
 }
 
 export interface CreateVersionRequest {
