@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, RenameBranchRequest, BranchProtectionRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult, SimilarVersion, TagLifecycleRecord, BatchTagResponse, BuildEnhancementSettings, BuildNotificationSettings, BuildEnvironment, BUILD_ENVIRONMENTS, DEFAULT_BUILD_RETRY_SETTINGS, DEFAULT_NOTIFICATION_SETTINGS, BatchDownloadRequest, BatchDownloadResponse, DownloadUrlVerification, DownloadStats, VersionSummary } from "./types";
+import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, RenameBranchRequest, BranchProtectionRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult, SimilarVersion, TagLifecycleRecord, BatchTagResponse, BuildEnhancementSettings, BuildNotificationSettings, BuildEnvironment, BUILD_ENVIRONMENTS, DEFAULT_BUILD_RETRY_SETTINGS, DEFAULT_NOTIFICATION_SETTINGS, BatchDownloadRequest, BatchDownloadResponse, DownloadUrlVerification, DownloadStats, VersionSummary, BuildArtifact } from "./types";
 
 // 全局版本自动升级和 Tag 设置
 let versionSettings: VersionSettings = {
@@ -2141,3 +2141,39 @@ export async function getDownloadStats(): Promise<DownloadStats> {
 
 // Re-export types for convenience
 export type { BatchDownloadRequest, BatchDownloadResponse, DownloadUrlVerification, DownloadStats } from './types';
+
+// Build Artifacts API
+const ARTIFACTS_API = "/api/v1/build/artifacts";
+
+export interface ArtifactsResponse {
+  code: number;
+  data: { artifacts: BuildArtifact[]; total: number };
+}
+
+export async function getBuildArtifacts(versionName?: string): Promise<BuildArtifact[]> {
+  const params = versionName ? `?versionName=${encodeURIComponent(versionName)}` : "";
+  const res = await fetch(`${ARTIFACTS_API}${params}`);
+  const json: ArtifactsResponse = await res.json();
+  return json.data?.artifacts || [];
+}
+
+export function useBuildArtifacts(versionName?: string) {
+  return useQuery({
+    queryKey: ["buildArtifacts", versionName],
+    queryFn: () => getBuildArtifacts(versionName),
+    staleTime: 30 * 1000,
+  });
+}
+
+export async function uploadBuildArtifact(file: File, versionName: string, env = "production", platform = "unknown", arch = "unknown"): Promise<BuildArtifact> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("versionName", versionName);
+  formData.append("env", env);
+  formData.append("platform", platform);
+  formData.append("arch", arch);
+  const res = await fetch(ARTIFACTS_API, { method: "POST", body: formData });
+  const json = await res.json();
+  return json.data as BuildArtifact;
+}
+

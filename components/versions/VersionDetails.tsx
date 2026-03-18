@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT } from "@/lib/api/types";
+import { useBuildArtifacts } from "@/lib/api/versions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -35,6 +36,9 @@ export function VersionDetails({ version, open, onOpenChange, onBuildComplete }:
   const [activeTab, setActiveTab] = useState<"info" | "logs" | "artifacts">("info");
   const [buildDialogOpen, setBuildDialogOpen] = useState(false);
 
+  // 从 API 获取真实产物列表（version.title 可用，因为 open=true 时 version 必定存在）
+  const { data: realArtifacts = [] } = useBuildArtifacts(version?.title);
+
   if (!version || !open) return null;
 
   // 模拟构建日志（实际应从 API 获取）
@@ -47,15 +51,6 @@ export function VersionDetails({ version, open, onOpenChange, onBuildComplete }:
     { time: "10:35:00", message: "构建成功", status: "success" },
     { time: "10:35:30", message: "上传产物到存储", status: "info" },
     { time: "10:36:00", message: "构建完成", status: "success" },
-  ];
-
-  // 模拟产物列表
-  const artifacts = [
-    { name: "teamclaw-v1.2.0-darwin-arm64.tar.gz", size: "45.2 MB" },
-    { name: "teamclaw-v1.2.0-darwin-x64.tar.gz", size: "46.1 MB" },
-    { name: "teamclaw-v1.2.0-linux-arm64.tar.gz", size: "44.8 MB" },
-    { name: "teamclaw-v1.2.0-linux-x64.tar.gz", size: "45.5 MB" },
-    { name: "teamclaw-v1.2.0-windows-x64.zip", size: "48.2 MB" },
   ];
 
   const getStatusIcon = (status: string) => {
@@ -209,18 +204,37 @@ export function VersionDetails({ version, open, onOpenChange, onBuildComplete }:
 
           {activeTab === "artifacts" && (
             <div className="space-y-2">
-              {artifacts.map((artifact, i) => (
-                <div key={i} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Download className="w-5 h-5 text-gray-400" />
-                    <span className="font-mono text-sm">{artifact.name}</span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm text-gray-500">{artifact.size}</span>
-                    <Button size="sm" variant="default">下载</Button>
-                  </div>
+              {realArtifacts.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  <Download className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">暂无构建产物</p>
+                  <p className="text-xs mt-1">请先执行构建任务</p>
                 </div>
-              ))}
+              ) : (
+                realArtifacts.map((artifact, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Download className="w-5 h-5 text-gray-400 shrink-0" />
+                      <div className="min-w-0">
+                        <span className="font-mono text-sm block truncate">{artifact.filename}</span>
+                        <span className="text-xs text-gray-400">{artifact.platform} / {artifact.arch} / {artifact.env}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 shrink-0">
+                      <span className="text-sm text-gray-500">{artifact.size}</span>
+                      <a
+                        href={artifact.downloadUrl}
+                        download={artifact.filename}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center rounded-md text-sm font-medium h-8 px-3 bg-primary text-primary-foreground hover:bg-primary/90"
+                      >
+                        下载
+                      </a>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           )}
         </div>

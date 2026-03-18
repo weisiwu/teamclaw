@@ -948,3 +948,18 @@ export interface DownloadStats {
     count: number;
   }>;
 }
+
+
+// Build Artifact
+export interface BuildArtifact {
+  filename: string;
+  versionName: string;
+  env: string;
+  platform: string;
+  arch: string;
+  size: string;
+  sizeBytes: number;
+  createdAt: string;
+  downloadUrl: string;
+}
+
