@@ -569,6 +569,8 @@ export interface VersionMessageScreenshot {
   screenshotUrl: string;
   thumbnailUrl?: string;
   createdAt: string;
+  /** 关联的分支名称 */
+  branchName?: string;
 }
 
 // 创建截图关联请求
@@ -579,6 +581,7 @@ export interface LinkScreenshotRequest {
   senderAvatar?: string;
   screenshotUrl: string;
   thumbnailUrl?: string;
+  branchName?: string;
 }
 
 // 截图列表响应
@@ -597,12 +600,16 @@ export interface VersionChangelog {
   changes: ChangelogChange[];
   generatedAt: string;
   generatedBy: string;
+  /** 关联的分支名称 */
+  branchName?: string;
 }
 
 export interface ChangelogChange {
   type: "feature" | "fix" | "improvement" | "breaking" | "docs" | "refactor" | "other";
   description: string;
   files?: string[];
+  /** 关联的分支名称 */
+  branchName?: string;
 }
 
 // 创建变更摘要请求

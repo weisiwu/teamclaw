@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { success } from './utils/response.js';
 import healthRouter from './routes/health.js';
+import projectRouter from './routes/project.js';
 
 const app = express();
 const PORT = process.env.PORT || 9700;
@@ -11,6 +12,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api/v1', healthRouter);
+app.use('/api/v1/projects', projectRouter);
 
 // Root
 app.get('/', (req, res) => {

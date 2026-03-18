@@ -193,6 +193,12 @@ function ScreenshotTimeline({
   screenshots: VersionMessageScreenshot[];
   onLink?: () => void;
 }) {
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
+
+  const handleImageError = (id: string) => {
+    setImageErrors(prev => new Set(prev).add(id));
+  };
+
   if (screenshots.length === 0) {
     return (
       <div className="border-2 border-dashed rounded-lg p-4 text-center">
@@ -210,28 +216,51 @@ function ScreenshotTimeline({
   
   return (
     <div className="space-y-3">
-      {screenshots.map((screenshot, index) => (
-        <div key={screenshot.id} className="relative pl-8 pb-4">
-          {index < screenshots.length - 1 && (
-            <div className="absolute left-[11px] top-6 bottom-0 w-0.5 bg-gray-200" />
-          )}
-          <div className="absolute left-0 top-0 w-6 h-6 rounded-full bg-purple-100 border-2 border-white flex items-center justify-center">
-            <ImageIcon className="w-3 h-3 text-purple-600" />
-          </div>
-          <div className="rounded-lg border p-2 bg-white">
-            <img 
-              src={screenshot.thumbnailUrl || screenshot.screenshotUrl} 
-              alt="Screenshot" 
-              className="w-full h-24 object-cover rounded"
-            />
-            {screenshot.messageContent && (
-              <p className="text-xs text-gray-500 mt-2 line-clamp-2">
-                {screenshot.messageContent}
-              </p>
+      {screenshots.map((screenshot, index) => {
+        const hasError = imageErrors.has(screenshot.id);
+        return (
+          <div key={screenshot.id} className="relative pl-8 pb-4">
+            {index < screenshots.length - 1 && (
+              <div className="absolute left-[11px] top-6 bottom-0 w-0.5 bg-gray-200" />
             )}
+            <div className="absolute left-0 top-0 w-6 h-6 rounded-full bg-purple-100 border-2 border-white flex items-center justify-center">
+              <ImageIcon className="w-3 h-3 text-purple-600" />
+            </div>
+            <div className="rounded-lg border p-2 bg-white">
+              {hasError ? (
+                <div className="w-full h-24 bg-gray-100 rounded flex items-center justify-center">
+                  <ImageIcon className="w-6 h-6 text-gray-400" />
+                </div>
+              ) : (
+                <img 
+                  src={screenshot.thumbnailUrl || screenshot.screenshotUrl} 
+                  alt="Screenshot" 
+                  className="w-full h-24 object-cover rounded"
+                  onError={() => handleImageError(screenshot.id)}
+                />
+              )}
+              <div className="flex items-center justify-between mt-2">
+                {screenshot.messageContent && (
+                  <p className="text-xs text-gray-500 line-clamp-2 flex-1">
+                    {screenshot.messageContent}
+                  </p>
+                )}
+                {screenshot.branchName && (
+                  <Badge variant="default" className="ml-2 text-xs whitespace-nowrap bg-white/80 text-gray-600 border-gray-200">
+                    {screenshot.branchName}
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-xs text-gray-400">{screenshot.senderName}</span>
+                <span className="text-xs text-gray-400">
+                  {new Date(screenshot.createdAt).toLocaleDateString("zh-CN")}
+                </span>
+              </div>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

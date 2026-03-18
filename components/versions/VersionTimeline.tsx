@@ -21,6 +21,8 @@ interface VersionTimelineProps {
   };
   isOpen: boolean;
   onClose: () => void;
+  /** 可选的分支列表，用于筛选 */
+  availableBranches?: string[];
 }
 
 interface TimelineEvent {
@@ -29,13 +31,15 @@ interface TimelineEvent {
   title: string;
   description: string;
   timestamp: string;
+  branchName?: string;
   data?: VersionMessageScreenshot | VersionChangelog | { createdBy: string };
 }
 
-export function VersionTimeline({ screenshots, changelog, versionInfo, isOpen, onClose }: VersionTimelineProps) {
+export function VersionTimeline({ screenshots, changelog, versionInfo, isOpen, onClose, availableBranches = [] }: VersionTimelineProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "screenshot" | "changelog">("all");
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
+  const [branchFilter, setBranchFilter] = useState<string>("all");
 
   // 构建时间线事件
   const events: TimelineEvent[] = [
@@ -55,6 +59,7 @@ export function VersionTimeline({ screenshots, changelog, versionInfo, isOpen, o
             title: "变更摘要生成",
             description: changelog.title || "变更摘要已生成",
             timestamp: changelog.generatedAt || "",
+            branchName: changelog.branchName,
             data: changelog,
           },
         ]
@@ -65,6 +70,7 @@ export function VersionTimeline({ screenshots, changelog, versionInfo, isOpen, o
       title: "截图关联",
       description: screenshot.messageContent?.slice(0, 50) + "..." || "截图已关联",
       timestamp: screenshot.createdAt,
+      branchName: screenshot.branchName,
       data: screenshot,
     })),
   ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -72,6 +78,7 @@ export function VersionTimeline({ screenshots, changelog, versionInfo, isOpen, o
   // 过滤事件
   const filteredEvents = events.filter((event) => {
     if (filterType !== "all" && event.type !== filterType) return false;
+    if (branchFilter !== "all" && event.branchName !== branchFilter) return false;
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
@@ -176,8 +183,8 @@ export function VersionTimeline({ screenshots, changelog, versionInfo, isOpen, o
         </div>
 
         {/* 搜索和过滤 */}
-        <div className="flex items-center gap-3 py-3 border-b">
-          <div className="relative flex-1">
+        <div className="flex items-center gap-3 py-3 border-b flex-wrap">
+          <div className="relative flex-1 min-w-[150px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="搜索事件..."
@@ -198,6 +205,21 @@ export function VersionTimeline({ screenshots, changelog, versionInfo, isOpen, o
               <option value="changelog">变更摘要</option>
             </select>
           </div>
+          {availableBranches.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">分支:</span>
+              <select
+                value={branchFilter}
+                onChange={(e) => setBranchFilter(e.target.value)}
+                className="text-sm border rounded-md px-2 py-1"
+              >
+                <option value="all">全部分支</option>
+                {availableBranches.map((branch) => (
+                  <option key={branch} value={branch}>{branch}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <Button variant="outline" size="sm" onClick={exportToMarkdown}>
             <Download className="h-4 w-4 mr-1" />
             导出
@@ -227,9 +249,14 @@ export function VersionTimeline({ screenshots, changelog, versionInfo, isOpen, o
 
                   {/* 内容 */}
                   <div className="flex-1 space-y-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       {getEventBadge(event.type)}
                       <span className="font-medium text-sm">{event.title}</span>
+                      {event.branchName && (
+                        <Badge variant="default" className="text-xs">
+                          {event.branchName}
+                        </Badge>
+                      )}
                       <span className="text-xs text-muted-foreground ml-auto">
                         {new Date(event.timestamp).toLocaleString("zh-CN")}
                       </span>

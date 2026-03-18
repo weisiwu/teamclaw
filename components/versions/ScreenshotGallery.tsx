@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2, ExternalLink, Image as ImageIcon, Plus } from "lucide-react";
+import { Trash2, Image as ImageIcon, Plus, ZoomIn, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
 } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { VersionMessageScreenshot } from "@/lib/api/types";
 
 interface ScreenshotGalleryProps {
@@ -18,6 +19,29 @@ interface ScreenshotGalleryProps {
 
 export function ScreenshotGallery({ screenshots, onUnlink, onLink, loading }: ScreenshotGalleryProps) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number>(0);
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
+
+  const handleImageError = (id: string) => {
+    setImageErrors(prev => new Set(prev).add(id));
+  };
+
+  const openLightbox = (screenshot: VersionMessageScreenshot, index: number) => {
+    setSelectedImage(screenshot.screenshotUrl);
+    setSelectedIndex(index);
+  };
+
+  const closeLightbox = () => {
+    setSelectedImage(null);
+  };
+
+  const navigateImage = (direction: "prev" | "next") => {
+    const newIndex = direction === "prev"
+      ? (selectedIndex - 1 + screenshots.length) % screenshots.length
+      : (selectedIndex + 1) % screenshots.length;
+    setSelectedIndex(newIndex);
+    setSelectedImage(screenshots[newIndex].screenshotUrl);
+  };
 
   if (loading) {
     return (
@@ -81,72 +105,167 @@ export function ScreenshotGallery({ screenshots, onUnlink, onLink, loading }: Sc
         )}
       </div>
       <div className="grid grid-cols-2 gap-3">
-        {screenshots.map((screenshot) => (
-          <div
-            key={screenshot.id}
-            className="group relative aspect-video rounded-lg border overflow-hidden bg-muted cursor-pointer"
-            onClick={() => setSelectedImage(screenshot.screenshotUrl)}
-          >
-            {/* 缩略图占位符 */}
-            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
-              <ImageIcon className="h-8 w-8 text-primary/40" />
-            </div>
+        {screenshots.map((screenshot, index) => {
+          const hasError = imageErrors.has(screenshot.id);
+          const imageUrl = screenshot.thumbnailUrl || screenshot.screenshotUrl;
 
-            {/* 悬停覆盖层 */}
-            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedImage(screenshot.screenshotUrl);
-                }}
-              >
-                <ExternalLink className="h-4 w-4 mr-1" />
-                查看
-              </Button>
-              {onUnlink && (
+          return (
+            <div
+              key={screenshot.id}
+              className="group relative aspect-video rounded-lg border overflow-hidden bg-muted cursor-pointer"
+              onClick={() => openLightbox(screenshot, index)}
+            >
+              {/* 真实图片或占位符 */}
+              {!hasError && imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={`截图 ${index + 1}`}
+                  className="w-full h-full object-cover"
+                  onError={() => handleImageError(screenshot.id)}
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
+                  <ImageIcon className="h-8 w-8 text-primary/40" />
+                </div>
+              )}
+
+              {/* 分支标签 */}
+              {screenshot.branchName && (
+                <div className="absolute top-2 left-2">
+                  <Badge variant="default" className="text-xs backdrop-blur-sm bg-black/50 text-white border-0">
+                    {screenshot.branchName}
+                  </Badge>
+                </div>
+              )}
+
+              {/* 悬停覆盖层 */}
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                 <Button
-                  variant="destructive"
+                  variant="outline"
                   size="sm"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onUnlink(screenshot.id);
+                    openLightbox(screenshot, index);
                   }}
+                  className="bg-white"
                 >
-                  <Trash2 className="h-4 w-4 mr-1" />
-                  删除
+                  <ZoomIn className="h-4 w-4 mr-1" />
+                  查看
                 </Button>
-              )}
-            </div>
+                {onUnlink && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUnlink(screenshot.id);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    删除
+                  </Button>
+                )}
+              </div>
 
-            {/* 消息内容 */}
-            <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent">
-              <p className="text-xs text-white line-clamp-2">
-                {screenshot.messageContent}
-              </p>
-              <div className="flex items-center justify-between mt-1">
-                <span className="text-xs text-white/70">{screenshot.senderName}</span>
-                <span className="text-xs text-white/50">
-                  {new Date(screenshot.createdAt).toLocaleDateString("zh-CN")}
-                </span>
+              {/* 消息内容 */}
+              <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent">
+                <p className="text-xs text-white line-clamp-2">
+                  {screenshot.messageContent}
+                </p>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-xs text-white/70">{screenshot.senderName}</span>
+                  <span className="text-xs text-white/50">
+                    {new Date(screenshot.createdAt).toLocaleDateString("zh-CN")}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* 图片预览对话框 */}
+      {/* 图片预览对话框 (Lightbox) */}
       <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
-        <DialogContent title="截图预览" className="max-w-4xl">
-          <div className="flex items-center justify-center min-h-[400px] bg-muted rounded-lg">
+        <DialogContent title="截图预览" className="max-w-5xl p-0 overflow-hidden">
+          <div className="relative bg-black flex items-center justify-center min-h-[500px]">
+            {/* 导航按钮 */}
+            {screenshots.length > 1 && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-black/50 hover:bg-black/70 text-white rounded-full"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigateImage("prev");
+                  }}
+                >
+                  <ChevronLeft className="h-6 w-6" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 z-10 bg-black/50 hover:bg-black/70 text-white rounded-full"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigateImage("next");
+                  }}
+                >
+                  <ChevronRight className="h-6 w-6" />
+                </Button>
+              </>
+            )}
+
+            {/* 图片 */}
             {selectedImage && (
-              <div className="text-center">
-                <ImageIcon className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">截图预览</p>
-                <p className="text-xs text-muted-foreground mt-2">{selectedImage}</p>
+              <img
+                src={selectedImage}
+                alt="截图预览"
+                className="max-w-full max-h-[80vh] object-contain"
+                onError={() => {
+                  // 如果图片加载失败，显示占位符
+                }}
+              />
+            )}
+
+            {/* 图片信息 */}
+            {screenshots[selectedIndex] && (
+              <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+                <div className="flex items-center justify-between text-white">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">
+                      {screenshots[selectedIndex].senderName}
+                    </p>
+                    <p className="text-xs text-white/70 line-clamp-2">
+                      {screenshots[selectedIndex].messageContent}
+                    </p>
+                    {screenshots[selectedIndex].branchName && (
+                      <Badge variant="default" className="mt-1 bg-white/20 text-white border-0">
+                        {screenshots[selectedIndex].branchName}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-white/70">
+                      {selectedIndex + 1} / {screenshots.length}
+                    </p>
+                    <p className="text-xs text-white/50">
+                      {new Date(screenshots[selectedIndex].createdAt).toLocaleString("zh-CN")}
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
+
+            {/* 关闭按钮 */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white rounded-full"
+              onClick={closeLightbox}
+            >
+              <X className="h-5 w-5" />
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
