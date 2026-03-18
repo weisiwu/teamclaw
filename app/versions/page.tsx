@@ -42,15 +42,14 @@ import {
   VersionTag,
   CreateSnapshotRequest,
 } from "@/lib/api/types";
-import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch as GitBranchIcon, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag, Image, FileCode, RefreshCw, Sparkles } from "lucide-react";
+import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch as GitBranchIcon, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag, Image, FileCode } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MessageSelector, ScreenshotGallery, ChangelogPanel } from "@/components/versions";
-import { MessageItem } from "@/components/versions/MessageSelector";
+import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel } from "@/components/versions";
 
 export default function VersionsPage() {
   const [page, setPage] = useState(1);
@@ -1357,167 +1356,22 @@ function VersionDetailDialog({
 
             {/* 截图列表 */}
             {activeTab === "screenshots" && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm text-gray-500">消息截图</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onLinkScreenshot}
-                    disabled={isLoadingScreenshots}
-                  >
-                    <Image className="w-4 h-4 mr-1" />
-                    关联截图
-                  </Button>
-                </div>
-                {isLoadingScreenshots ? (
-                  <div className="text-center py-4 text-gray-500">
-                    <Loader2 className="w-5 h-5 mx-auto animate-spin" />
-                    加载中...
-                  </div>
-                ) : screenshots && screenshots.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    {screenshots.map((screenshot) => (
-                      <div
-                        key={screenshot.id}
-                        className="group relative aspect-video rounded-lg border overflow-hidden bg-muted"
-                      >
-                        {/* 缩略图占位符 */}
-                        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
-                          <Image className="h-8 w-8 text-gray-400" />
-                        </div>
-
-                        {/* 悬停覆盖层 */}
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          {onUnlinkScreenshot && (
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => onUnlinkScreenshot(screenshot.id)}
-                            >
-                              <Trash2 className="h-4 w-4 mr-1" />
-                              删除
-                            </Button>
-                          )}
-                        </div>
-
-                        {/* 消息内容 */}
-                        <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent">
-                          <p className="text-xs text-white line-clamp-2">
-                            {screenshot.messageContent}
-                          </p>
-                          <div className="flex items-center justify-between mt-1">
-                            <span className="text-xs text-white/70">{screenshot.senderName}</span>
-                            <span className="text-xs text-white/50">
-                              {new Date(screenshot.createdAt).toLocaleDateString("zh-CN")}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                    <Image className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-                    <p className="text-sm text-gray-500">暂无关联截图</p>
-                    <p className="text-xs text-gray-400 mt-1">点击上方按钮关联消息截图</p>
-                  </div>
-                )}
-              </div>
+              <ScreenshotGallery
+                screenshots={screenshots || []}
+                loading={isLoadingScreenshots}
+                onLink={onLinkScreenshot}
+                onUnlink={onUnlinkScreenshot}
+              />
             )}
 
             {/* 变更摘要 */}
             {activeTab === "changelog" && (
-              <div className="space-y-3">
-                {isLoadingChangelog ? (
-                  <div className="text-center py-4 text-gray-500">
-                    <Loader2 className="w-5 h-5 mx-auto animate-spin" />
-                    加载中...
-                  </div>
-                ) : changelog ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium">{changelog.title}</h4>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={onGenerateChangelog}
-                        disabled={isGeneratingChangelog}
-                      >
-                        {isGeneratingChangelog ? (
-                          <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                        ) : (
-                          <RefreshCw className="w-4 h-4 mr-1" />
-                        )}
-                        重新生成
-                      </Button>
-                    </div>
-                    <p className="text-sm text-gray-600">{changelog.content}</p>
-                    <div className="space-y-2">
-                      {changelog.changes.map((change, index) => (
-                        <div key={index} className="bg-gray-50 rounded-lg p-3">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Badge
-                              variant={
-                                change.type === "feature"
-                                  ? "success"
-                                  : change.type === "fix"
-                                  ? "warning"
-                                  : change.type === "breaking"
-                                  ? "error"
-                                  : "default"
-                              }
-                              className="text-xs"
-                            >
-                              {change.type === "feature"
-                                ? "新功能"
-                                : change.type === "fix"
-                                ? "修复"
-                                : change.type === "improvement"
-                                ? "改进"
-                                : change.type === "breaking"
-                                ? "破坏性变更"
-                                : change.type}
-                            </Badge>
-                          </div>
-                          <p className="text-sm">{change.description}</p>
-                          {change.files && change.files.length > 0 && (
-                            <div className="mt-2 flex flex-wrap gap-1">
-                              {change.files.map((file, fileIndex) => (
-                                <span key={fileIndex} className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                                  {file}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="text-xs text-gray-400 pt-2 border-t">
-                      生成时间: {new Date(changelog.generatedAt).toLocaleString("zh-CN")} · 生成者: {changelog.generatedBy}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                    <FileCode className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-                    <p className="text-sm text-gray-500">暂无变更摘要</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3"
-                      onClick={onGenerateChangelog}
-                      disabled={isGeneratingChangelog}
-                    >
-                      {isGeneratingChangelog ? (
-                        <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                      ) : (
-                        <Sparkles className="w-4 h-4 mr-1" />
-                      )}
-                      {isGeneratingChangelog ? "生成中..." : "生成变更摘要"}
-                    </Button>
-                  </div>
-                )}
-              </div>
+              <ChangelogPanel
+                changelog={changelog ?? null}
+                loading={isLoadingChangelog}
+                generating={isGeneratingChangelog}
+                onGenerate={onGenerateChangelog || (() => {})}
+              />
             )}
 
             {/* 恢复确认对话框 */}

@@ -1133,7 +1133,7 @@ export function useUnlinkScreenshot() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ screenshotId, versionId }: { screenshotId: string; versionId: string }) =>
+    mutationFn: ({ screenshotId }: { screenshotId: string; versionId: string }) =>
       unlinkScreenshot(screenshotId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["versionScreenshots", variables.versionId] });

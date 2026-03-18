@@ -7,3 +7,4 @@ export { VersionSettingsDialog } from "./VersionSettingsDialog";
 export { MessageSelector } from "./MessageSelector";
 export { ScreenshotGallery } from "./ScreenshotGallery";
 export { ChangelogPanel } from "./ChangelogPanel";
+export type { MessageItem } from "./MessageSelector";

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { RefreshCw, FileText, Sparkles, Loader2, GitCommit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -116,7 +115,7 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating }: C
             {change.files && change.files.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">
                 {change.files.map((file, fileIndex) => (
-                  <Badge key={fileIndex} variant="outline" className="text-xs">
+                  <Badge key={fileIndex} variant="default" className="text-xs bg-transparent border border-gray-300 text-gray-600">
                     <GitCommit className="h-3 w-3 mr-1" />
                     {file}
                   </Badge>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, MessageSquare, User, X } from "lucide-react";
+import { Search, MessageSquare, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -9,8 +9,6 @@ import {
   Dialog,
   DialogContent,
   DialogFooter,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
 
 export interface MessageItem {
@@ -102,11 +100,7 @@ export function MessageSelector({ open, onOpenChange, onSelect }: MessageSelecto
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle>选择消息</DialogTitle>
-        </DialogHeader>
-
+      <DialogContent title="选择消息" className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -142,7 +136,7 @@ export function MessageSelector({ open, onOpenChange, onSelect }: MessageSelecto
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-medium text-sm">{msg.senderName}</span>
                       {msg.channelName && (
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="default" className="text-xs bg-transparent border border-gray-300 text-gray-600">
                           {msg.channelName}
                         </Badge>
                       )}
