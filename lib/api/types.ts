@@ -528,6 +528,7 @@ export interface GitBranch {
   name: string;
   isMain: boolean;
   isRemote: boolean;
+  isProtected: boolean; // 保护分支，不可轻易删除
   createdAt: string;
   lastCommitAt: string;
   commitMessage: string;
@@ -539,6 +540,16 @@ export interface CreateBranchRequest {
   name: string;
   baseBranch?: string; // 基于哪个分支
   versionId?: string; // 基于哪个版本
+}
+
+export interface RenameBranchRequest {
+  branchId: string;
+  newName: string;
+}
+
+export interface BranchProtectionRequest {
+  branchId: string;
+  protected: boolean;
 }
 
 export interface BranchListResponse {

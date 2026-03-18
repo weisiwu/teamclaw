@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult, SimilarVersion, TagLifecycleRecord, BatchTagResponse, BuildEnhancementSettings, BuildNotificationSettings, BuildEnvironment, BUILD_ENVIRONMENTS, DEFAULT_BUILD_RETRY_SETTINGS, DEFAULT_NOTIFICATION_SETTINGS, BatchDownloadRequest, BatchDownloadResponse, DownloadUrlVerification, DownloadStats } from "./types";
+import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, RenameBranchRequest, BranchProtectionRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult, SimilarVersion, TagLifecycleRecord, BatchTagResponse, BuildEnhancementSettings, BuildNotificationSettings, BuildEnvironment, BUILD_ENVIRONMENTS, DEFAULT_BUILD_RETRY_SETTINGS, DEFAULT_NOTIFICATION_SETTINGS, BatchDownloadRequest, BatchDownloadResponse, DownloadUrlVerification, DownloadStats } from "./types";
 
 // 全局版本自动升级和 Tag 设置
 let versionSettings: VersionSettings = {
@@ -37,6 +37,7 @@ const mockBranches: GitBranch[] = [
     name: "main",
     isMain: true,
     isRemote: false,
+    isProtected: true,
     createdAt: "2026-01-01T08:00:00Z",
     lastCommitAt: "2026-03-15T14:30:00Z",
     commitMessage: "feat: add version management",
@@ -48,6 +49,7 @@ const mockBranches: GitBranch[] = [
     name: "develop",
     isMain: false,
     isRemote: false,
+    isProtected: true,
     createdAt: "2026-01-05T10:00:00Z",
     lastCommitAt: "2026-03-14T16:20:00Z",
     commitMessage: "feat: add new features",
@@ -59,6 +61,7 @@ const mockBranches: GitBranch[] = [
     name: "feature/v2.0.0",
     isMain: false,
     isRemote: false,
+    isProtected: false,
     createdAt: "2026-02-20T09:00:00Z",
     lastCommitAt: "2026-03-10T11:15:00Z",
     commitMessage: "feat: version 2.0.0 development",
@@ -70,6 +73,7 @@ const mockBranches: GitBranch[] = [
     name: "hotfix/bug-fix",
     isMain: false,
     isRemote: false,
+    isProtected: false,
     createdAt: "2026-03-01T14:00:00Z",
     lastCommitAt: "2026-03-05T10:30:00Z",
     commitMessage: "fix: resolve critical bug",
@@ -80,6 +84,7 @@ const mockBranches: GitBranch[] = [
     name: "release/v1.3.0",
     isMain: false,
     isRemote: false,
+    isProtected: false,
     createdAt: "2026-02-25T08:00:00Z",
     lastCommitAt: "2026-03-01T09:45:00Z",
     commitMessage: "chore: prepare release v1.3.0",
@@ -752,6 +757,7 @@ export async function createBranch(request: CreateBranchRequest): Promise<GitBra
     name: request.name,
     isMain: false,
     isRemote: false,
+    isProtected: false,
     createdAt: new Date().toISOString(),
     lastCommitAt: new Date().toISOString(),
     commitMessage: `feat: create branch ${request.name}`,
@@ -790,6 +796,39 @@ export async function setMainBranch(branchId: string): Promise<GitBranch | null>
   if (index === -1) return null;
   
   mockBranches[index].isMain = true;
+  return mockBranches[index];
+}
+
+// 重命名分支
+export async function renameBranch(request: RenameBranchRequest): Promise<GitBranch | null> {
+  await delay(300);
+  
+  const index = mockBranches.findIndex(b => b.id === request.branchId);
+  if (index === -1) return null;
+  
+  // 保护分支不允许重命名
+  if (mockBranches[index].isProtected) {
+    throw new Error("Protected branches cannot be renamed");
+  }
+  
+  mockBranches[index].name = request.newName;
+  mockBranches[index].commitMessage = `chore: rename branch to ${request.newName}`;
+  return mockBranches[index];
+}
+
+// 切换分支保护状态
+export async function toggleBranchProtection(request: BranchProtectionRequest): Promise<GitBranch | null> {
+  await delay(200);
+  
+  const index = mockBranches.findIndex(b => b.id === request.branchId);
+  if (index === -1) return null;
+  
+  // 主分支必须保持保护状态
+  if (mockBranches[index].isMain && !request.protected) {
+    throw new Error("Main branch must always be protected");
+  }
+  
+  mockBranches[index].isProtected = request.protected;
   return mockBranches[index];
 }
 
@@ -1083,6 +1122,28 @@ export function useSetMainBranch() {
 
   return useMutation({
     mutationFn: (branchId: string) => setMainBranch(branchId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["branches"] });
+    },
+  });
+}
+
+export function useRenameBranch() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (request: RenameBranchRequest) => renameBranch(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["branches"] });
+    },
+  });
+}
+
+export function useToggleBranchProtection() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (request: BranchProtectionRequest) => toggleBranchProtection(request),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["branches"] });
     },

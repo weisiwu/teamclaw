@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
 import {
   useVersions,
   useCreateVersion,
@@ -24,6 +25,8 @@ import {
   useCreateBranch,
   useDeleteBranch,
   useSetMainBranch,
+  useRenameBranch,
+  useToggleBranchProtection,
   useVersionScreenshots,
   useLinkScreenshot,
   useUnlinkScreenshot,
@@ -46,7 +49,7 @@ import {
   CreateSnapshotRequest,
   DOWNLOAD_FORMAT_OPTIONS,
 } from "@/lib/api/types";
-import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch as GitBranchIcon, GitMerge, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag, Image, FileCode, History, FolderOpen, BarChart3 } from "lucide-react";
+import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch as GitBranchIcon, GitMerge, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag, Image, FileCode, History, FolderOpen, BarChart3, Shield, ShieldOff, Edit3, Check } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -102,6 +105,12 @@ export default function VersionsPage() {
   const [isBatchDownloadOpen, setIsBatchDownloadOpen] = useState(false);
   const [isDownloadStatsOpen, setIsDownloadStatsOpen] = useState(false);
   const [deleteBranchConfirmId, setDeleteBranchConfirmId] = useState<string | null>(null);
+  // Branch rename state
+  const [renameBranchId, setRenameBranchId] = useState<string | null>(null);
+  const [renameNewName, setRenameNewName] = useState("");
+  // Branch search/filter state
+  const [branchSearchQuery, setBranchSearchQuery] = useState("");
+  const [branchProtectionFilter, setBranchProtectionFilter] = useState<"all" | "protected" | "unprotected">("all");
   const [newBranchForm, setNewBranchForm] = useState({
     name: '',
     baseBranch: '',
@@ -177,6 +186,8 @@ export default function VersionsPage() {
   const createBranch = useCreateBranch();
   const deleteBranch = useDeleteBranch();
   const setMainBranch = useSetMainBranch();
+  const renameBranch = useRenameBranch();
+  const toggleBranchProtection = useToggleBranchProtection();
 
   // 截图和变更摘要 hooks
   const versionScreenshots = useVersionScreenshots(selectedVersion?.id || "");
@@ -281,6 +292,24 @@ export default function VersionsPage() {
       setActionMessage({ type: 'success', text: '已设为主分支' });
     } catch {
       setActionMessage({ type: 'error', text: '设置主分支失败' });
+    }
+  };
+
+  const handleRenameBranch = async (branchId: string, newName: string) => {
+    try {
+      await renameBranch.mutateAsync({ branchId, newName });
+      setActionMessage({ type: 'success', text: `分支已重命名为: ${newName}` });
+    } catch {
+      setActionMessage({ type: 'error', text: '重命名分支失败' });
+    }
+  };
+
+  const handleToggleBranchProtection = async (branchId: string, isProtected: boolean) => {
+    try {
+      await toggleBranchProtection.mutateAsync({ branchId, protected: isProtected });
+      setActionMessage({ type: 'success', text: isProtected ? '分支已设为保护' : '分支保护已取消' });
+    } catch {
+      setActionMessage({ type: 'error', text: '设置保护失败' });
     }
   };
 
@@ -470,6 +499,14 @@ export default function VersionsPage() {
       </div>
     );
   }
+
+  // Filtered branches for branch panel
+  const filteredBranches = branches.filter((branch) => {
+    if (branchSearchQuery && !branch.name.toLowerCase().includes(branchSearchQuery.toLowerCase())) return false;
+    if (branchProtectionFilter === "protected" && !branch.isProtected) return false;
+    if (branchProtectionFilter === "unprotected" && branch.isProtected) return false;
+    return true;
+  });
 
   return (
     <div className="p-6">
@@ -1040,6 +1077,28 @@ export default function VersionsPage() {
               </div>
             </div>
 
+            {/* 分支搜索和筛选 */}
+            <div className="mb-4 flex items-center gap-3 flex-wrap">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder="搜索分支名称..."
+                  value={branchSearchQuery}
+                  onChange={(e) => setBranchSearchQuery(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+              <select
+                value={branchProtectionFilter}
+                onChange={(e) => setBranchProtectionFilter(e.target.value as "all" | "protected" | "unprotected")}
+                className="px-3 py-2 border rounded-md text-sm bg-white"
+              >
+                <option value="all">全部</option>
+                <option value="protected">已保护</option>
+                <option value="unprotected">未保护</option>
+              </select>
+            </div>
+
             {isLoadingBranches ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -1047,72 +1106,126 @@ export default function VersionsPage() {
               </div>
             ) : branches.length === 0 ? (
               <div className="text-center py-12 text-gray-500">暂无分支</div>
+            ) : filteredBranches.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <GitBranchIcon className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                <p>没有找到匹配的分支</p>
+              </div>
             ) : (
               <div className="space-y-2">
-                {branches.map((branch) => (
-                  <div
-                    key={branch.id}
-                    className={`p-4 rounded-lg border ${branch.isMain ? 'bg-blue-50 border-blue-200' : 'bg-white hover:bg-gray-50'}`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        {branch.isMain ? (
-                          <Star className="w-5 h-5 text-blue-500 fill-blue-500" />
-                        ) : (
-                          <GitBranchIcon className="w-5 h-5 text-gray-400" />
-                        )}
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-medium text-gray-900">{branch.name}</span>
-                            {branch.isMain && (
-                              <Badge variant="success" className="text-xs">主分支</Badge>
+                {filteredBranches.map((branch) => (
+                      <div
+                        key={branch.id}
+                        className={`p-4 rounded-lg border ${branch.isMain ? 'bg-blue-50 border-blue-200' : 'bg-white hover:bg-gray-50'} ${branch.isProtected ? 'border-amber-200' : ''}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            {branch.isMain ? (
+                              <Star className="w-5 h-5 text-blue-500 fill-blue-500" />
+                            ) : (
+                              <GitBranchIcon className={`w-5 h-5 ${branch.isProtected ? 'text-amber-500' : 'text-gray-400'}`} />
                             )}
+                            <div>
+                              <div className="flex items-center gap-2">
+                                {/* 重命名编辑模式 */}
+                                {renameBranchId === branch.id ? (
+                                  <div className="flex items-center gap-1">
+                                    <Input
+                                      value={renameNewName}
+                                      onChange={(e) => setRenameNewName(e.target.value)}
+                                      className="h-7 w-40 text-sm"
+                                      autoFocus
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") { e.preventDefault(); handleRenameBranch(branch.id, renameNewName); setRenameBranchId(null); }
+                                        if (e.key === "Escape") { setRenameBranchId(null); }
+                                      }}
+                                    />
+                                    <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { handleRenameBranch(branch.id, renameNewName); setRenameBranchId(null); }} disabled={!renameNewName.trim() || renameBranch.isPending}>
+                                      <Check className="w-4 h-4" />
+                                    </Button>
+                                    <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setRenameBranchId(null)}>
+                                      <X className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <span className="font-mono font-medium text-gray-900">{branch.name}</span>
+                                    {branch.isMain && <Badge variant="success" className="text-xs">主分支</Badge>}
+                                    {branch.isProtected && (
+                                      <Badge variant="warning" className="text-xs">
+                                        <Shield className="w-3 h-3 mr-0.5" />保护
+                                      </Badge>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                              <div className="text-sm text-gray-500 mt-1">
+                                {branch.commitMessage}
+                              </div>
+                            </div>
                           </div>
-                          <div className="text-sm text-gray-500 mt-1">
-                            {branch.commitMessage}
+                          <div className="flex items-center gap-4">
+                            <div className="text-sm text-gray-500 text-right">
+                              <div className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                创建于 {new Date(branch.createdAt).toLocaleDateString('zh-CN')}
+                              </div>
+                              <div className="flex items-center gap-1 mt-1">
+                                <span className="text-gray-400">作者:</span>
+                                <span>{branch.author}</span>
+                              </div>
+                            </div>
+                            <div className="flex gap-1 items-center">
+                              {!branch.isMain && (
+                                <>
+                                  {/* 保护切换 */}
+                                  <div className="flex items-center gap-1 mr-1" title={branch.isProtected ? "取消保护" : "设为保护"}>
+                                    <Switch
+                                      checked={branch.isProtected}
+                                      onCheckedChange={(checked) => handleToggleBranchProtection(branch.id, checked)}
+                                      disabled={toggleBranchProtection.isPending}
+                                      size="sm"
+                                    />
+                                    {branch.isProtected ? <ShieldOff className="w-3.5 h-3.5 text-amber-500" /> : <Shield className="w-3.5 h-3.5 text-gray-400" />}
+                                  </div>
+                                  {/* 重命名按钮 */}
+                                  {!branch.isProtected && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => { setRenameBranchId(branch.id); setRenameNewName(branch.name); }}
+                                      title="重命名分支"
+                                      className="h-8 w-8 p-0"
+                                    >
+                                      <Edit3 className="w-4 h-4" />
+                                    </Button>
+                                  )}
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleSetAsMainBranch(branch.id)}
+                                    disabled={setMainBranch.isPending}
+                                    title="设为主分支"
+                                  >
+                                    <Star className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setDeleteBranchConfirmId(branch.id)}
+                                    disabled={deleteBranch.isPending || branch.isProtected}
+                                    className={`text-red-600 hover:text-red-700 ${branch.isProtected ? 'opacity-50' : ''}`}
+                                    title={branch.isProtected ? "保护分支无法删除" : "删除分支"}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-sm text-gray-500 text-right">
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            创建于 {new Date(branch.createdAt).toLocaleDateString('zh-CN')}
-                          </div>
-                          <div className="flex items-center gap-1 mt-1">
-                            <span className="text-gray-400">作者:</span>
-                            <span>{branch.author}</span>
-                          </div>
-                        </div>
-                        <div className="flex gap-1">
-                          {!branch.isMain && (
-                            <>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleSetAsMainBranch(branch.id)}
-                                disabled={setMainBranch.isPending}
-                                title="设为主分支"
-                              >
-                                <Star className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setDeleteBranchConfirmId(branch.id)}
-                                disabled={deleteBranch.isPending}
-                                className="text-red-600 hover:text-red-700"
-                                title="删除分支"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                    ))}
               </div>
             )}
 
