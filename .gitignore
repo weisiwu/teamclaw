@@ -47,6 +47,7 @@ tasks/
 files/
 versions/
 artifacts/
+!app/api/v1/build/artifacts/
 
 # docker
 docker-compose.override.yml

@@ -14,6 +14,7 @@ export type { Snapshot } from "./SnapshotCompareDialog";
  */
 export { VersionDetails } from "./VersionDetails";
 export { VersionHistory } from "./VersionHistory";
+export { RollbackDialog } from "./RollbackDialog";
 export { VersionSettingsDialog } from "./VersionSettingsDialog";
 export { VersionPanel } from "./VersionPanel";
 export { MessageSelector } from "./MessageSelector";

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, RenameBranchRequest, BranchProtectionRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult, SimilarVersion, TagLifecycleRecord, BatchTagResponse, BuildEnhancementSettings, BuildNotificationSettings, BuildEnvironment, BUILD_ENVIRONMENTS, DEFAULT_BUILD_RETRY_SETTINGS, DEFAULT_NOTIFICATION_SETTINGS, BatchDownloadRequest, BatchDownloadResponse, DownloadUrlVerification, DownloadStats, VersionSummary, BuildArtifact } from "./types";
+import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, RenameBranchRequest, BranchProtectionRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult, SimilarVersion, TagLifecycleRecord, BatchTagResponse, BuildEnhancementSettings, BuildNotificationSettings, BuildEnvironment, BUILD_ENVIRONMENTS, DEFAULT_BUILD_RETRY_SETTINGS, DEFAULT_NOTIFICATION_SETTINGS, BatchDownloadRequest, BatchDownloadResponse, DownloadUrlVerification, DownloadStats, VersionSummary, BuildArtifact, RollbackHistoryRecord } from "./types";
 
 // 全局版本自动升级和 Tag 设置
 let versionSettings: VersionSettings = {
@@ -2177,3 +2177,79 @@ export async function uploadBuildArtifact(file: File, versionName: string, env =
   return json.data as BuildArtifact;
 }
 
+
+// Version Rollback API
+export interface RollbackRequest {
+  versionId: string;
+  targetVersion: string;
+  mode: "revert" | "checkout";
+  message?: string;
+}
+
+export interface RollbackResponse {
+  success: boolean;
+  rollbackId: string;
+  newVersionId?: string;
+  message: string;
+  rollbackedAt?: string;
+}
+
+const rollbackHistory: RollbackHistoryRecord[] = [];
+
+export async function rollbackVersion(request: RollbackRequest): Promise<RollbackResponse> {
+  console.log("[Version Rollback] Initiating rollback:", request);
+  
+  // 模拟 API 延迟
+  await new Promise((r) => setTimeout(r, 800));
+  
+  const record: RollbackHistoryRecord = {
+    id: `rb-${Date.now()}`,
+    versionId: request.versionId,
+    fromVersion: request.versionId,
+    toVersion: request.targetVersion,
+    mode: request.mode,
+    performedBy: "developer",
+    performedAt: new Date().toISOString(),
+    message: request.message || `Rollback to ${request.targetVersion}`,
+    backupCreated: true,
+    status: "success",
+  };
+  
+  rollbackHistory.push(record);
+  
+  return {
+    success: true,
+    rollbackId: record.id,
+    newVersionId: `v${Date.now()}`,
+    message: `Successfully rolled back to ${request.targetVersion}`,
+    rollbackedAt: record.performedAt,
+  };
+}
+
+export function useRollbackVersion() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (request: RollbackRequest) => rollbackVersion(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["versions"] });
+      queryClient.invalidateQueries({ queryKey: ["versionHistory"] });
+    },
+  });
+}
+
+export async function getRollbackHistory(versionId?: string): Promise<RollbackHistoryRecord[]> {
+  await new Promise((r) => setTimeout(r, 300));
+  if (versionId) {
+    return rollbackHistory.filter((r) => r.versionId === versionId);
+  }
+  return rollbackHistory;
+}
+
+export function useRollbackHistory(versionId?: string) {
+  return useQuery({
+    queryKey: ["rollbackHistory", versionId],
+    queryFn: () => getRollbackHistory(versionId),
+    staleTime: 60 * 1000,
+  });
+}

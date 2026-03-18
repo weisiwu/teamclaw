@@ -963,3 +963,32 @@ export interface BuildArtifact {
   downloadUrl: string;
 }
 
+
+// Version Rollback
+export interface VersionRollbackRequest {
+  versionId: string;
+  targetVersionId: string;
+  mode: "revert" | "checkout";
+  createBackup: boolean;
+}
+
+export interface VersionRollbackResponse {
+  success: boolean;
+  rollbackId: string;
+  newVersionId: string;
+  message: string;
+  backupCreated: boolean;
+}
+
+export interface RollbackHistoryRecord {
+  id: string;
+  versionId: string;
+  fromVersion: string;
+  toVersion: string;
+  mode: "revert" | "checkout";
+  performedBy: string;
+  performedAt: string;
+  message: string;
+  backupCreated: boolean;
+  status: "success" | "failed";
+}

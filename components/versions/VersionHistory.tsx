@@ -5,10 +5,12 @@
 "use client";
 
 import { useState } from "react";
-import { Version } from "@/lib/api/types";
+import { Version, VersionListResponse } from "@/lib/api/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, GitBranch, Play, CheckCircle, XCircle, Clock, FileText, X } from "lucide-react";
+import { useVersions } from "@/lib/api/versions";
+import { RollbackDialog } from "./RollbackDialog";
+import { Calendar, GitBranch, Play, CheckCircle, XCircle, Clock, FileText, X, RotateCcw } from "lucide-react";
 
 interface VersionHistoryProps {
   version: Version | null;
@@ -30,6 +32,9 @@ interface HistoryEvent {
 
 export function VersionHistory({ version, open, onOpenChange }: VersionHistoryProps) {
   const [filter, setFilter] = useState<OperationType | "all">("all");
+  const [rollbackOpen, setRollbackOpen] = useState(false);
+  const { data: versionData } = useVersions(1, 1000, "all");
+  const allVersions = (versionData as VersionListResponse)?.data || [];
 
   if (!version || !open) return null;
 
@@ -126,6 +131,7 @@ export function VersionHistory({ version, open, onOpenChange }: VersionHistoryPr
   };
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* 背景遮罩 */}
       <div className="absolute inset-0 bg-black/50" onClick={() => onOpenChange(false)} />
@@ -138,9 +144,20 @@ export function VersionHistory({ version, open, onOpenChange }: VersionHistoryPr
             <Calendar className="w-5 h-5" />
             <h2 className="text-lg font-semibold">版本历史 - {version.version}</h2>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}>
-            <X className="w-5 h-5" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRollbackOpen(true)}
+              className="text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+            >
+              <RotateCcw className="w-4 h-4 mr-1" />
+              回退
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}>
+              <X className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
 
         {/* 筛选器 */}
@@ -243,5 +260,17 @@ export function VersionHistory({ version, open, onOpenChange }: VersionHistoryPr
         </div>
       </div>
     </div>
+
+    {/* 回退对话框 - 放在 modal 外部 */}
+    <RollbackDialog
+      version={version}
+      open={rollbackOpen}
+      onOpenChange={setRollbackOpen}
+      allVersions={allVersions}
+      onRollbackComplete={() => {
+        onOpenChange(false);
+      }}
+    />
+    </>
   );
 }
