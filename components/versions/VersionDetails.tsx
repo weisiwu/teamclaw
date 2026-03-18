@@ -27,9 +27,11 @@ interface VersionDetailsProps {
   version: Version | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** 构建完成回调，用于更新外部构建历史 */
+  onBuildComplete?: (buildId: string, versionName: string, status: 'success' | 'failed') => void;
 }
 
-export function VersionDetails({ version, open, onOpenChange }: VersionDetailsProps) {
+export function VersionDetails({ version, open, onOpenChange, onBuildComplete }: VersionDetailsProps) {
   const [activeTab, setActiveTab] = useState<"info" | "logs" | "artifacts">("info");
   const [buildDialogOpen, setBuildDialogOpen] = useState(false);
 
@@ -228,6 +230,7 @@ export function VersionDetails({ version, open, onOpenChange }: VersionDetailsPr
         open={buildDialogOpen}
         onOpenChange={setBuildDialogOpen}
         presetVersion={version}
+        onBuildComplete={onBuildComplete}
       />
     </div>
   );

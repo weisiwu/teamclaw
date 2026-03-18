@@ -2,9 +2,9 @@
 
 import { useState, useMemo } from "react";
 import { Version, VERSION_STATUS_BADGE_VARIANT, VERSION_STATUS_LABELS, VERSION_TAG_OPTIONS, VersionStatus } from "@/lib/api/types";
-import { 
-  Tag, Star, GitBranchIcon, FileText, Calendar, Search, X, 
-  ChevronDown, ChevronRight, FolderOpen, BarChart3, Grid3X3, List
+import {
+  Tag, Star, GitBranchIcon, FileText, Calendar, Search, X,
+  ChevronDown, ChevronRight, FolderOpen, BarChart3, Grid3X3, List, RotateCcw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ interface VersionPanelProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectVersion: (version: Version) => void;
+  onRebuild?: (version: Version) => void;
 }
 
 // 版本卡片组件 - 展示单个版本的详细信息
@@ -182,9 +183,11 @@ function VersionCard({
 function VersionRow({ 
   version, 
   onClick,
+  onRebuild,
 }: { 
   version: Version; 
   onClick: () => void;
+  onRebuild?: (version: Version) => void;
 }) {
   return (
     <div 
@@ -216,11 +219,20 @@ function VersionRow({
       <div className="text-sm text-gray-400 flex-shrink-0">
         {version.changedFiles.length} 文件
       </div>
+      {onRebuild && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onRebuild(version); }}
+          className="p-1.5 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors"
+          title="重新打包"
+        >
+          <RotateCcw className="w-4 h-4" />
+        </button>
+      )}
     </div>
   );
 }
 
-export function VersionPanel({ versions, isOpen, onClose, onSelectVersion }: VersionPanelProps) {
+export function VersionPanel({ versions, isOpen, onClose, onSelectVersion, onRebuild }: VersionPanelProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
@@ -492,6 +504,7 @@ export function VersionPanel({ versions, isOpen, onClose, onSelectVersion }: Ver
                   key={version.id}
                   version={version}
                   onClick={() => onSelectVersion(version)}
+                  onRebuild={onRebuild}
                 />
               ))}
             </div>

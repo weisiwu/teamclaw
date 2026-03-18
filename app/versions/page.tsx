@@ -374,6 +374,18 @@ export default function VersionsPage() {
     }
   };
 
+  // 监听 BuildLogViewer 的重新构建事件
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { versionName } = (e as CustomEvent).detail;
+      if (!versionName) return;
+      const found = versions.find(v => v.version === versionName);
+      if (found) handleRebuild(found);
+    };
+    window.addEventListener('rebuild-version', handler);
+    return () => window.removeEventListener('rebuild-version', handler);
+  }, [versions, handleRebuild]);
+
   // 下载重试函数
   const downloadWithRetry = async (
     versionId: string, 
