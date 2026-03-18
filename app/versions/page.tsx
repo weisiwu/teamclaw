@@ -33,6 +33,8 @@ import {
   useVersionChangelog,
   useGenerateChangelog,
   storeVersionVector,
+  useVersionSettings,
+  updateVersionSettings,
 } from "@/lib/api/versions";
 import {
   Version,
@@ -48,15 +50,16 @@ import {
   VersionTag,
   CreateSnapshotRequest,
   DOWNLOAD_FORMAT_OPTIONS,
+  VersionSettings as ApiVersionSettings,
 } from "@/lib/api/types";
-import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch as GitBranchIcon, GitMerge, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag, Image, FileCode, History, FolderOpen, BarChart3, Shield, ShieldOff, Edit3, Check } from "lucide-react";
+import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch as GitBranchIcon, GitMerge, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag, Image, FileCode, History, FolderOpen, BarChart3, Shield, ShieldOff, Edit3, Check, Settings } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel, BuildLogViewer, getBuildHistory, addBuildLog, clearBuildHistory, SnapshotCompareDialog, VersionTimeline, SimilarVersionsPanel, TagLifecyclePanel, BatchTagOperations, TagGroupManager, useTagGroups, useFavoriteTags, BuildSettingsMenu, BuildEnvSelector, BatchDownloadDialog, DownloadStatsPanel } from "@/components/versions";
+import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel, BuildLogViewer, getBuildHistory, addBuildLog, clearBuildHistory, SnapshotCompareDialog, VersionTimeline, SimilarVersionsPanel, TagLifecyclePanel, BatchTagOperations, TagGroupManager, useTagGroups, useFavoriteTags, BuildSettingsMenu, BuildEnvSelector, BatchDownloadDialog, DownloadStatsPanel, VersionSettingsDialog } from "@/components/versions";
 import { BranchCompareDialog, BranchMergeDialog } from "@/components/branch";
 
 export default function VersionsPage() {
@@ -104,6 +107,11 @@ export default function VersionsPage() {
   const [isBatchTagOpen, setIsBatchTagOpen] = useState(false);
   const [isBatchDownloadOpen, setIsBatchDownloadOpen] = useState(false);
   const [isDownloadStatsOpen, setIsDownloadStatsOpen] = useState(false);
+  // 自动升级配置状态
+  const [isVersionSettingsOpen, setIsVersionSettingsOpen] = useState(false);
+  // 版本设置 hooks
+  const { data: versionSettings } = useVersionSettings();
+  const [isSettingsSaving, setIsSettingsSaving] = useState(false);
   const [deleteBranchConfirmId, setDeleteBranchConfirmId] = useState<string | null>(null);
   // Branch rename state
   const [renameBranchId, setRenameBranchId] = useState<string | null>(null);
@@ -559,13 +567,21 @@ export default function VersionsPage() {
           </Button>
           <BuildSettingsMenu />
           <BuildEnvSelector />
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
+            onClick={() => setIsVersionSettingsOpen(true)}
+            className="gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            版本设置
+          </Button>
+          <Button
+            variant="outline"
             onClick={() => {
               if (versions.length >= 2) {
                 setCompareVersions([versions[0].id, versions[1].id]);
               }
-            }} 
+            }}
             disabled={versions.length < 2}
             className="gap-2"
           >
@@ -1318,6 +1334,36 @@ export default function VersionsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 版本自动升级设置弹窗 */}
+      <Dialog open={isVersionSettingsOpen} onOpenChange={setIsVersionSettingsOpen}>
+        <DialogContent className="max-w-lg" title="版本自动升级设置">
+          <div className="py-4">
+            <VersionSettingsDialog
+              isOpen={isVersionSettingsOpen}
+              onClose={() => setIsVersionSettingsOpen(false)}
+              settings={versionSettings || {
+                autoBump: true,
+                bumpType: 'patch',
+                autoTag: true,
+                tagPrefix: 'v',
+              }}
+              onSaveSettings={async (settings) => {
+                setIsSettingsSaving(true);
+                try {
+                  updateVersionSettings(settings as unknown as Partial<ApiVersionSettings>);
+                  setIsVersionSettingsOpen(false);
+                } finally {
+                  setIsSettingsSaving(false);
+                }
+              }}
+              isSaving={isSettingsSaving}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 升级预览弹窗（预留，待后续集成） */}
 
       {/* 创建分支弹窗 */}
       {isCreateBranchOpen && (
