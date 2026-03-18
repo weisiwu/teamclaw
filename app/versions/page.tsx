@@ -46,14 +46,14 @@ import {
   CreateSnapshotRequest,
   DOWNLOAD_FORMAT_OPTIONS,
 } from "@/lib/api/types";
-import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch as GitBranchIcon, GitMerge, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag, Image, FileCode, History } from "lucide-react";
+import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch as GitBranchIcon, GitMerge, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag, Image, FileCode, History, FolderOpen } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel, BuildLogViewer, getBuildHistory, addBuildLog, clearBuildHistory, SnapshotCompareDialog, VersionTimeline, SimilarVersionsPanel, TagLifecyclePanel, BatchTagOperations } from "@/components/versions";
+import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel, BuildLogViewer, getBuildHistory, addBuildLog, clearBuildHistory, SnapshotCompareDialog, VersionTimeline, SimilarVersionsPanel, TagLifecyclePanel, BatchTagOperations, TagGroupManager, useTagGroups, useFavoriteTags } from "@/components/versions";
 import { BranchCompareDialog, BranchMergeDialog } from "@/components/branch";
 
 export default function VersionsPage() {
@@ -67,6 +67,9 @@ export default function VersionsPage() {
   const [selectedVersion, setSelectedVersion] = useState<Version | null>(null);
   const [compareVersions, setCompareVersions] = useState<[string, string] | null>(null);
   const [isTagPanelOpen, setIsTagPanelOpen] = useState(false);
+  // Tag 收藏和分组状态
+  const { favorites, addFavorite, removeFavorite, isFavorite } = useFavoriteTags();
+  const { groups: tagGroups, updateGroups } = useTagGroups();
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
   const [downloadFormat, setDownloadFormat] = useState<Record<string, string>>({});
   const [downloadRetryCount, setDownloadRetryCount] = useState<Record<string, number>>({});
@@ -930,9 +933,22 @@ export default function VersionsPage() {
       {isTagPanelOpen && (
         <TagPanelDialog
           versions={versions}
+          favorites={favorites}
+          isFavorite={isFavorite}
+          onAddFavorite={addFavorite}
+          onRemoveFavorite={removeFavorite}
+          tagGroups={tagGroups}
+          onTagGroupsChange={updateGroups}
           onClose={() => setIsTagPanelOpen(false)}
           onSelectVersion={(version) => {
             setSelectedVersion(version);
+            setIsTagPanelOpen(false);
+          }}
+          onOpenCompare={() => {
+            // 选择前两个 Tag 进行对比
+            if (filteredVersions.length >= 2) {
+              setCompareVersions([filteredVersions[0].id, filteredVersions[1].id]);
+            }
             setIsTagPanelOpen(false);
           }}
         />
@@ -1926,17 +1942,33 @@ function VersionCompareDialog({
 // 版本面板弹窗组件 - 显示所有 Git Tags 和提交详情
 function TagPanelDialog({ 
   versions, 
+  favorites,
+  isFavorite,
+  onAddFavorite,
+  onRemoveFavorite,
+  tagGroups,
+  onTagGroupsChange,
   onClose,
   onSelectVersion,
+  onOpenCompare,
 }: { 
   versions: Version[];
+  favorites: Array<{ tagName: string; addedAt: string }>;
+  isFavorite: (tagName: string) => boolean;
+  onAddFavorite: (tagName: string) => void;
+  onRemoveFavorite: (tagName: string) => void;
+  tagGroups: Array<{ id: string; name: string; color: string; tagNames: string[] }>;
+  onTagGroupsChange: (groups: Array<{ id: string; name: string; color: string; tagNames: string[] }>) => void;
   onClose: () => void;
   onSelectVersion: (version: Version) => void;
+  onOpenCompare: () => void;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showStats, setShowStats] = useState(false);
+  const [showGroupManager, setShowGroupManager] = useState(false);
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>("all");
 
   // 按 Git Tag 创建时间排序（最新的在前）
   const versionsWithTags = versions
@@ -1949,6 +1981,13 @@ function TagPanelDialog({
 
   // 筛选后的版本列表
   const filteredVersions = versionsWithTags.filter(v => {
+    // 分组筛选
+    if (selectedGroupFilter !== "all") {
+      const group = tagGroups.find(g => g.id === selectedGroupFilter);
+      if (!group || !group.tagNames.includes(v.gitTag || "")) {
+        return false;
+      }
+    }
     // 搜索筛选
     if (searchQuery && !v.version.toLowerCase().includes(searchQuery.toLowerCase()) && 
         !v.gitTag?.toLowerCase().includes(searchQuery.toLowerCase()) &&
@@ -1969,6 +2008,17 @@ function TagPanelDialog({
     }
     return true;
   });
+
+  // 收藏的版本（按添加时间倒序）
+  const favoriteVersions = versionsWithTags
+    .filter(v => v.gitTag && isFavorite(v.gitTag))
+    .sort((a, b) => {
+      const favA = favorites.find(f => f.tagName === a.gitTag);
+      const favB = favorites.find(f => f.tagName === b.gitTag);
+      const dateA = favA ? new Date(favA.addedAt).getTime() : 0;
+      const dateB = favB ? new Date(favB.addedAt).getTime() : 0;
+      return dateB - dateA;
+    });
 
   // 统计最近6个月的发布数量
   const getMonthlyStats = () => {
@@ -2046,6 +2096,12 @@ function TagPanelDialog({
             </Badge>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={onOpenCompare}>
+              <GitCompare className="w-4 h-4 mr-1" />对比
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowGroupManager(!showGroupManager)}>
+              <FolderOpen className="w-4 h-4 mr-1" />分组
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => setShowStats(!showStats)}>
               <FileText className="w-4 h-4 mr-1" />统计
             </Button>
@@ -2054,6 +2110,48 @@ function TagPanelDialog({
             </Button>
           </div>
         </div>
+
+        {/* 分组管理面板 */}
+        {showGroupManager && (
+          <div className="mb-4 border rounded-lg p-4 bg-gray-50">
+            <TagGroupManager
+              groups={tagGroups}
+              onGroupsChange={onTagGroupsChange}
+              availableTags={versionsWithTags.map(v => v.gitTag).filter(Boolean) as string[]}
+            />
+          </div>
+        )}
+
+        {/* 收藏区域 */}
+        {favoriteVersions.length > 0 && (
+          <div className="mb-4 border rounded-lg p-4 bg-amber-50">
+            <div className="text-sm font-medium mb-2 flex items-center gap-2">
+              <Star className="w-4 h-4 text-amber-500" />
+              收藏的版本 ({favoriteVersions.length})
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {favoriteVersions.map((version) => (
+                <div
+                  key={version.id}
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-white border rounded-md cursor-pointer hover:bg-amber-100"
+                  onClick={() => onSelectVersion(version)}
+                >
+                  <Tag className="w-3 h-3 text-amber-600" />
+                  <span className="text-sm font-mono">{version.gitTag}</span>
+                  <button
+                    className="text-gray-400 hover:text-red-500"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveFavorite(version.gitTag!);
+                    }}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* 搜索和筛选区域 */}
         <div className="mb-4 space-y-3">
@@ -2078,10 +2176,24 @@ function TagPanelDialog({
               className="w-36"
               placeholder="结束日期"
             />
-            {(searchQuery || dateRange.start || dateRange.end) && (
+            {/* 分组筛选 */}
+            <select
+              value={selectedGroupFilter}
+              onChange={(e) => setSelectedGroupFilter(e.target.value)}
+              className="px-3 py-2 border rounded-md text-sm"
+            >
+              <option value="all">全部分组</option>
+              {tagGroups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name} ({group.tagNames.length})
+                </option>
+              ))}
+            </select>
+            {(searchQuery || dateRange.start || dateRange.end || selectedGroupFilter !== "all") && (
               <Button variant="ghost" size="sm" onClick={() => {
                 setSearchQuery("");
                 setDateRange({ start: "", end: "" });
+                setSelectedGroupFilter("all");
               }}>
                 清除筛选
               </Button>
@@ -2146,6 +2258,22 @@ function TagPanelDialog({
                             <span className="font-mono font-medium text-gray-900">
                               {version.gitTag}
                             </span>
+                            {/* 收藏按钮 */}
+                            <button
+                              className={`p-1 rounded hover:bg-gray-100 ${
+                                isFavorite(version.gitTag || "") ? "text-amber-500" : "text-gray-300"
+                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isFavorite(version.gitTag || "")) {
+                                  onRemoveFavorite(version.gitTag!);
+                                } else {
+                                  onAddFavorite(version.gitTag!);
+                                }
+                              }}
+                            >
+                              <Star className="w-4 h-4" fill={isFavorite(version.gitTag || "") ? "currentColor" : "none"} />
+                            </button>
                           </div>
                           {version.isMain && (
                             <Badge variant="success" className="text-xs">

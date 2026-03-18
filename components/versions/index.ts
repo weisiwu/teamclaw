@@ -6,6 +6,7 @@ export { SemanticSearchToggle } from "./SemanticSearchToggle";
 export { SimilarVersionsPanel } from "./SimilarVersionsPanel";
 export { TagLifecyclePanel } from "./TagLifecyclePanel";
 export { BatchTagOperations } from "./BatchTagOperations";
+export { TagGroupManager, useTagGroups, useFavoriteTags } from "./TagGroupManager";
 export type { Snapshot } from "./SnapshotCompareDialog";
 
 /**

@@ -276,7 +276,6 @@ export async function createGitTag(versionId: string, request?: CreateTagRequest
     createdAt: version.gitTagCreatedAt 
   };
 }
-
 // 自动递增版本号
 function autoBumpVersion(currentVersion: string, bumpType: VersionBumpType): string {
   const match = currentVersion.match(/^v?(\d+)\.(\d+)\.(\d+)/);
@@ -1253,7 +1252,6 @@ export function useUnlinkScreenshot() {
     },
   });
 }
-
 // ========== 变更摘要 Hooks ==========
 
 export function useVersionChangelog(versionId: string) {

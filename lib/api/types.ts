@@ -767,3 +767,53 @@ export interface BatchTagResponse {
   totalSuccess: number;
   totalFailed: number;
 }
+
+// ========== Tag 生命周期管理类型 ==========
+
+export interface TagRecord {
+  id: string;
+  name: string;
+  versionId: string;
+  version: string;
+  prefix?: string;
+  message?: string;
+  archived: boolean;
+  protected: boolean;
+  createdAt: string;
+  archivedAt?: string;
+}
+
+export interface CreateTagRequest {
+  versionId: string;
+  tagName?: string;
+  prefix?: string;
+  message?: string;
+  force?: boolean;
+}
+
+export interface BatchTagOperation {
+  versionIds: string[];
+  operation: 'create' | 'delete' | 'archive' | 'unarchive';
+  options?: {
+    prefix?: string;
+    message?: string;
+    force?: boolean;
+  };
+}
+
+export interface BatchTagResult {
+  success: boolean;
+  results: Array<{
+    versionId: string;
+    success: boolean;
+    tagName?: string;
+    error?: string;
+  }>;
+}
+
+export interface TagFilter {
+  archived?: boolean;
+  protected?: boolean;
+  versionId?: string;
+  prefix?: string;
+}
