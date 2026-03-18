@@ -817,3 +817,52 @@ export interface TagFilter {
   versionId?: string;
   prefix?: string;
 }
+
+// === 构建增强功能类型 ===
+
+// 构建重试设置
+export interface BuildRetrySettings {
+  maxRetries: number; // 0-3
+  retryDelays: number[]; // 重试延迟（秒）
+}
+
+// 构建通知设置
+export type NotifyOn = 'always' | 'failure' | 'never';
+export type NotifyChannel = 'email' | 'feishu';
+
+export interface BuildNotificationSettings {
+  notifyOn: NotifyOn;
+  notifyChannels: NotifyChannel[];
+  notifyEmails?: string[];
+}
+
+// 构建环境变量
+export interface BuildEnvironment {
+  name: 'development' | 'staging' | 'production';
+  label: string;
+  envVars: Record<string, string>;
+}
+
+// 构建环境预设
+export const BUILD_ENVIRONMENTS: BuildEnvironment[] = [
+  { name: 'development', label: '开发环境', envVars: { NODE_ENV: 'development', API_URL: 'https://dev.api.example.com' } },
+  { name: 'staging', label: '预发布环境', envVars: { NODE_ENV: 'staging', API_URL: 'https://staging.api.example.com' } },
+  { name: 'production', label: '生产环境', envVars: { NODE_ENV: 'production', API_URL: 'https://api.example.com' } },
+];
+
+// 构建增强设置（组合）
+export interface BuildEnhancementSettings {
+  retry: BuildRetrySettings;
+  notification: BuildNotificationSettings;
+  defaultEnv?: BuildEnvironment['name'];
+}
+
+export const DEFAULT_BUILD_RETRY_SETTINGS: BuildRetrySettings = {
+  maxRetries: 0,
+  retryDelays: [3, 6, 12],
+};
+
+export const DEFAULT_NOTIFICATION_SETTINGS: BuildNotificationSettings = {
+  notifyOn: 'failure',
+  notifyChannels: ['feishu'],
+};

@@ -21,4 +21,8 @@ export { ChangelogPanel } from "./ChangelogPanel";
 export { ChangeTimeline } from "./ChangeTimeline";
 export { BuildProgress } from "./BuildProgress";
 export { BuildLogViewer, getBuildHistory, addBuildLog, updateBuildLog, clearBuildHistory } from "./BuildLogViewer";
+export { BuildRetrySettingsDialog } from "./BuildRetrySettingsDialog";
+export { BuildNotificationSettingsDialog } from "./BuildNotificationSettingsDialog";
+export { BuildEnvSelector } from "./BuildEnvSelector";
+export { BuildSettingsMenu } from "./BuildSettingsMenu";
 export type { MessageItem } from "./MessageSelector";

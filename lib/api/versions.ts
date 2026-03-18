@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult, SimilarVersion, TagLifecycleRecord, BatchTagResponse } from "./types";
+import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult, SimilarVersion, TagLifecycleRecord, BatchTagResponse, BuildEnhancementSettings, BuildNotificationSettings, BuildEnvironment, BUILD_ENVIRONMENTS, DEFAULT_BUILD_RETRY_SETTINGS, DEFAULT_NOTIFICATION_SETTINGS } from "./types";
 
 // 全局版本自动升级和 Tag 设置
 let versionSettings: VersionSettings = {
@@ -1801,4 +1801,98 @@ export function useBatchCreateTags() {
     mutationFn: ({ versions, prefix }: { versions: Version[]; prefix?: string }) =>
       batchCreateTags(versions, prefix),
   });
+}
+
+// === 构建增强功能 API ===
+
+const BUILD_SETTINGS_KEY = 'teamclaw_build_settings';
+
+// 获取构建增强设置
+export function getBuildEnhancementSettings(): BuildEnhancementSettings {
+  if (typeof window === 'undefined') {
+    return { retry: DEFAULT_BUILD_RETRY_SETTINGS, notification: DEFAULT_NOTIFICATION_SETTINGS };
+  }
+  const stored = localStorage.getItem(BUILD_SETTINGS_KEY);
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch {
+      // ignore
+    }
+  }
+  return { retry: DEFAULT_BUILD_RETRY_SETTINGS, notification: DEFAULT_NOTIFICATION_SETTINGS };
+}
+
+// 保存构建增强设置
+export function saveBuildEnhancementSettings(settings: Partial<BuildEnhancementSettings>): void {
+  if (typeof window === 'undefined') return;
+  const current = getBuildEnhancementSettings();
+  const updated = { ...current, ...settings };
+  localStorage.setItem(BUILD_SETTINGS_KEY, JSON.stringify(updated));
+}
+
+// 发送构建通知（模拟）
+export async function sendBuildNotification(
+  version: string,
+  status: 'success' | 'failed',
+  settings: BuildNotificationSettings
+): Promise<void> {
+  // 检查是否需要通知
+  if (settings.notifyOn === 'never') return;
+  if (settings.notifyOn === 'failure' && status === 'success') return;
+  
+  const message = `版本 ${version} 构建${status === 'success' ? '成功' : '失败'}`;
+  
+  for (const channel of settings.notifyChannels) {
+    if (channel === 'feishu') {
+      console.log(`[飞书通知] ${message}`);
+      // 实际发送飞书通知的 API 调用
+    } else if (channel === 'email') {
+      console.log(`[邮件通知] ${message} to ${settings.notifyEmails?.join(', ')}`);
+      // 实际发送邮件的 API 调用
+    }
+  }
+}
+
+// 带有重试的构建触发
+export async function triggerBuildWithRetry(
+  versionId: string,
+  onRetry?: (attempt: number, maxRetries: number) => void
+): Promise<{ success: boolean; buildId: string; attempts: number }> {
+  const settings = getBuildEnhancementSettings();
+  const { maxRetries, retryDelays } = settings.retry;
+  
+  let attempts = 0;
+  
+  for (let i = 0; i <= maxRetries; i++) {
+    attempts = i + 1;
+    
+    try {
+      const result = await triggerBuild(versionId);
+      if (result.success) {
+        // 发送成功通知
+        sendBuildNotification(versionId, 'success', settings.notification);
+        return { ...result, attempts };
+      }
+    } catch (error) {
+      // 记录错误用于调试
+      console.error('Build attempt failed:', error);
+    }
+    
+    // 如果还有重试次数，等待后重试
+    if (i < maxRetries && onRetry) {
+      onRetry(i + 1, maxRetries);
+      const delay = retryDelays[Math.min(i, retryDelays.length - 1)] * 1000;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  // 所有重试都失败
+  sendBuildNotification(versionId, 'failed', settings.notification);
+  return { success: false, buildId: '', attempts };
+}
+
+// 获取构建环境列表
+export function getBuildEnvironments(): BuildEnvironment[] {
+  return BUILD_ENVIRONMENTS;
 }

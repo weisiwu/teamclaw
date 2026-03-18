@@ -53,7 +53,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel, BuildLogViewer, getBuildHistory, addBuildLog, clearBuildHistory, SnapshotCompareDialog, VersionTimeline, SimilarVersionsPanel, TagLifecyclePanel, BatchTagOperations, TagGroupManager, useTagGroups, useFavoriteTags } from "@/components/versions";
+import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel, BuildLogViewer, getBuildHistory, addBuildLog, clearBuildHistory, SnapshotCompareDialog, VersionTimeline, SimilarVersionsPanel, TagLifecyclePanel, BatchTagOperations, TagGroupManager, useTagGroups, useFavoriteTags, BuildSettingsMenu, BuildEnvSelector } from "@/components/versions";
 import { BranchCompareDialog, BranchMergeDialog } from "@/components/branch";
 
 export default function VersionsPage() {
@@ -518,6 +518,8 @@ export default function VersionsPage() {
             <Play className="w-4 h-4" />
             构建历史
           </Button>
+          <BuildSettingsMenu />
+          <BuildEnvSelector />
           <Button 
             variant="outline" 
             onClick={() => {
