@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import {
   useVersions,
   useCreateVersion,
@@ -41,6 +42,27 @@ export default function VersionsPage() {
   const [selectedVersion, setSelectedVersion] = useState<Version | null>(null);
   const [compareVersions, setCompareVersions] = useState<[string, string] | null>(null);
   const [isTagPanelOpen, setIsTagPanelOpen] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
+  const [downloadHistory, setDownloadHistory] = useState<Array<{versionId: string; version: string; time: string; url: string}>>([]);
+
+  // Load download history from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('downloadHistory');
+    if (saved) {
+      try {
+        setDownloadHistory(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to parse download history:', e);
+      }
+    }
+  }, []);
+
+  // Save download history to localStorage
+  const saveDownloadHistory = (entry: {versionId: string; version: string; time: string; url: string}) => {
+    const newHistory = [entry, ...downloadHistory].slice(0, 20); // Keep last 20 entries
+    setDownloadHistory(newHistory);
+    localStorage.setItem('downloadHistory', JSON.stringify(newHistory));
+  };
 
   const pageSize = 10;
 
@@ -138,14 +160,51 @@ export default function VersionsPage() {
 
   const handleDownload = async (version: Version) => {
     try {
+      // Start progress simulation
+      setDownloadProgress(prev => ({ ...prev, [version.id]: 10 }));
+      
       const result = await downloadArtifact.mutateAsync(version.id);
+      
+      // Simulate progress
+      setDownloadProgress(prev => ({ ...prev, [version.id]: 50 }));
+      
       if (result.success && result.url) {
+        // Save to history
+        saveDownloadHistory({
+          versionId: version.id,
+          version: version.version,
+          time: new Date().toLocaleString('zh-CN'),
+          url: result.url
+        });
+        
+        setDownloadProgress(prev => ({ ...prev, [version.id]: 100 }));
+        
+        // Open download URL
         window.open(result.url, '_blank');
         setActionMessage({ type: 'success', text: '开始下载产物' });
+        
+        // Clear progress after a short delay
+        setTimeout(() => {
+          setDownloadProgress(prev => {
+            const newProgress = { ...prev };
+            delete newProgress[version.id];
+            return newProgress;
+          });
+        }, 1000);
       } else {
+        setDownloadProgress(prev => {
+          const newProgress = { ...prev };
+          delete newProgress[version.id];
+          return newProgress;
+        });
         setActionMessage({ type: 'error', text: '下载链接不存在' });
       }
     } catch {
+      setDownloadProgress(prev => {
+        const newProgress = { ...prev };
+        delete newProgress[version.id];
+        return newProgress;
+      });
       setActionMessage({ type: 'error', text: '下载失败' });
     }
   };
@@ -425,10 +484,18 @@ export default function VersionsPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDownload(version)}
-                          disabled={!version.artifactUrl || downloadArtifact.isPending}
+                          disabled={!version.artifactUrl || downloadArtifact.isPending || !!downloadProgress[version.id]}
                           title="下载产物"
+                          className={downloadProgress[version.id] ? "text-blue-600" : ""}
                         >
-                          <Download className="w-4 h-4" />
+                          {downloadProgress[version.id] ? (
+                            <div className="flex items-center gap-1">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span className="text-xs">{downloadProgress[version.id]}%</span>
+                            </div>
+                          ) : (
+                            <Download className="w-4 h-4" />
+                          )}
                         </Button>
                         <Button
                           variant="ghost"
@@ -524,6 +591,9 @@ export default function VersionsPage() {
         <VersionDetailDialog
           version={selectedVersion}
           onClose={() => setSelectedVersion(null)}
+          onDownload={handleDownload}
+          downloadProgress={downloadProgress[selectedVersion.id]}
+          downloadHistory={downloadHistory.filter(h => h.versionId === selectedVersion.id)}
         />
       )}
 
@@ -554,10 +624,16 @@ export default function VersionsPage() {
 // 版本详情弹窗组件
 function VersionDetailDialog({ 
   version, 
-  onClose 
+  onClose,
+  onDownload,
+  downloadProgress,
+  downloadHistory,
 }: { 
   version: Version; 
   onClose: () => void;
+  onDownload?: (version: Version) => void;
+  downloadProgress?: number;
+  downloadHistory?: Array<{versionId: string; version: string; time: string; url: string}>;
 }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -635,6 +711,62 @@ function VersionDetailDialog({
               </div>
             </div>
           </div>
+
+          {/* 下载区域 */}
+          {version.artifactUrl && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-500 mb-3">下载</h4>
+              <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">产物下载</span>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => onDownload?.(version)}
+                    disabled={!!downloadProgress}
+                    className="gap-1"
+                  >
+                    {downloadProgress ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        下载中 {downloadProgress}%
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        下载产物
+                      </>
+                    )}
+                  </Button>
+                </div>
+                {downloadProgress !== undefined && downloadProgress > 0 && downloadProgress < 100 && (
+                  <Progress value={downloadProgress} className="h-2" />
+                )}
+                
+                {/* 下载历史 */}
+                {downloadHistory && downloadHistory.length > 0 && (
+                  <div className="mt-3 pt-3 border-t">
+                    <div className="text-xs text-gray-500 mb-2">下载历史</div>
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {downloadHistory.slice(0, 5).map((record, index) => (
+                        <div key={index} className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">{record.time}</span>
+                          <a 
+                            href={record.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline truncate max-w-[200px]"
+                          >
+                            重新下载
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* 时间线 */}
           <div>
