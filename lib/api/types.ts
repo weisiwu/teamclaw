@@ -460,6 +460,42 @@ export const BUILD_STATUS_BADGE_VARIANT: Record<BuildStatus, "default" | "info" 
   failed: "error",
 };
 
+// ============ 自动升级类型定义 ============
+
+export type VersionBumpType = 'patch' | 'minor' | 'major';
+
+// 版本自动升级设置
+export interface VersionSettings {
+  autoBump: boolean;
+  bumpType: VersionBumpType;
+  lastBumpedAt?: string;
+}
+
+// 发布记录
+export interface ReleaseLog {
+  id: string;
+  versionId: string;
+  version: string;
+  previousVersion: string;
+  bumpType: VersionBumpType;
+  releasedAt: string;
+  releasedBy: string;
+}
+
+// 版本号递增请求
+export interface BumpVersionRequest {
+  bumpType: VersionBumpType;
+}
+
+// 递增版本的响应
+export interface BumpVersionResponse {
+  success: boolean;
+  version?: Version;
+  previousVersion?: string;
+  newVersion?: string;
+  error?: string;
+}
+
 // ========== Git 分支类型 ==========
 
 export interface GitBranch {

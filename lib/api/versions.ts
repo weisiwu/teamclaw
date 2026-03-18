@@ -1,4 +1,24 @@
-import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, BranchListResponse } from "./types";
+import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings } from "./types";
+
+// 全局版本自动升级设置
+let versionSettings: VersionSettings = {
+  autoBump: true,
+  bumpType: 'patch',
+};
+
+// 获取版本设置
+export function getVersionSettings(): VersionSettings {
+  return { ...versionSettings };
+}
+
+// 更新版本设置
+export function updateVersionSettings(settings: Partial<VersionSettings>): VersionSettings {
+  versionSettings = { ...versionSettings, ...settings };
+  if (settings.autoBump !== undefined || settings.bumpType !== undefined) {
+    versionSettings.lastBumpedAt = new Date().toISOString();
+  }
+  return { ...versionSettings };
+}
 
 // Mock 分支数据
 const mockBranches: GitBranch[] = [
@@ -200,6 +220,57 @@ async function autoCreateGitTag(version: Version): Promise<{ success: boolean; t
   return { success: true, tagName };
 }
 
+// 自动递增版本号
+function autoBumpVersion(currentVersion: string, bumpType: VersionBumpType): string {
+  const match = currentVersion.match(/^v?(\d+)\.(\d+)\.(\d+)/);
+  if (!match) {
+    // 如果无法解析，返回原版本号
+    return currentVersion.startsWith('v') ? currentVersion : `v${currentVersion}`;
+  }
+  
+  let [, major, minor, patch] = match.map(Number);
+  
+  switch (bumpType) {
+    case 'major':
+      major += 1;
+      minor = 0;
+      patch = 0;
+      break;
+    case 'minor':
+      minor += 1;
+      patch = 0;
+      break;
+    case 'patch':
+    default:
+      patch += 1;
+      break;
+  }
+  
+  return `v${major}.${minor}.${patch}`;
+}
+
+// Mock 发布记录数据
+const mockReleaseLogs: ReleaseLog[] = [
+  {
+    id: "rel-1",
+    versionId: "v3",
+    version: "v1.2.0",
+    previousVersion: "v1.1.0",
+    bumpType: "minor",
+    releasedAt: "2026-03-18T10:00:00Z",
+    releasedBy: "system",
+  },
+  {
+    id: "rel-2",
+    versionId: "v2",
+    version: "v1.1.0",
+    previousVersion: "v1.0.0",
+    bumpType: "patch",
+    releasedAt: "2026-03-15T14:30:00Z",
+    releasedBy: "system",
+  },
+];
+
 // 版本列表
 export async function getVersions(
   page: number = 1,
@@ -295,6 +366,43 @@ export async function updateVersion(
       updated.gitTag = tagResult.tagName;
       updated.gitTagCreatedAt = new Date().toISOString();
     }
+  }
+
+  // 当状态变为已发布时，自动递增版本号
+  if (isStatusChangingToPublished && versionSettings.autoBump) {
+    const previousVersion = updated.version;
+    const newVersion = autoBumpVersion(previousVersion, versionSettings.bumpType);
+    
+    // 创建新版本记录
+    const newVersionEntry: Version = {
+      ...updated,
+      id: `v${Date.now()}`,
+      version: newVersion,
+      status: 'draft',
+      releasedAt: null,
+      gitTag: undefined,
+      gitTagCreatedAt: undefined,
+      buildStatus: 'pending',
+      changedFiles: [],
+      commitCount: 0,
+    };
+    
+    // 添加到版本列表
+    mockVersions.unshift(newVersionEntry);
+    
+    // 记录发布日志
+    const releaseLog: ReleaseLog = {
+      id: `rel-${Date.now()}`,
+      versionId: newVersionEntry.id,
+      version: newVersion,
+      previousVersion: previousVersion,
+      bumpType: versionSettings.bumpType,
+      releasedAt: new Date().toISOString(),
+      releasedBy: 'system',
+    };
+    mockReleaseLogs.unshift(releaseLog);
+    
+    console.log(`[Auto Bump] Version bumped from ${previousVersion} to ${newVersion} (${versionSettings.bumpType})`);
   }
 
   mockVersions[index] = updated;
@@ -524,6 +632,66 @@ export async function setMainBranch(branchId: string): Promise<GitBranch | null>
   
   mockBranches[index].isMain = true;
   return mockBranches[index];
+}
+
+// 手动触发版本号递增
+export async function bumpVersion(versionId: string, bumpType: VersionBumpType): Promise<BumpVersionResponse> {
+  await delay(300);
+  
+  const index = mockVersions.findIndex(v => v.id === versionId);
+  if (index === -1) {
+    return { success: false, error: 'Version not found' };
+  }
+  
+  const currentVersion = mockVersions[index];
+  const previousVersion = currentVersion.version;
+  const newVersion = autoBumpVersion(previousVersion, bumpType);
+  
+  // 创建新版本
+  const newVersionEntry: Version = {
+    ...currentVersion,
+    id: `v${Date.now()}`,
+    version: newVersion,
+    status: 'draft',
+    releasedAt: null,
+    gitTag: undefined,
+    gitTagCreatedAt: undefined,
+    buildStatus: 'pending',
+    changedFiles: [],
+    commitCount: 0,
+  };
+  
+  mockVersions.unshift(newVersionEntry);
+  
+  // 记录发布日志
+  const releaseLog: ReleaseLog = {
+    id: `rel-${Date.now()}`,
+    versionId: newVersionEntry.id,
+    version: newVersion,
+    previousVersion: previousVersion,
+    bumpType: bumpType,
+    releasedAt: new Date().toISOString(),
+    releasedBy: 'user',
+  };
+  mockReleaseLogs.unshift(releaseLog);
+  
+  return {
+    success: true,
+    version: newVersionEntry,
+    previousVersion,
+    newVersion,
+  };
+}
+
+// 获取发布记录
+export async function getReleaseLogs(versionId?: string): Promise<ReleaseLog[]> {
+  await delay(200);
+  
+  if (versionId) {
+    return mockReleaseLogs.filter(r => r.versionId === versionId);
+  }
+  
+  return [...mockReleaseLogs];
 }
 
 // React Query hooks
