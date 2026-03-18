@@ -40,6 +40,7 @@ export default function VersionsPage() {
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [selectedVersion, setSelectedVersion] = useState<Version | null>(null);
   const [compareVersions, setCompareVersions] = useState<[string, string] | null>(null);
+  const [isTagPanelOpen, setIsTagPanelOpen] = useState(false);
 
   const pageSize = 10;
 
@@ -179,6 +180,14 @@ export default function VersionsPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">版本管理</h1>
         <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => setIsTagPanelOpen(true)}
+            className="gap-2"
+          >
+            <Tag className="w-4 h-4" />
+            版本面板
+          </Button>
           <Button 
             variant="outline" 
             onClick={() => {
@@ -526,6 +535,18 @@ export default function VersionsPage() {
           onClose={() => setCompareVersions(null)}
         />
       )}
+
+      {/* 版本面板弹窗 */}
+      {isTagPanelOpen && (
+        <TagPanelDialog
+          versions={versions}
+          onClose={() => setIsTagPanelOpen(false)}
+          onSelectVersion={(version) => {
+            setSelectedVersion(version);
+            setIsTagPanelOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -851,6 +872,151 @@ function VersionCompareDialog({
         )}
 
         <div className="mt-6 flex justify-end">
+          <Button variant="outline" onClick={onClose}>
+            关闭
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 版本面板弹窗组件 - 显示所有 Git Tags 和提交详情
+function TagPanelDialog({ 
+  versions, 
+  onClose,
+  onSelectVersion,
+}: { 
+  versions: Version[];
+  onClose: () => void;
+  onSelectVersion: (version: Version) => void;
+}) {
+  // 按 Git Tag 创建时间排序（最新的在前）
+  const versionsWithTags = versions
+    .filter(v => v.gitTag)
+    .sort((a, b) => {
+      const dateA = a.gitTagCreatedAt ? new Date(a.gitTagCreatedAt).getTime() : 0;
+      const dateB = b.gitTagCreatedAt ? new Date(b.gitTagCreatedAt).getTime() : 0;
+      return dateB - dateA;
+    });
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl p-6 max-w-4xl w-full mx-4 max-h-[85vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Tag className="w-5 h-5 text-blue-600" />
+            <h3 className="text-xl font-semibold">版本面板</h3>
+            <Badge variant="default">
+              {versionsWithTags.length} 个 Tag
+            </Badge>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
+
+        {/* Tag 列表 */}
+        <div className="flex-1 overflow-y-auto">
+          {versionsWithTags.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <Tag className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <p>暂无 Git Tag</p>
+              <p className="text-sm mt-1">创建版本后可以生成 Git Tag</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {versionsWithTags.map((version) => (
+                <div
+                  key={version.id}
+                  className="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => onSelectVersion(version)}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <Tag className="w-4 h-4 text-blue-600" />
+                        <span className="font-mono font-medium text-gray-900">
+                          {version.gitTag}
+                        </span>
+                      </div>
+                      {version.isMain && (
+                        <Badge variant="success" className="text-xs">
+                          <Star className="w-3 h-3 mr-1" />主版本
+                        </Badge>
+                      )}
+                      <Badge variant={VERSION_STATUS_BADGE_VARIANT[version.status]}>
+                        {VERSION_STATUS_LABELS[version.status]}
+                      </Badge>
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {version.gitTagCreatedAt && (
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {new Date(version.gitTagCreatedAt).toLocaleDateString('zh-CN')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500">版本:</span>
+                      <span className="font-medium text-gray-900">{version.version}</span>
+                      <span className="text-gray-300">|</span>
+                      <span className="text-sm text-gray-500">标题:</span>
+                      <span className="text-gray-900">{version.title}</span>
+                    </div>
+
+                    {/* 提交信息 */}
+                    <div className="flex items-center gap-4 text-sm text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <GitBranch className="w-3 h-3" />
+                        {version.commitCount} 次提交
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <FileText className="w-3 h-3" />
+                        {version.changedFiles.length} 个文件
+                      </span>
+                      {version.description && (
+                        <span className="truncate max-w-[300px] text-gray-400">
+                          {version.description}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 变更文件预览 */}
+                  {version.changedFiles.length > 0 && (
+                    <div className="mt-3 pt-3 border-t">
+                      <div className="text-xs text-gray-500 mb-2">变更文件:</div>
+                      <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto">
+                        {version.changedFiles.slice(0, 10).map((file, index) => (
+                          <span 
+                            key={index} 
+                            className="px-2 py-0.5 bg-gray-100 rounded text-xs font-mono text-gray-600 truncate max-w-[200px]"
+                          >
+                            {file}
+                          </span>
+                        ))}
+                        {version.changedFiles.length > 10 && (
+                          <span className="px-2 py-0.5 text-xs text-gray-400">
+                            +{version.changedFiles.length - 10} 个文件
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 pt-4 border-t flex justify-between items-center">
+          <div className="text-sm text-gray-500">
+            点击任意行查看版本详情
+          </div>
           <Button variant="outline" onClick={onClose}>
             关闭
           </Button>
