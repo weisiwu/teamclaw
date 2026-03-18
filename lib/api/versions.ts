@@ -1,4 +1,62 @@
-import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest } from "./types";
+import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, BranchListResponse } from "./types";
+
+// Mock 分支数据
+const mockBranches: GitBranch[] = [
+  {
+    id: "branch-main",
+    name: "main",
+    isMain: true,
+    isRemote: false,
+    createdAt: "2026-01-01T08:00:00Z",
+    lastCommitAt: "2026-03-15T14:30:00Z",
+    commitMessage: "feat: add version management",
+    author: "system",
+    versionId: "v1",
+  },
+  {
+    id: "branch-develop",
+    name: "develop",
+    isMain: false,
+    isRemote: false,
+    createdAt: "2026-01-05T10:00:00Z",
+    lastCommitAt: "2026-03-14T16:20:00Z",
+    commitMessage: "feat: add new features",
+    author: "developer",
+    versionId: "v2",
+  },
+  {
+    id: "branch-feature-v2",
+    name: "feature/v2.0.0",
+    isMain: false,
+    isRemote: false,
+    createdAt: "2026-02-20T09:00:00Z",
+    lastCommitAt: "2026-03-10T11:15:00Z",
+    commitMessage: "feat: version 2.0.0 development",
+    author: "developer",
+    versionId: "v5",
+  },
+  {
+    id: "branch-hotfix",
+    name: "hotfix/bug-fix",
+    isMain: false,
+    isRemote: false,
+    createdAt: "2026-03-01T14:00:00Z",
+    lastCommitAt: "2026-03-05T10:30:00Z",
+    commitMessage: "fix: resolve critical bug",
+    author: "developer",
+  },
+  {
+    id: "branch-release-v1.3",
+    name: "release/v1.3.0",
+    isMain: false,
+    isRemote: false,
+    createdAt: "2026-02-25T08:00:00Z",
+    lastCommitAt: "2026-03-01T09:45:00Z",
+    commitMessage: "chore: prepare release v1.3.0",
+    author: "system",
+    versionId: "v4",
+  },
+];
 
 // Mock 数据
 const mockVersions: Version[] = [
@@ -299,12 +357,6 @@ export async function createGitTag(versionId: string): Promise<Version | null> {
   return version;
 }
 
-// 创建分支
-export async function createBranch(versionId: string, branchName: string): Promise<{ success: boolean; branchName: string }> {
-  await delay(500);
-  return { success: true, branchName: `feature/${branchName || 'new-branch'}` };
-}
-
 // 指定主版本
 export async function setMainVersion(versionId: string): Promise<Version | null> {
   await delay(300);
@@ -413,6 +465,67 @@ export async function restoreSnapshot(snapshotId: string): Promise<Version> {
   return version;
 }
 
+// ========== 分支管理 API ==========
+
+// 获取分支列表
+export async function getBranches(): Promise<BranchListResponse> {
+  await delay(300);
+  return {
+    data: [...mockBranches],
+    total: mockBranches.length,
+  };
+}
+
+// 创建分支
+export async function createBranch(request: CreateBranchRequest): Promise<GitBranch> {
+  await delay(500);
+  
+  const newBranch: GitBranch = {
+    id: `branch-${Date.now()}`,
+    name: request.name,
+    isMain: false,
+    isRemote: false,
+    createdAt: new Date().toISOString(),
+    lastCommitAt: new Date().toISOString(),
+    commitMessage: `feat: create branch ${request.name}`,
+    author: "current-user",
+    versionId: request.versionId,
+  };
+  
+  mockBranches.unshift(newBranch);
+  return newBranch;
+}
+
+// 删除分支
+export async function deleteBranch(branchId: string): Promise<boolean> {
+  await delay(300);
+  
+  const index = mockBranches.findIndex(b => b.id === branchId);
+  if (index === -1) return false;
+  
+  // 不能删除主分支
+  if (mockBranches[index].isMain) {
+    throw new Error("Cannot delete main branch");
+  }
+  
+  mockBranches.splice(index, 1);
+  return true;
+}
+
+// 设置主分支
+export async function setMainBranch(branchId: string): Promise<GitBranch | null> {
+  await delay(300);
+  
+  // 先清除其他分支的主分支标记
+  mockBranches.forEach(b => { b.isMain = false; });
+  
+  const index = mockBranches.findIndex(b => b.id === branchId);
+  if (index === -1) return null;
+  
+  mockBranches[index].isMain = true;
+  return mockBranches[index];
+}
+
 // React Query hooks
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -465,12 +578,12 @@ export function useDeleteVersion() {
   });
 }
 
-export function useCreateBranch() {
+export function useCreateBranchForVersion() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ versionId, branchName }: { versionId: string; branchName: string }) =>
-      createBranch(versionId, branchName),
+      createBranch({ name: branchName, versionId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["versions"] });
     },
@@ -582,6 +695,48 @@ export function useRestoreSnapshot() {
     mutationFn: (snapshotId: string) => restoreSnapshot(snapshotId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["versions"] });
+    },
+  });
+}
+
+// ========== 分支管理 Hooks ==========
+
+export function useBranches() {
+  return useQuery({
+    queryKey: ["branches"],
+    queryFn: () => getBranches(),
+  });
+}
+
+export function useCreateBranch() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (request: CreateBranchRequest) => createBranch(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["branches"] });
+    },
+  });
+}
+
+export function useDeleteBranch() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (branchId: string) => deleteBranch(branchId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["branches"] });
+    },
+  });
+}
+
+export function useSetMainBranch() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (branchId: string) => setMainBranch(branchId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["branches"] });
     },
   });
 }

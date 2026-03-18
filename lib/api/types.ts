@@ -459,3 +459,28 @@ export const BUILD_STATUS_BADGE_VARIANT: Record<BuildStatus, "default" | "info" 
   success: "success",
   failed: "error",
 };
+
+// ========== Git 分支类型 ==========
+
+export interface GitBranch {
+  id: string;
+  name: string;
+  isMain: boolean;
+  isRemote: boolean;
+  createdAt: string;
+  lastCommitAt: string;
+  commitMessage: string;
+  author: string;
+  versionId?: string; // 关联的版本 ID
+}
+
+export interface CreateBranchRequest {
+  name: string;
+  baseBranch?: string; // 基于哪个分支
+  versionId?: string; // 基于哪个版本
+}
+
+export interface BranchListResponse {
+  data: GitBranch[];
+  total: number;
+}

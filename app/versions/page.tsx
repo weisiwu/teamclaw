@@ -9,7 +9,7 @@ import {
   useCreateVersion,
   useUpdateVersion,
   useDeleteVersion,
-  useCreateBranch,
+  useCreateBranchForVersion,
   useSetMainVersion,
   useTriggerBuild,
   useRebuildVersion,
@@ -18,6 +18,10 @@ import {
   useVersionSnapshots,
   useCreateSnapshot,
   useRestoreSnapshot,
+  useBranches,
+  useCreateBranch,
+  useDeleteBranch,
+  useSetMainBranch,
 } from "@/lib/api/versions";
 import {
   Version,
@@ -33,7 +37,13 @@ import {
   VersionTag,
   CreateSnapshotRequest,
 } from "@/lib/api/types";
-import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag } from "lucide-react";
+import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch as GitBranchIcon, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 export default function VersionsPage() {
   const [page, setPage] = useState(1);
@@ -48,6 +58,16 @@ export default function VersionsPage() {
   const [isTagPanelOpen, setIsTagPanelOpen] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
   const [downloadHistory, setDownloadHistory] = useState<Array<{versionId: string; version: string; time: string; url: string}>>([]);
+  
+  // 分支管理状态
+  const [isBranchPanelOpen, setIsBranchPanelOpen] = useState(false);
+  const [isCreateBranchOpen, setIsCreateBranchOpen] = useState(false);
+  const [deleteBranchConfirmId, setDeleteBranchConfirmId] = useState<string | null>(null);
+  const [newBranchForm, setNewBranchForm] = useState({
+    name: '',
+    baseBranch: '',
+    versionId: '',
+  });
 
   // Load download history from localStorage
   useEffect(() => {
@@ -74,7 +94,7 @@ export default function VersionsPage() {
   const createVersion = useCreateVersion();
   const updateVersion = useUpdateVersion();
   const deleteVersion = useDeleteVersion();
-  const createBranch = useCreateBranch();
+  const createBranchForVersion = useCreateBranchForVersion();
   const setMainVersion = useSetMainVersion();
   const triggerBuild = useTriggerBuild();
   const rebuildVersion = useRebuildVersion();
@@ -83,6 +103,14 @@ export default function VersionsPage() {
   const versionSnapshots = useVersionSnapshots(selectedVersion?.id || "");
   const createSnapshot = useCreateSnapshot();
   const restoreSnapshot = useRestoreSnapshot();
+  
+  // 分支管理 hooks
+  const { data: branchesData, isLoading: isLoadingBranches } = useBranches();
+  const createBranch = useCreateBranch();
+  const deleteBranch = useDeleteBranch();
+  const setMainBranch = useSetMainBranch();
+  
+  const branches = branchesData?.data || [];
 
   const versions = data?.data || [];
   // 前端标签筛选
@@ -131,10 +159,49 @@ export default function VersionsPage() {
   const handleCreateBranch = async (version: Version) => {
     try {
       const branchName = `v${version.version.replace(/\./g, '-')}-branch`;
-      await createBranch.mutateAsync({ versionId: version.id, branchName });
+      await createBranchForVersion.mutateAsync({ versionId: version.id, branchName });
       setActionMessage({ type: 'success', text: `分支创建成功: feature/${branchName}` });
     } catch {
       setActionMessage({ type: 'error', text: '创建分支失败' });
+    }
+  };
+
+  // 分支管理处理函数
+  const handleCreateNewBranch = async () => {
+    if (!newBranchForm.name.trim()) {
+      setActionMessage({ type: 'error', text: '请输入分支名称' });
+      return;
+    }
+    try {
+      await createBranch.mutateAsync({
+        name: newBranchForm.name,
+        baseBranch: newBranchForm.baseBranch || undefined,
+        versionId: newBranchForm.versionId || undefined,
+      });
+      setIsCreateBranchOpen(false);
+      setNewBranchForm({ name: '', baseBranch: '', versionId: '' });
+      setActionMessage({ type: 'success', text: `分支创建成功: ${newBranchForm.name}` });
+    } catch {
+      setActionMessage({ type: 'error', text: '创建分支失败' });
+    }
+  };
+
+  const handleDeleteBranch = async (branchId: string) => {
+    try {
+      await deleteBranch.mutateAsync(branchId);
+      setDeleteBranchConfirmId(null);
+      setActionMessage({ type: 'success', text: '分支删除成功' });
+    } catch {
+      setActionMessage({ type: 'error', text: '删除分支失败' });
+    }
+  };
+
+  const handleSetAsMainBranch = async (branchId: string) => {
+    try {
+      await setMainBranch.mutateAsync(branchId);
+      setActionMessage({ type: 'success', text: '已设为主分支' });
+    } catch {
+      setActionMessage({ type: 'error', text: '设置主分支失败' });
     }
   };
 
@@ -246,6 +313,14 @@ export default function VersionsPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">版本管理</h1>
         <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => setIsBranchPanelOpen(true)}
+            className="gap-2"
+          >
+            <GitBranchIcon className="w-4 h-4" />
+            分支管理
+          </Button>
           <Button 
             variant="outline" 
             onClick={() => setIsTagPanelOpen(true)}
@@ -446,10 +521,10 @@ export default function VersionsPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleCreateBranch(version)}
-                          disabled={createBranch.isPending}
+                          disabled={createBranchForVersion.isPending}
                           title="创建分支"
                         >
-                          <GitBranch className="w-4 h-4" />
+                          <GitBranchIcon className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -633,6 +708,210 @@ export default function VersionsPage() {
             setIsTagPanelOpen(false);
           }}
         />
+      )}
+
+      {/* 分支管理弹窗 */}
+      {isBranchPanelOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-4xl w-full mx-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <GitBranchIcon className="w-6 h-6" />
+                <h3 className="text-xl font-semibold">分支管理</h3>
+                <span className="text-sm text-gray-500">({branches.length} 个分支)</span>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => setIsCreateBranchOpen(true)}
+                  className="gap-1"
+                >
+                  <Plus className="w-4 h-4" />
+                  创建分支
+                </Button>
+                <Button variant="outline" onClick={() => setIsBranchPanelOpen(false)}>
+                  关闭
+                </Button>
+              </div>
+            </div>
+
+            {isLoadingBranches ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                <span className="ml-2 text-gray-500">加载中...</span>
+              </div>
+            ) : branches.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">暂无分支</div>
+            ) : (
+              <div className="space-y-2">
+                {branches.map((branch) => (
+                  <div
+                    key={branch.id}
+                    className={`p-4 rounded-lg border ${branch.isMain ? 'bg-blue-50 border-blue-200' : 'bg-white hover:bg-gray-50'}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        {branch.isMain ? (
+                          <Star className="w-5 h-5 text-blue-500 fill-blue-500" />
+                        ) : (
+                          <GitBranchIcon className="w-5 h-5 text-gray-400" />
+                        )}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-medium text-gray-900">{branch.name}</span>
+                            {branch.isMain && (
+                              <Badge variant="success" className="text-xs">主分支</Badge>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-500 mt-1">
+                            {branch.commitMessage}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-sm text-gray-500 text-right">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            创建于 {new Date(branch.createdAt).toLocaleDateString('zh-CN')}
+                          </div>
+                          <div className="flex items-center gap-1 mt-1">
+                            <span className="text-gray-400">作者:</span>
+                            <span>{branch.author}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-1">
+                          {!branch.isMain && (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleSetAsMainBranch(branch.id)}
+                                disabled={setMainBranch.isPending}
+                                title="设为主分支"
+                              >
+                                <Star className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setDeleteBranchConfirmId(branch.id)}
+                                disabled={deleteBranch.isPending}
+                                className="text-red-600 hover:text-red-700"
+                                title="删除分支"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 删除分支确认 */}
+            {deleteBranchConfirmId && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+                <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+                  <h3 className="text-lg font-semibold mb-4">确认删除分支</h3>
+                  <p className="text-gray-600 mb-6">确定要删除这个分支吗？此操作无法撤销。</p>
+                  <div className="flex gap-3 justify-end">
+                    <Button variant="outline" onClick={() => setDeleteBranchConfirmId(null)}>
+                      取消
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => handleDeleteBranch(deleteBranchConfirmId)}
+                      disabled={deleteBranch.isPending}
+                    >
+                      {deleteBranch.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          删除中...
+                        </>
+                      ) : (
+                        "删除"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 创建分支弹窗 */}
+      {isCreateBranchOpen && (
+        <Dialog open={isCreateBranchOpen} onOpenChange={setIsCreateBranchOpen}>
+          <DialogContent title="创建新分支">
+            <div className="space-y-4 py-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  分支名称 <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  placeholder="例如: feature/new-feature"
+                  value={newBranchForm.name}
+                  onChange={(e) => setNewBranchForm({ ...newBranchForm, name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  基于分支
+                </label>
+                <select
+                  className="flex h-10 w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={newBranchForm.baseBranch}
+                  onChange={(e) => setNewBranchForm({ ...newBranchForm, baseBranch: e.target.value })}
+                >
+                  <option value="">选择基础分支</option>
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.name}>
+                      {branch.name} {branch.isMain ? '(主分支)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  基于版本（可选）
+                </label>
+                <select
+                  className="flex h-10 w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={newBranchForm.versionId}
+                  onChange={(e) => setNewBranchForm({ ...newBranchForm, versionId: e.target.value })}
+                >
+                  <option value="">选择版本</option>
+                  {versions.map((version) => (
+                    <option key={version.id} value={version.id}>
+                      {version.version} - {version.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsCreateBranchOpen(false)}>
+                取消
+              </Button>
+              <Button
+                onClick={handleCreateNewBranch}
+                disabled={createBranch.isPending || !newBranchForm.name.trim()}
+              >
+                {createBranch.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    创建中...
+                  </>
+                ) : (
+                  "创建"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
@@ -853,7 +1132,7 @@ function VersionDetailDialog({
                 <span className="text-gray-900">{version.changedFiles.length} 个文件</span>
               </div>
               <div className="flex items-center gap-3">
-                <GitBranch className="w-4 h-4 text-gray-400" />
+                <GitBranchIcon className="w-4 h-4 text-gray-400" />
                 <span className="text-gray-600 w-20">提交数</span>
                 <span className="text-gray-900">{version.commitCount} 次提交</span>
               </div>
@@ -1272,7 +1551,7 @@ function TagPanelDialog({
                     {/* 提交信息 */}
                     <div className="flex items-center gap-4 text-sm text-gray-500">
                       <span className="flex items-center gap-1">
-                        <GitBranch className="w-3 h-3" />
+                        <GitBranchIcon className="w-3 h-3" />
                         {version.commitCount} 次提交
                       </span>
                       <span className="flex items-center gap-1">
