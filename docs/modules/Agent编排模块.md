@@ -166,4 +166,96 @@ reviewer 审查代码
 
 ---
 
+## 7. API 定义
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/v1/agents` | 获取所有 Agent 列表及状态 |
+| `GET` | `/api/v1/agents/:agentName` | 获取单个 Agent 详情（角色、等级、当前任务） |
+| `PUT` | `/api/v1/agents/:agentName/config` | 更新 Agent 配置（模型、Prompt 模板等） |
+| `GET` | `/api/v1/agents/:agentName/sessions` | 获取 Agent 历史会话列表 |
+| `POST` | `/api/v1/agents/:agentName/dispatch` | 向指定 Agent 分发任务 |
+| `GET` | `/api/v1/agents/team` | 获取团队编排概览（等级关系、指派矩阵） |
+
+**GET /api/v1/agents 响应示例**
+
+```json
+{
+  "code": 0,
+  "data": {
+    "list": [
+      {
+        "name": "main",
+        "role": "主管",
+        "level": 3,
+        "status": "idle",
+        "currentTask": null,
+        "inGroup": true,
+        "model": "claude-sonnet-3.5"
+      },
+      {
+        "name": "coder1",
+        "role": "程序员1号",
+        "level": 1,
+        "status": "busy",
+        "currentTask": "t_20260316_002",
+        "inGroup": false,
+        "model": "claude-sonnet-3.5"
+      }
+    ]
+  },
+  "message": "ok"
+}
+```
+
+---
+
+## 8. 实现任务清单
+
+> 前置依赖：人员与权限模块验收通过。
+
+### 任务 8.1：后端 - Agent 管理
+
+| # | 任务 | 产出文件 | 说明 |
+|---|------|---------|------|
+| 1 | Agent 配置数据模型 | `server/src/models/agent.ts` | Agent 类型定义、默认配置、等级枚举 |
+| 2 | Agent 管理路由 | `server/src/routes/agent.ts` | 上述 6 个 API 端点 |
+| 3 | Agent 管理服务 | `server/src/services/agentService.ts` | Agent 状态管理、配置更新、团队编排查询 |
+| 4 | Agent 指派规则引擎 | `server/src/services/dispatchService.ts` | 等级校验（高→低）、Agent 可用性检查、负载均衡选择 coder |
+| 5 | Agent 常量定义 | `server/src/constants/agents.ts` | 5 个 Agent 默认配置、等级矩阵、指派规则 |
+
+### 任务 8.2：后端 - Agent 实例隔离
+
+| # | 任务 | 产出文件 | 说明 |
+|---|------|---------|------|
+| 1 | Agent 工作空间管理 | `server/src/services/agentWorkspace.ts` | 创建/清理 Agent 独立工作目录 |
+| 2 | 共享资源锁管理 | `server/src/services/resourceLock.ts` | Skills、workspace、memory 的文件锁机制 |
+| 3 | Agent 初始化脚本 | `server/src/services/agentInit.ts` | 首次启动时创建 5 个 Agent 目录和默认配置 |
+
+### 任务 8.3：前端 - Agent 管理页面
+
+| # | 任务 | 产出文件 | 说明 |
+|---|------|---------|------|
+| 1 | Agent 团队概览页 | `dashboard/src/pages/AgentTeam/index.tsx` | 卡片式展示 5 个 Agent，显示角色/等级/状态/当前任务 |
+| 2 | Agent 详情面板 | `dashboard/src/pages/AgentTeam/AgentDetail.tsx` | 侧滑面板：配置、历史会话、当前任务 |
+| 3 | 等级关系图组件 | `dashboard/src/pages/AgentTeam/HierarchyChart.tsx` | 可视化展示 Lv3→Lv2→Lv1 指派关系 |
+| 4 | Agent API 封装 | `dashboard/src/services/agent.ts` | 封装上述 6 个 API |
+| 5 | Agent 状态标签组件 | `dashboard/src/components/AgentStatusBadge.tsx` | idle/busy/error 不同颜色状态标签 |
+
+---
+
+## 9. 验收标准
+
+| # | 验收项 | 验证方式 |
+|---|--------|---------|
+| 1 | `GET /api/v1/agents` 返回 5 个 Agent 的完整信息 | curl 验证 |
+| 2 | Agent 团队概览页正确展示 5 张卡片，角色/等级/状态信息正确 | 浏览器截图 |
+| 3 | 等级关系图正确展示 Lv3→Lv2→Lv1 指派链路 | 浏览器截图 |
+| 4 | 修改 Agent 配置后刷新页面数据持久化 | 操作验证 |
+| 5 | 指派规则引擎正确拒绝低级向高级指派 | 单元测试 |
+| 6 | Agent 工作目录已正确创建，共享资源目录存在 | 文件系统检查 |
+| 7 | 所有页面样式正确，卡片布局响应式适配 | 浏览器样式检查 |
+
+---
+
 [← 上一章：人员与权限模块](./人员与权限模块.md) | [返回主文档](../系统架构.V1.md) | [下一章：消息机制模块 →](./消息机制模块.md)
