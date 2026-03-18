@@ -45,7 +45,7 @@ import {
   CreateSnapshotRequest,
   DOWNLOAD_FORMAT_OPTIONS,
 } from "@/lib/api/types";
-import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch as GitBranchIcon, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag, Image, FileCode } from "lucide-react";
+import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch as GitBranchIcon, GitMerge, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag, Image, FileCode } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -53,6 +53,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel, BuildLogViewer, getBuildHistory, addBuildLog, clearBuildHistory, SnapshotCompareDialog } from "@/components/versions";
+import { BranchCompareDialog, BranchMergeDialog } from "@/components/branch";
 
 export default function VersionsPage() {
   const [page, setPage] = useState(1);
@@ -96,6 +97,10 @@ export default function VersionsPage() {
     baseBranch: '',
     versionId: '',
   });
+  
+  // 分支对比/合并对话框状态
+  const [isBranchCompareOpen, setIsBranchCompareOpen] = useState(false);
+  const [isBranchMergeOpen, setIsBranchMergeOpen] = useState(false);
 
   // 消息截图相关状态
   const [isMessageSelectorOpen, setIsMessageSelectorOpen] = useState(false);
@@ -943,6 +948,22 @@ export default function VersionsPage() {
               </div>
               <div className="flex gap-2">
                 <Button 
+                  variant="outline"
+                  onClick={() => setIsBranchCompareOpen(true)}
+                  className="gap-1"
+                >
+                  <GitCompare className="w-4 h-4" />
+                  对比
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => setIsBranchMergeOpen(true)}
+                  className="gap-1"
+                >
+                  <GitMerge className="w-4 h-4" />
+                  合并
+                </Button>
+                <Button 
                   onClick={() => setIsCreateBranchOpen(true)}
                   className="gap-1"
                 >
@@ -1062,6 +1083,24 @@ export default function VersionsPage() {
           </div>
         </div>
       )}
+
+      {/* 分支对比弹窗 */}
+      <BranchCompareDialog
+        isOpen={isBranchCompareOpen}
+        onClose={() => setIsBranchCompareOpen(false)}
+        branches={branches}
+      />
+
+      {/* 分支合并弹窗 */}
+      <BranchMergeDialog
+        isOpen={isBranchMergeOpen}
+        onClose={() => setIsBranchMergeOpen(false)}
+        branches={branches}
+        onMerge={async () => {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          return true;
+        }}
+      />
 
       {/* 创建分支弹窗 */}
       {isCreateBranchOpen && (
@@ -1597,6 +1636,15 @@ function VersionDetailDialog({
             关闭
           </Button>
         </div>
+
+        {/* 快照对比弹窗 */}
+        {isCompareDialogOpen && snapshots && (
+          <SnapshotCompareDialog
+            open={isCompareDialogOpen}
+            onOpenChange={setIsCompareDialogOpen}
+            snapshots={snapshots}
+          />
+        )}
       </div>
     </div>
   );
