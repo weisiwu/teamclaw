@@ -13,6 +13,7 @@ import {
   useTriggerBuild,
   useRebuildVersion,
   useDownloadArtifact,
+  useCreateGitTag,
 } from "@/lib/api/versions";
 import {
   Version,
@@ -27,7 +28,7 @@ import {
   VERSION_TAG_OPTIONS,
   VersionTag,
 } from "@/lib/api/types";
-import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch, Star, Play, Download, Calendar, Clock, FileText, GitCompare } from "lucide-react";
+import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag } from "lucide-react";
 
 export default function VersionsPage() {
   const [page, setPage] = useState(1);
@@ -51,6 +52,7 @@ export default function VersionsPage() {
   const triggerBuild = useTriggerBuild();
   const rebuildVersion = useRebuildVersion();
   const downloadArtifact = useDownloadArtifact();
+  const createGitTag = useCreateGitTag();
 
   const versions = data?.data || [];
   // 前端标签筛选
@@ -144,6 +146,15 @@ export default function VersionsPage() {
       }
     } catch {
       setActionMessage({ type: 'error', text: '下载失败' });
+    }
+  };
+
+  const handleCreateTag = async (version: Version) => {
+    try {
+      await createGitTag.mutateAsync(version.id);
+      setActionMessage({ type: 'success', text: `已创建 Git Tag: ${version.version}` });
+    } catch {
+      setActionMessage({ type: 'error', text: '创建 Tag 失败' });
     }
   };
 
@@ -269,6 +280,7 @@ export default function VersionsPage() {
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">版本</th>
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">标题</th>
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">标签</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">Git Tag</th>
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">状态</th>
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">构建</th>
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">发布时间</th>
@@ -307,6 +319,16 @@ export default function VersionsPage() {
                           );
                         })}
                       </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {version.gitTag ? (
+                        <Badge variant="default" className="font-mono">
+                          <Tag className="w-3 h-3 mr-1" />
+                          {version.gitTag}
+                        </Badge>
+                      ) : (
+                        <span className="text-gray-400 text-sm">-</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <Badge variant={getStatusBadgeVariant(version.status)}>
@@ -371,6 +393,15 @@ export default function VersionsPage() {
                           title="构建"
                         >
                           <Play className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCreateTag(version)}
+                          disabled={!!version.gitTag || createGitTag.isPending}
+                          title="创建 Tag"
+                        >
+                          <Tag className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="ghost"

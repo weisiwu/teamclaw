@@ -16,6 +16,8 @@ const mockVersions: Version[] = [
     buildStatus: "success",
     artifactUrl: "https://example.com/artifacts/v1.0.0.zip",
     tags: ["stable", "latest"],
+    gitTag: "v1.0.0",
+    gitTagCreatedAt: "2026-01-15T10:00:00Z",
   },
   {
     id: "v2",
@@ -31,6 +33,8 @@ const mockVersions: Version[] = [
     buildStatus: "success",
     artifactUrl: "https://example.com/artifacts/v1.1.0.zip",
     tags: ["stable"],
+    gitTag: "v1.1.0",
+    gitTagCreatedAt: "2026-02-01T14:30:00Z",
   },
   {
     id: "v3",
@@ -46,6 +50,8 @@ const mockVersions: Version[] = [
     buildStatus: "success",
     artifactUrl: "https://example.com/artifacts/v1.2.0.zip",
     tags: ["beta"],
+    gitTag: "v1.2.0",
+    gitTagCreatedAt: "2026-02-20T16:00:00Z",
   },
   {
     id: "v4",
@@ -61,6 +67,8 @@ const mockVersions: Version[] = [
     buildStatus: "success",
     artifactUrl: "https://example.com/artifacts/v1.3.0.zip",
     tags: ["latest"],
+    gitTag: "v1.3.0",
+    gitTagCreatedAt: "2026-03-01T10:00:00Z",
   },
   {
     id: "v5",
@@ -81,6 +89,15 @@ const mockVersions: Version[] = [
 
 // 模拟延迟
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// 自动创建 Git Tag（模拟）
+async function autoCreateGitTag(version: Version): Promise<{ success: boolean; tagName: string }> {
+  await delay(300);
+  // 模拟自动创建 git tag
+  const tagName = version.version.startsWith('v') ? version.version : `v${version.version}`;
+  console.log(`[Auto Tag] Created git tag: ${tagName} for version ${version.version}`);
+  return { success: true, tagName };
+}
 
 // 版本列表
 export async function getVersions(
@@ -135,6 +152,15 @@ export async function createVersion(request: CreateVersionRequest): Promise<Vers
     tags: request.tags || [],
   };
 
+  // 如果是发布状态，自动创建 Git Tag
+  if (request.status === "published") {
+    const tagResult = await autoCreateGitTag(newVersion);
+    if (tagResult.success) {
+      newVersion.gitTag = tagResult.tagName;
+      newVersion.gitTagCreatedAt = new Date().toISOString();
+    }
+  }
+
   mockVersions.unshift(newVersion);
   return newVersion;
 }
@@ -149,14 +175,26 @@ export async function updateVersion(
   const index = mockVersions.findIndex((v) => v.id === id);
   if (index === -1) return null;
 
+  const currentVersion = mockVersions[index];
+  const isStatusChangingToPublished = request.status === "published" && currentVersion.status !== "published";
+  
   const updated = {
-    ...mockVersions[index],
+    ...currentVersion,
     ...request,
     releasedAt:
-      request.status === "published" && !mockVersions[index].releasedAt
+      request.status === "published" && !currentVersion.releasedAt
         ? new Date().toISOString()
-        : mockVersions[index].releasedAt,
+        : currentVersion.releasedAt,
   };
+
+  // 当状态变为已发布时，自动创建 Git Tag
+  if (isStatusChangingToPublished && !currentVersion.gitTag) {
+    const tagResult = await autoCreateGitTag(updated);
+    if (tagResult.success) {
+      updated.gitTag = tagResult.tagName;
+      updated.gitTagCreatedAt = new Date().toISOString();
+    }
+  }
 
   mockVersions[index] = updated;
   return updated;
@@ -194,6 +232,27 @@ export async function removeVersionTag(versionId: string, tag: VersionTag): Prom
   if (!version) return null;
 
   version.tags = version.tags.filter((t) => t !== tag);
+  return version;
+}
+
+// 手动创建 Git Tag
+export async function createGitTag(versionId: string): Promise<Version | null> {
+  await delay(300);
+
+  const version = mockVersions.find((v) => v.id === versionId);
+  if (!version) return null;
+
+  // 如果已有 tag，不再创建
+  if (version.gitTag) {
+    return version;
+  }
+
+  const tagResult = await autoCreateGitTag(version);
+  if (tagResult.success) {
+    version.gitTag = tagResult.tagName;
+    version.gitTagCreatedAt = new Date().toISOString();
+  }
+
   return version;
 }
 
@@ -367,6 +426,18 @@ export function useRemoveVersionTag() {
   return useMutation({
     mutationFn: ({ versionId, tag }: { versionId: string; tag: VersionTag }) =>
       removeVersionTag(versionId, tag),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["versions"] });
+    },
+  });
+}
+
+// 创建 Git Tag
+export function useCreateGitTag() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (versionId: string) => createGitTag(versionId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["versions"] });
     },

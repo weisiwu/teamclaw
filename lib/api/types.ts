@@ -366,6 +366,9 @@ export interface Version {
   buildStatus: BuildStatus;
   artifactUrl: string | null;
   tags: VersionTag[];
+  // Git Tag 信息
+  gitTag?: string;
+  gitTagCreatedAt?: string;
 }
 
 export interface CreateVersionRequest {
