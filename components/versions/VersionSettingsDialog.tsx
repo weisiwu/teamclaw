@@ -8,6 +8,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { X, Settings, Save, Loader2, History, Tag } from "lucide-react";
+import { VERSION_STATUS_LABELS } from "@/lib/api/types";
 
 interface VersionSettings {
   autoBump: boolean;
@@ -186,6 +187,7 @@ export function VersionSettingsDialog({
               </Card>
 
               {localSettings.autoTag && (
+                <>
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base">Tag 前缀</CardTitle>
@@ -232,6 +234,53 @@ export function VersionSettingsDialog({
                     )}
                   </CardContent>
                 </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">触发时机</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-gray-500 mb-3">选择哪些状态变更时自动创建 Git Tag</p>
+                    <div className="space-y-2">
+                      {(['draft', 'published', 'archived'] as (keyof typeof VERSION_STATUS_LABELS)[]).map((status) => {
+                        const isSelected = (localSettings.tagOnStatus || []).includes(status);
+                        return (
+                          <label
+                            key={status}
+                            className={`flex items-center p-3 rounded-lg border cursor-pointer transition-colors ${isSelected ? 'border-blue-500 bg-blue-50' : 'hover:bg-gray-50'}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                const current = localSettings.tagOnStatus || ['published'];
+                                const newStatus = e.target.checked
+                                  ? [...current, status]
+                                  : current.filter((s: string) => s !== status);
+                                setLocalSettings({ ...localSettings, tagOnStatus: newStatus });
+                              }}
+                              className="mr-3 w-4 h-4"
+                            />
+                            <div>
+                              <div className="font-medium">{VERSION_STATUS_LABELS[status]}</div>
+                              <div className="text-sm text-gray-500">
+                                {status === 'draft' && '版本创建为草稿时自动打 Tag'}
+                                {status === 'published' && '版本发布时自动打 Tag'}
+                                {status === 'archived' && '版本归档时自动打 Tag'}
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {(localSettings.tagOnStatus || []).length === 0 && (
+                      <p className="text-sm text-amber-600 mt-2">
+                        ⚠️ 未选择任何状态，自动 Tag 将不会触发
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+                </>
               )}
             </div>
           )}
