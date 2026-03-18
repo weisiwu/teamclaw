@@ -677,3 +677,36 @@ export interface UpgradeHistoryResponse {
   data: UpgradeHistoryRecord[];
   total: number;
 }
+
+// ========== 版本摘要向量类型 ==========
+
+// 版本摘要向量
+export interface VersionSummaryVector {
+  versionId: string;
+  version: string;
+  summaryText: string;
+  // 简化：使用文本哈希模拟向量（实际应接入嵌入API）
+  vectorHash: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 向量搜索请求
+export interface VectorSearchRequest {
+  query: string;
+  limit?: number;
+  threshold?: number;
+}
+
+// 向量搜索结果
+export interface VectorSearchResult {
+  version: Version;
+  similarity: number;
+}
+
+// 向量存储响应
+export interface VectorStoreResponse {
+  success: boolean;
+  vector?: VersionSummaryVector;
+  error?: string;
+}

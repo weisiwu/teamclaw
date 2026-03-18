@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview } from "./types";
+import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult } from "./types";
 
 // 全局版本自动升级和 Tag 设置
 let versionSettings: VersionSettings = {
@@ -1407,4 +1407,160 @@ export function useUpgradeHistory(versionId: string) {
     queryFn: () => getUpgradeHistory(versionId),
     enabled: !!versionId,
   });
+}
+
+// ========== 版本摘要向量 API ==========
+
+const VECTOR_STORAGE_KEY = 'teamclaw_version_vectors';
+
+// 获取所有版本向量
+export function getVersionVectors(): VersionSummaryVector[] {
+  if (typeof window === 'undefined') return [];
+  const stored = localStorage.getItem(VECTOR_STORAGE_KEY);
+  return stored ? JSON.parse(stored) : [];
+}
+
+// 保存所有版本向量
+function saveVersionVectors(vectors: VersionSummaryVector[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(VECTOR_STORAGE_KEY, JSON.stringify(vectors));
+}
+
+// 生成版本摘要文本
+export function generateVersionSummary(version: Version): string {
+  const parts = [
+    version.version,
+    version.title,
+    version.description,
+    ...version.changedFiles,
+  ].filter(Boolean);
+  return parts.join(' ');
+}
+
+// 计算文本相似度（简化版：Jaccard 相似度）
+function calculateSimilarity(text1: string, text2: string): number {
+  const tokens1 = new Set(text1.toLowerCase().split(/\s+/).filter(Boolean));
+  const tokens2 = new Set(text2.toLowerCase().split(/\s+/).filter(Boolean));
+  
+  if (tokens1.size === 0 || tokens2.size === 0) return 0;
+  
+  const intersection = new Set(Array.from(tokens1).filter(x => tokens2.has(x)));
+  const union = new Set(Array.from(tokens1).concat(Array.from(tokens2)));
+  
+  return intersection.size / union.size;
+}
+
+// 生成向量哈希（简化版）
+function generateVectorHash(text: string): string {
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    const char = text.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return hash.toString(36);
+}
+
+// 存储版本向量
+export function storeVersionVector(version: Version): VersionSummaryVector {
+  const vectors = getVersionVectors();
+  const summaryText = generateVersionSummary(version);
+  const vectorHash = generateVectorHash(summaryText);
+  const now = new Date().toISOString();
+  
+  const existingIndex = vectors.findIndex(v => v.versionId === version.id);
+  const vector: VersionSummaryVector = {
+    versionId: version.id,
+    version: version.version,
+    summaryText,
+    vectorHash,
+    createdAt: existingIndex >= 0 ? vectors[existingIndex].createdAt : now,
+    updatedAt: now,
+  };
+  
+  if (existingIndex >= 0) {
+    vectors[existingIndex] = vector;
+  } else {
+    vectors.push(vector);
+  }
+  
+  saveVersionVectors(vectors);
+  return vector;
+}
+
+// 向量语义搜索
+export async function searchVersionsByVector(
+  query: string,
+  limit: number = 10,
+  _threshold: number = 0.1
+): Promise<VectorSearchResult[]> {
+  await delay(100);
+  
+  const vectors = getVersionVectors();
+  const versions = await getVersions(1, 100, 'all');
+  
+  const results: VectorSearchResult[] = [];
+  
+  for (const version of versions.data) {
+    const vector = vectors.find(v => v.versionId === version.id);
+    const summaryText = vector?.summaryText || generateVersionSummary(version);
+    const similarity = calculateSimilarity(query, summaryText);
+    
+    if (similarity > _threshold) {
+      results.push({ version, similarity });
+    }
+  }
+  
+  // 按相似度排序
+  results.sort((a, b) => b.similarity - a.similarity);
+  
+  return results.slice(0, limit);
+}
+
+// 查找相似版本
+export async function findSimilarVersions(
+  versionId: string,
+  limit: number = 5
+): Promise<VectorSearchResult[]> {
+  await delay(50);
+  
+  const versions = await getVersions(1, 100, 'all');
+  const targetVersion = versions.data.find(v => v.id === versionId);
+  
+  if (!targetVersion) return [];
+  
+  const targetVector = getVersionVectors().find(v => v.versionId === versionId);
+  const targetSummary = targetVector?.summaryText || generateVersionSummary(targetVersion);
+  
+  const results: VectorSearchResult[] = [];
+  
+  for (const version of versions.data) {
+    if (version.id === versionId) continue;
+    
+    const vector = getVersionVectors().find(v => v.versionId === version.id);
+    const summaryText = vector?.summaryText || generateVersionSummary(version);
+    const similarity = calculateSimilarity(targetSummary, summaryText);
+    
+    if (similarity > 0.1) {
+      results.push({ version, similarity });
+    }
+  }
+  
+  // 按相似度排序
+  results.sort((a, b) => b.similarity - a.similarity);
+  
+  return results.slice(0, limit);
+}
+
+// 初始化版本向量（批量）
+export async function initializeVersionVectors(): Promise<number> {
+  const versions = await getVersions(1, 100, 'all');
+  let count = 0;
+  
+  for (const version of versions.data) {
+    storeVersionVector(version);
+    count++;
+  }
+  
+  return count;
 }

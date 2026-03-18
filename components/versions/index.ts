@@ -2,6 +2,8 @@ export { SnapshotCompareDialog } from "./SnapshotCompareDialog";
 export { UpgradeConfigDialog } from "./UpgradeConfigDialog";
 export { UpgradePreviewDialog } from "./UpgradePreviewDialog";
 export { VersionTimeline } from "./VersionTimeline";
+export { SemanticSearchToggle } from "./SemanticSearchToggle";
+export { SimilarVersionsPanel } from "./SimilarVersionsPanel";
 export type { Snapshot } from "./SnapshotCompareDialog";
 
 /**
@@ -13,6 +15,7 @@ export { VersionSettingsDialog } from "./VersionSettingsDialog";
 export { MessageSelector } from "./MessageSelector";
 export { ScreenshotGallery } from "./ScreenshotGallery";
 export { ChangelogPanel } from "./ChangelogPanel";
+export { ChangeTimeline } from "./ChangeTimeline";
 export { BuildProgress } from "./BuildProgress";
 export { BuildLogViewer, getBuildHistory, addBuildLog, updateBuildLog, clearBuildHistory } from "./BuildLogViewer";
 export type { MessageItem } from "./MessageSelector";

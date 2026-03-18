@@ -29,6 +29,7 @@ import {
   useUnlinkScreenshot,
   useVersionChangelog,
   useGenerateChangelog,
+  storeVersionVector,
 } from "@/lib/api/versions";
 import {
   Version,
@@ -52,7 +53,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel, BuildLogViewer, getBuildHistory, addBuildLog, clearBuildHistory, SnapshotCompareDialog, VersionTimeline } from "@/components/versions";
+import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel, BuildLogViewer, getBuildHistory, addBuildLog, clearBuildHistory, SnapshotCompareDialog, VersionTimeline, SimilarVersionsPanel } from "@/components/versions";
 import { BranchCompareDialog, BranchMergeDialog } from "@/components/branch";
 
 export default function VersionsPage() {
@@ -198,12 +199,16 @@ export default function VersionsPage() {
   const handleSubmit = async (formData: CreateVersionRequest | UpdateVersionRequest) => {
     try {
       if (editingVersion) {
-        await updateVersion.mutateAsync({
+        const updated = await updateVersion.mutateAsync({
           id: editingVersion.id,
           request: formData as UpdateVersionRequest,
         });
+        // 更新版本向量
+        if (updated) storeVersionVector(updated);
       } else {
-        await createVersion.mutateAsync(formData as CreateVersionRequest);
+        const created = await createVersion.mutateAsync(formData as CreateVersionRequest);
+        // 存储版本向量
+        if (created) storeVersionVector(created);
       }
       setIsFormOpen(false);
       setEditingVersion(null);
@@ -886,6 +891,9 @@ export default function VersionsPage() {
             generateChangelog.mutate({ versionId: selectedVersion.id });
           }}
           isGeneratingChangelog={generateChangelog.isPending}
+          onSelectVersion={(version) => {
+            setSelectedVersion(version);
+          }}
         />
       )}
 
@@ -1274,6 +1282,7 @@ function VersionDetailDialog({
   isLoadingChangelog?: boolean;
   onGenerateChangelog?: () => void;
   isGeneratingChangelog?: boolean;
+  onSelectVersion?: (version: Version) => void;
 }) {
   const [activeTab, setActiveTab] = useState<"info" | "snapshots" | "screenshots" | "changelog">("info");
   const [isCreateSnapshotOpen, setIsCreateSnapshotOpen] = useState(false);
@@ -1646,6 +1655,14 @@ function VersionDetailDialog({
             )}
           </div>
         </div>
+
+        {/* 相似版本 */}
+        {version && (
+          <SimilarVersionsPanel
+            versionId={version.id}
+            onSelectVersion={() => {}}
+          />
+        )}
 
         <div className="mt-6 flex justify-end">
           <Button variant="outline" onClick={onClose}>
