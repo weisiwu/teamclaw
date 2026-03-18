@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, RenameBranchRequest, BranchProtectionRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult, SimilarVersion, TagLifecycleRecord, BatchTagResponse, BuildEnhancementSettings, BuildNotificationSettings, BuildEnvironment, BUILD_ENVIRONMENTS, DEFAULT_BUILD_RETRY_SETTINGS, DEFAULT_NOTIFICATION_SETTINGS, BatchDownloadRequest, BatchDownloadResponse, DownloadUrlVerification, DownloadStats } from "./types";
+import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, RenameBranchRequest, BranchProtectionRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult, SimilarVersion, TagLifecycleRecord, BatchTagResponse, BuildEnhancementSettings, BuildNotificationSettings, BuildEnvironment, BUILD_ENVIRONMENTS, DEFAULT_BUILD_RETRY_SETTINGS, DEFAULT_NOTIFICATION_SETTINGS, BatchDownloadRequest, BatchDownloadResponse, DownloadUrlVerification, DownloadStats, VersionSummary } from "./types";
 
 // 全局版本自动升级和 Tag 设置
 let versionSettings: VersionSettings = {
@@ -1482,6 +1482,66 @@ export function generateVersionSummary(version: Version): string {
     ...version.changedFiles,
   ];
   return parts.filter(Boolean).join(' ');
+}
+
+// ========== LLM 版本摘要生成 ==========
+// 注意：由于 API key 不应在客户端暴露，这里使用简化版摘要生成。
+// 如需 LLM 生成，请通过 server-side API route 调用。
+
+export async function generateVersionSummaryLLM(version: Version): Promise<VersionSummary> {
+  // 使用结构化提取生成摘要（不调用 LLM，避免 key 暴露）
+  return {
+    versionId: version.id,
+    features: extractFeatures(version),
+    changes: [],
+    fixes: [],
+    breaking: [],
+    text: buildVersionText(version),
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+function buildVersionText(version: Version): string {
+  const parts = [version.version];
+  if (version.title) parts.push(version.title);
+  if (version.description) parts.push(version.description);
+  if (version.gitTag) parts.push(`Tag: ${version.gitTag}`);
+  if (version.tags.length > 0) parts.push(`标签: ${version.tags.join(', ')}`);
+  parts.push(`变更文件: ${version.changedFiles.length} 个`);
+  parts.push(`提交: ${version.commitCount} 次`);
+  return parts.join(' | ');
+}
+
+function extractFeatures(version: Version): string[] {
+  const features: string[] = [];
+  if (version.title) features.push(version.title);
+  if (version.description) features.push(version.description);
+  if (version.gitTag) features.push(`Git Tag: ${version.gitTag}`);
+  return features;
+}
+
+// 异步存储版本摘要到 localStorage（摘要单独存储，不影响主数据）
+const SUMMARY_STORAGE_KEY = 'teamclaw_version_summaries';
+
+export function storeVersionSummary(summary: VersionSummary): void {
+  const stored = localStorage.getItem(SUMMARY_STORAGE_KEY);
+  const summaries: VersionSummary[] = stored ? JSON.parse(stored) : [];
+  const idx = summaries.findIndex(s => s.versionId === summary.versionId);
+  if (idx >= 0) summaries[idx] = summary;
+  else summaries.push(summary);
+  localStorage.setItem(SUMMARY_STORAGE_KEY, JSON.stringify(summaries));
+}
+
+export function getVersionSummary(versionId: string): VersionSummary | null {
+  const stored = localStorage.getItem(SUMMARY_STORAGE_KEY);
+  if (!stored) return null;
+  const summaries: VersionSummary[] = JSON.parse(stored);
+  return summaries.find(s => s.versionId === versionId) ?? null;
+}
+
+export function getAllVersionSummaries(): VersionSummary[] {
+  const stored = localStorage.getItem(SUMMARY_STORAGE_KEY);
+  return stored ? JSON.parse(stored) : [];
 }
 
 // 简单哈希函数（用于生成 vector hash）

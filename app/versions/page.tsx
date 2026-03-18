@@ -35,6 +35,9 @@ import {
   storeVersionVector,
   useVersionSettings,
   updateVersionSettings,
+  generateVersionSummaryLLM,
+  storeVersionSummary,
+  getVersionSummary,
 } from "@/lib/api/versions";
 import {
   Version,
@@ -51,8 +54,9 @@ import {
   CreateSnapshotRequest,
   DOWNLOAD_FORMAT_OPTIONS,
   VersionSettings as ApiVersionSettings,
+  VersionSummary,
 } from "@/lib/api/types";
-import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch as GitBranchIcon, GitMerge, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag, Image, FileCode, History, FolderOpen, BarChart3, Shield, ShieldOff, Edit3, Check, Settings } from "lucide-react";
+import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch as GitBranchIcon, GitMerge, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag, Image, FileCode, History, FolderOpen, BarChart3, Shield, ShieldOff, Edit3, Check, Settings, Sparkles } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -1539,7 +1543,9 @@ function VersionDetailDialog({
   isGeneratingChangelog?: boolean;
   onSelectVersion?: (version: Version) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<"info" | "snapshots" | "screenshots" | "changelog">("info");
+  const [activeTab, setActiveTab] = useState<"info" | "snapshots" | "screenshots" | "changelog" | "summary">("info");
+  const [versionSummary, setVersionSummary] = useState<VersionSummary | null>(null);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [isCreateSnapshotOpen, setIsCreateSnapshotOpen] = useState(false);
   const [isCompareDialogOpen, setIsCompareDialogOpen] = useState(false);
   const [restoreConfirmId, setRestoreConfirmId] = useState<string | null>(null);
@@ -1813,6 +1819,32 @@ function VersionDetailDialog({
                 <FileCode className="w-3 h-3 inline mr-1" />
                 变更摘要
               </button>
+              <button
+                className={`px-4 py-2 text-sm font-medium ${activeTab === "summary" ? "border-b-2 border-blue-500 text-blue-600" : "text-gray-500"}`}
+                onClick={async () => {
+                  setActiveTab("summary");
+                  if (!versionSummary) {
+                    const existing = getVersionSummary(version.id);
+                    if (existing) {
+                      setVersionSummary(existing);
+                    } else {
+                      setIsGeneratingSummary(true);
+                      try {
+                        const summary = await generateVersionSummaryLLM(version);
+                        storeVersionSummary(summary);
+                        setVersionSummary(summary);
+                      } catch (e) {
+                        console.error('Failed to generate summary:', e);
+                      } finally {
+                        setIsGeneratingSummary(false);
+                      }
+                    }
+                  }
+                }}
+              >
+                <Sparkles className="w-3 h-3 inline mr-1" />
+                版本摘要
+              </button>
             </div>
 
             {/* 快照列表 */}
@@ -1891,6 +1923,26 @@ function VersionDetailDialog({
                 loading={isLoadingChangelog}
                 generating={isGeneratingChangelog}
                 onGenerate={onGenerateChangelog || (() => {})}
+              />
+            )}
+
+            {/* 版本摘要 */}
+            {activeTab === "summary" && (
+              <VersionSummaryPanel
+                summary={versionSummary}
+                generating={isGeneratingSummary}
+                onRegenerate={async () => {
+                  setIsGeneratingSummary(true);
+                  try {
+                    const summary = await generateVersionSummaryLLM(version);
+                    storeVersionSummary(summary);
+                    setVersionSummary(summary);
+                  } catch (e) {
+                    console.error('Failed to regenerate summary:', e);
+                  } finally {
+                    setIsGeneratingSummary(false);
+                  }
+                }}
               />
             )}
 
@@ -2717,6 +2769,146 @@ function VersionForm({ version, onSubmit, onClose, isPending }: VersionFormProps
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+// ========== 版本摘要面板 ==========
+
+interface VersionSummaryPanelProps {
+  summary: VersionSummary | null;
+  generating: boolean;
+  onRegenerate: () => void;
+}
+
+function VersionSummaryPanel({ summary, generating, onRegenerate }: VersionSummaryPanelProps) {
+  if (generating) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-medium">版本摘要</div>
+        </div>
+        <div className="space-y-3">
+          <div className="h-4 w-3/4 bg-muted animate-pulse rounded" />
+          <div className="h-4 w-1/2 bg-muted animate-pulse rounded" />
+          <div className="h-20 bg-muted animate-pulse rounded" />
+        </div>
+        <div className="text-center text-sm text-gray-500 py-4">
+          <Loader2 className="w-5 h-5 mx-auto animate-spin mb-2" />
+          正在生成版本摘要...
+        </div>
+      </div>
+    );
+  }
+
+  if (!summary) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-medium">版本摘要</div>
+          <Button variant="outline" size="sm" onClick={onRegenerate}>
+            <Sparkles className="h-4 w-4 mr-2" />
+            生成摘要
+          </Button>
+        </div>
+        <div className="border-2 border-dashed rounded-lg p-8 text-center">
+          <FileText className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
+          <p className="text-sm text-muted-foreground">暂无版本摘要</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            点击上方按钮自动生成版本摘要
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-medium">版本摘要</div>
+        <Button variant="outline" size="sm" onClick={onRegenerate}>
+          <Sparkles className="h-4 w-4 mr-2" />
+          重新生成
+        </Button>
+      </div>
+
+      {/* 摘要文本 */}
+      {summary.text && (
+        <div className="bg-blue-50 rounded-lg p-4">
+          <p className="text-sm text-blue-900 font-medium">{summary.text}</p>
+          <p className="text-xs text-blue-600 mt-2">
+            生成时间: {new Date(summary.generatedAt).toLocaleString("zh-CN")}
+          </p>
+        </div>
+      )}
+
+      {/* 功能列表 */}
+      {summary.features.length > 0 && (
+        <div>
+          <div className="text-sm font-medium text-green-700 mb-2">✨ 新功能</div>
+          <ul className="space-y-2">
+            {summary.features.map((feature, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm">
+                <span className="text-green-500 mt-0.5">•</span>
+                <span>{feature}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* 变更列表 */}
+      {summary.changes.length > 0 && (
+        <div>
+          <div className="text-sm font-medium text-blue-700 mb-2">🔄 变更</div>
+          <ul className="space-y-2">
+            {summary.changes.map((change, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm">
+                <span className="text-blue-500 mt-0.5">•</span>
+                <span>{change}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* 修复列表 */}
+      {summary.fixes.length > 0 && (
+        <div>
+          <div className="text-sm font-medium text-amber-700 mb-2">🐛 Bug 修复</div>
+          <ul className="space-y-2">
+            {summary.fixes.map((fix, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm">
+                <span className="text-amber-500 mt-0.5">•</span>
+                <span>{fix}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* 破坏性变更 */}
+      {summary.breaking.length > 0 && (
+        <div>
+          <div className="text-sm font-medium text-red-700 mb-2">⚠️ 破坏性变更</div>
+          <ul className="space-y-2">
+            {summary.breaking.map((b, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm">
+                <span className="text-red-500 mt-0.5">•</span>
+                <span>{b}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* 无内容提示 */}
+      {summary.features.length === 0 && summary.changes.length === 0 &&
+       summary.fixes.length === 0 && summary.breaking.length === 0 && (
+        <div className="text-center py-4 text-sm text-gray-500">
+          摘要内容为空，请尝试重新生成
+        </div>
+      )}
     </div>
   );
 }

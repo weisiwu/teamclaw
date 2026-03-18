@@ -398,8 +398,22 @@ export interface Version {
   // Git Tag 信息
   gitTag?: string;
   gitTagCreatedAt?: string;
+  // 版本摘要（自动生成，可编辑）
+  summary?: string;
+  summaryGeneratedAt?: string;
   // 快照列表
   snapshots?: VersionSnapshot[];
+}
+
+// 版本摘要结构
+export interface VersionSummary {
+  versionId: string;
+  features: string[];       // 本版本新增功能
+  changes: string[];        // 变更内容
+  fixes: string[];          // Bug 修复
+  breaking: string[];        // 破坏性变更
+  text: string;             // 原始摘要文本
+  generatedAt: string;
 }
 
 export interface CreateVersionRequest {
@@ -408,6 +422,7 @@ export interface CreateVersionRequest {
   description: string;
   status: VersionStatus;
   tags?: VersionTag[];
+  summary?: string;
 }
 
 export interface UpdateVersionRequest {
@@ -416,6 +431,7 @@ export interface UpdateVersionRequest {
   description?: string;
   status?: VersionStatus;
   tags?: VersionTag[];
+  summary?: string;
 }
 
 export interface VersionListResponse {
