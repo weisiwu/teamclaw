@@ -1,4 +1,7 @@
 export { SnapshotCompareDialog } from "./SnapshotCompareDialog";
+export { UpgradeConfigDialog } from "./UpgradeConfigDialog";
+export { UpgradePreviewDialog } from "./UpgradePreviewDialog";
+export { VersionTimeline } from "./VersionTimeline";
 export type { Snapshot } from "./SnapshotCompareDialog";
 
 /**

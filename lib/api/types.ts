@@ -632,3 +632,48 @@ export const DOWNLOAD_FORMAT_OPTIONS = [
   { value: 'exe', label: 'EXE (.exe)', desc: 'Windows 安装程序' },
   { value: 'dmg', label: 'DMG (.dmg)', desc: 'macOS 磁盘镜像' },
 ] as const;
+
+// ========== 版本升级配置类型 ==========
+
+export interface VersionUpgradeConfig {
+  id: string;
+  versionId: string;
+  bumpType: 'major' | 'minor' | 'patch' | 'custom';
+  customPattern?: string;
+  autoTrigger: boolean;
+  triggerOn: ('create' | 'publish' | 'tag' | 'manual')[];
+  enablePreview: boolean;
+  historyRetention: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpgradeHistoryRecord {
+  id: string;
+  versionId: string;
+  fromVersion: string;
+  toVersion: string;
+  bumpType: string;
+  triggeredBy: string;
+  timestamp: string;
+}
+
+export interface UpgradePreview {
+  currentVersion: string;
+  newVersion: string;
+  bumpType: string;
+  changes: {
+    field: string;
+    oldValue: string;
+    newValue: string;
+  }[];
+}
+
+export interface UpgradeConfigResponse {
+  data: VersionUpgradeConfig;
+}
+
+export interface UpgradeHistoryResponse {
+  data: UpgradeHistoryRecord[];
+  total: number;
+}

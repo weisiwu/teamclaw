@@ -45,14 +45,14 @@ import {
   CreateSnapshotRequest,
   DOWNLOAD_FORMAT_OPTIONS,
 } from "@/lib/api/types";
-import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch as GitBranchIcon, GitMerge, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag, Image, FileCode } from "lucide-react";
+import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch as GitBranchIcon, GitMerge, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag, Image, FileCode, History } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel, BuildLogViewer, getBuildHistory, addBuildLog, clearBuildHistory, SnapshotCompareDialog } from "@/components/versions";
+import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel, BuildLogViewer, getBuildHistory, addBuildLog, clearBuildHistory, SnapshotCompareDialog, VersionTimeline } from "@/components/versions";
 import { BranchCompareDialog, BranchMergeDialog } from "@/components/branch";
 
 export default function VersionsPage() {
@@ -1296,6 +1296,9 @@ function VersionDetailDialog({
     onRestoreSnapshot?.(snapshotId);
     setRestoreConfirmId(null);
   };
+
+  const [isTimelineOpen, setIsTimelineOpen] = useState(false);
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
@@ -1313,6 +1316,19 @@ function VersionDetailDialog({
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
             <X className="w-5 h-5" />
+          </Button>
+        </div>
+
+        {/* 时间线按钮 */}
+        <div className="mb-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsTimelineOpen(true)}
+            className="w-full"
+          >
+            <History className="w-4 h-4 mr-2" />
+            查看变更历史时间线
           </Button>
         </div>
 
@@ -1643,6 +1659,21 @@ function VersionDetailDialog({
             open={isCompareDialogOpen}
             onOpenChange={setIsCompareDialogOpen}
             snapshots={snapshots}
+          />
+        )}
+
+        {/* 变更历史时间线 */}
+        {isTimelineOpen && (
+          <VersionTimeline
+            screenshots={screenshots || []}
+            changelog={changelog ?? null}
+            versionInfo={{
+              version: version.version,
+              createdAt: version.createdAt,
+              createdBy: "",
+            }}
+            isOpen={isTimelineOpen}
+            onClose={() => setIsTimelineOpen(false)}
           />
         )}
       </div>

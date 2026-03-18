@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus } from "./types";
+import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview } from "./types";
 
 // 全局版本自动升级和 Tag 设置
 let versionSettings: VersionSettings = {
@@ -1272,5 +1272,139 @@ export function useGenerateChangelog() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["versionChangelog", variables.versionId] });
     },
+  });
+}
+
+// ========== 版本升级配置 API ==========
+
+// Mock 升级配置数据
+const mockUpgradeConfigs: VersionUpgradeConfig[] = [];
+const mockUpgradeHistory: UpgradeHistoryRecord[] = [];
+
+// 获取升级配置
+export async function getUpgradeConfig(versionId: string): Promise<VersionUpgradeConfig | null> {
+  await delay(100);
+  const config = mockUpgradeConfigs.find(c => c.versionId === versionId);
+  if (!config) {
+    // 返回默认配置
+    return {
+      id: `cfg-${versionId}`,
+      versionId,
+      bumpType: 'patch',
+      autoTrigger: true,
+      triggerOn: ['publish'],
+      enablePreview: true,
+      historyRetention: 30,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  return config;
+}
+
+// 更新升级配置
+export async function updateUpgradeConfig(
+  versionId: string, 
+  updates: Partial<VersionUpgradeConfig>
+): Promise<VersionUpgradeConfig> {
+  await delay(200);
+  let config = mockUpgradeConfigs.find(c => c.versionId === versionId);
+  
+  if (!config) {
+    config = {
+      id: `cfg-${versionId}`,
+      versionId,
+      bumpType: 'patch',
+      autoTrigger: true,
+      triggerOn: ['publish'],
+      enablePreview: true,
+      historyRetention: 30,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    mockUpgradeConfigs.push(config);
+  }
+  
+  Object.assign(config, updates, { updatedAt: new Date().toISOString() });
+  return config;
+}
+
+// 预览升级结果
+export async function previewUpgrade(versionId: string): Promise<UpgradePreview> {
+  await delay(150);
+  const version = mockVersions.find(v => v.id === versionId);
+  if (!version) {
+    throw new Error("Version not found");
+  }
+  
+  const config = await getUpgradeConfig(versionId);
+  const bumpType = config?.bumpType || 'patch';
+  
+  // 计算新版本号（custom 类型使用 patch 作为默认值）
+  const effectiveBumpType = bumpType === 'custom' ? 'patch' : bumpType;
+  const newVersion = autoBumpVersion(version.version, effectiveBumpType as VersionBumpType);
+  
+  return {
+    currentVersion: version.version,
+    newVersion,
+    bumpType,
+    changes: [
+      { field: 'version', oldValue: version.version, newValue: newVersion },
+      { field: 'bumpType', oldValue: '', newValue: bumpType },
+    ],
+  };
+}
+
+// 获取升级历史
+export async function getUpgradeHistory(versionId: string): Promise<UpgradeHistoryRecord[]> {
+  await delay(100);
+  return mockUpgradeHistory.filter(h => h.versionId === versionId);
+}
+
+// 添加升级记录
+export async function addUpgradeRecord(record: Omit<UpgradeHistoryRecord, 'id' | 'timestamp'>): Promise<UpgradeHistoryRecord> {
+  await delay(50);
+  const newRecord: UpgradeHistoryRecord = {
+    ...record,
+    id: `upg-${Date.now()}`,
+    timestamp: new Date().toLocaleString('zh-CN'),
+  };
+  mockUpgradeHistory.unshift(newRecord);
+  return newRecord;
+}
+
+// ========== 版本升级配置 Hooks ==========
+
+export function useUpgradeConfig(versionId: string) {
+  return useQuery({
+    queryKey: ["upgradeConfig", versionId],
+    queryFn: () => getUpgradeConfig(versionId),
+    enabled: !!versionId,
+  });
+}
+
+export function useUpdateUpgradeConfig() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ versionId, config }: { versionId: string; config: Partial<VersionUpgradeConfig> }) =>
+      updateUpgradeConfig(versionId, config),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["upgradeConfig", variables.versionId] });
+    },
+  });
+}
+
+export function usePreviewUpgrade() {
+  return useMutation({
+    mutationFn: (versionId: string) => previewUpgrade(versionId),
+  });
+}
+
+export function useUpgradeHistory(versionId: string) {
+  return useQuery({
+    queryKey: ["upgradeHistory", versionId],
+    queryFn: () => getUpgradeHistory(versionId),
+    enabled: !!versionId,
   });
 }
