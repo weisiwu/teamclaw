@@ -464,11 +464,36 @@ export const BUILD_STATUS_BADGE_VARIANT: Record<BuildStatus, "default" | "info" 
 
 export type VersionBumpType = 'patch' | 'minor' | 'major';
 
-// 版本自动升级设置
+// Tag 前缀类型
+export type TagPrefix = 'v' | 'release' | 'version' | 'custom';
+
+// 版本自动升级和 Tag 设置
 export interface VersionSettings {
   autoBump: boolean;
   bumpType: VersionBumpType;
   lastBumpedAt?: string;
+  // 自动 Tag 配置
+  autoTag: boolean;
+  tagPrefix: TagPrefix;
+  customPrefix?: string; // 当 tagPrefix 为 custom 时使用
+  tagOnStatus: VersionStatus[]; // 哪些状态变更时自动打 Tag
+}
+
+// Tag 创建请求
+export interface CreateTagRequest {
+  versionId: string;
+  tagName?: string; // 自定义 tag 名称，默认使用版本号
+  message?: string; // Tag 描述/注释
+  force?: boolean; // 是否强制创建（覆盖已有 tag）
+}
+
+// Tag 创建结果
+export interface CreateTagResponse {
+  success: boolean;
+  tagName?: string;
+  message?: string;
+  createdAt?: string;
+  error?: string;
 }
 
 // 发布记录

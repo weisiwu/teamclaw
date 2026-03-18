@@ -300,10 +300,20 @@ export default function VersionsPage() {
     }
   };
 
-  const handleCreateTag = async (version: Version) => {
+  const handleCreateTag = async (version: Version, options?: { tagName?: string; message?: string; force?: boolean }) => {
     try {
-      await createGitTag.mutateAsync(version.id);
-      setActionMessage({ type: 'success', text: `已创建 Git Tag: ${version.version}` });
+      const result = await createGitTag.mutateAsync({ 
+        versionId: version.id,
+        request: options ? { 
+          versionId: version.id,
+          ...options 
+        } : undefined 
+      });
+      if (result.success) {
+        setActionMessage({ type: 'success', text: `已创建 Git Tag: ${result.tagName}` });
+      } else {
+        setActionMessage({ type: 'error', text: result.error || '创建 Tag 失败' });
+      }
     } catch {
       setActionMessage({ type: 'error', text: '创建 Tag 失败' });
     }

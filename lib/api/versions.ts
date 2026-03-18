@@ -1,11 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange } from "./types";
+import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus } from "./types";
 
-// 全局版本自动升级设置
+// 全局版本自动升级和 Tag 设置
 let versionSettings: VersionSettings = {
   autoBump: true,
   bumpType: 'patch',
+  autoTag: true,
+  tagPrefix: 'v',
+  tagOnStatus: ['published'],
 };
 
 // 获取版本设置
@@ -13,12 +16,17 @@ export function getVersionSettings(): VersionSettings {
   return { ...versionSettings };
 }
 
-// 更新版本设置
+// 更新版本设置（包含自动升级和自动 Tag）
 export function updateVersionSettings(settings: Partial<VersionSettings>): VersionSettings {
   versionSettings = { ...versionSettings, ...settings };
-  if (settings.autoBump !== undefined || settings.bumpType !== undefined) {
+  
+  // 更新最后修改时间
+  if (settings.autoBump !== undefined || settings.bumpType !== undefined || 
+      settings.autoTag !== undefined || settings.tagPrefix !== undefined) {
     versionSettings.lastBumpedAt = new Date().toISOString();
   }
+  
+  console.log('[Version Settings] Updated:', versionSettings);
   return { ...versionSettings };
 }
 
@@ -214,12 +222,59 @@ const mockSnapshots: VersionSnapshot[] = [
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // 自动创建 Git Tag（模拟）
-async function autoCreateGitTag(version: Version): Promise<{ success: boolean; tagName: string }> {
+async function autoCreateGitTag(version: Version, options?: { prefix?: string; message?: string }): Promise<{ success: boolean; tagName: string; message?: string }> {
   await delay(300);
-  // 模拟自动创建 git tag
-  const tagName = version.version.startsWith('v') ? version.version : `v${version.version}`;
+  
+  // 确定 Tag 前缀
+  let tagPrefix = versionSettings.tagPrefix;
+  if (tagPrefix === 'custom' && versionSettings.customPrefix) {
+    tagPrefix = versionSettings.customPrefix as TagPrefix;
+  }
+  
+  // 构建 Tag 名称
+  const versionNum = version.version.startsWith('v') ? version.version : `v${version.version}`;
+  const tagName = tagPrefix === 'v' ? versionNum : `${tagPrefix}/${version.version}`;
+  
+  // Tag 描述/注释
+  const tagMessage = options?.message || `Release ${version.version} - ${version.title || 'Version release'}`;
+  
   console.log(`[Auto Tag] Created git tag: ${tagName} for version ${version.version}`);
-  return { success: true, tagName };
+  console.log(`[Auto Tag] Tag message: ${tagMessage}`);
+  
+  return { success: true, tagName, message: tagMessage };
+}
+
+// 手动创建 Git Tag（增强版）
+export async function createGitTag(versionId: string, request?: CreateTagRequest): Promise<CreateTagResponse> {
+  await delay(300);
+
+  const version = mockVersions.find((v) => v.id === versionId);
+  if (!version) {
+    return { success: false, error: 'Version not found' };
+  }
+
+  // 如果已有 tag 且不强制创建
+  if (version.gitTag && !request?.force) {
+    return { success: false, error: 'Tag already exists. Use force=true to overwrite.' };
+  }
+
+  // 确定 Tag 名称
+  const tagName = request?.tagName || (version.version.startsWith('v') ? version.version : `v${version.version}`);
+  const tagMessage = request?.message || `Release ${version.version} - ${version.title || 'Version release'}`;
+
+  // 创建 Tag
+  version.gitTag = tagName;
+  version.gitTagCreatedAt = new Date().toISOString();
+
+  console.log(`[Manual Tag] Created git tag: ${tagName} for version ${version.version}`);
+  console.log(`[Manual Tag] Tag message: ${tagMessage}`);
+
+  return { 
+    success: true, 
+    tagName, 
+    message: tagMessage,
+    createdAt: version.gitTagCreatedAt 
+  };
 }
 
 // 自动递增版本号
@@ -393,12 +448,13 @@ export async function createVersion(request: CreateVersionRequest): Promise<Vers
     tags: request.tags || [],
   };
 
-  // 如果是发布状态，自动创建 Git Tag
-  if (request.status === "published") {
+  // 如果是发布状态，根据设置自动创建 Git Tag
+  if (versionSettings.autoTag && versionSettings.tagOnStatus.includes(request.status as VersionStatus)) {
     const tagResult = await autoCreateGitTag(newVersion);
     if (tagResult.success) {
       newVersion.gitTag = tagResult.tagName;
       newVersion.gitTagCreatedAt = new Date().toISOString();
+      console.log(`[Auto Tag] Created tag ${tagResult.tagName} for version ${newVersion.version}`);
     }
   }
 
@@ -428,12 +484,18 @@ export async function updateVersion(
         : currentVersion.releasedAt,
   };
 
-  // 当状态变为已发布时，自动创建 Git Tag
-  if (isStatusChangingToPublished && !currentVersion.gitTag) {
+  // 当状态变更时，根据设置自动创建 Git Tag
+  const isStatusChangingToTagStatus = request.status && 
+    versionSettings.autoTag && 
+    versionSettings.tagOnStatus.includes(request.status as VersionStatus) &&
+    currentVersion.status !== request.status;
+    
+  if (isStatusChangingToTagStatus && !currentVersion.gitTag) {
     const tagResult = await autoCreateGitTag(updated);
     if (tagResult.success) {
       updated.gitTag = tagResult.tagName;
       updated.gitTagCreatedAt = new Date().toISOString();
+      console.log(`[Auto Tag] Created tag ${tagResult.tagName} for version ${updated.version} on status change to ${request.status}`);
     }
   }
 
@@ -510,27 +572,6 @@ export async function removeVersionTag(versionId: string, tag: VersionTag): Prom
   if (!version) return null;
 
   version.tags = version.tags.filter((t) => t !== tag);
-  return version;
-}
-
-// 手动创建 Git Tag
-export async function createGitTag(versionId: string): Promise<Version | null> {
-  await delay(300);
-
-  const version = mockVersions.find((v) => v.id === versionId);
-  if (!version) return null;
-
-  // 如果已有 tag，不再创建
-  if (version.gitTag) {
-    return version;
-  }
-
-  const tagResult = await autoCreateGitTag(version);
-  if (tagResult.success) {
-    version.gitTag = tagResult.tagName;
-    version.gitTagCreatedAt = new Date().toISOString();
-  }
-
   return version;
 }
 
@@ -889,12 +930,13 @@ export function useRemoveVersionTag() {
   });
 }
 
-// 创建 Git Tag
+// 创建 Git Tag（增强版）
 export function useCreateGitTag() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (versionId: string) => createGitTag(versionId),
+    mutationFn: ({ versionId, request }: { versionId: string; request?: CreateTagRequest }) => 
+      createGitTag(versionId, request),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["versions"] });
     },
@@ -1001,7 +1043,7 @@ export function useReleaseLogs(versionId?: string) {
 export function useVersionSettings() {
   return useQuery({
     queryKey: ["versionSettings"],
-    queryFn: () => Promise.resolve({ autoBump: true, bumpType: "patch" as const }),
+    queryFn: () => getVersionSettings(),
   });
 }
 
@@ -1010,7 +1052,7 @@ export function useUpdateVersionSettings() {
 
   return useMutation({
     mutationFn: async (newSettings: Partial<VersionSettings>) => {
-      return { ...newSettings };
+      return updateVersionSettings(newSettings);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["versionSettings"] });
