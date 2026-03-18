@@ -3,6 +3,7 @@ import cors from 'cors';
 import { success } from './utils/response.js';
 import healthRouter from './routes/health.js';
 import projectRouter from './routes/project.js';
+import userRouter from './routes/user.js';
 
 const app = express();
 const PORT = process.env.PORT || 9700;
@@ -13,6 +14,8 @@ app.use(express.json());
 // Routes
 app.use('/api/v1', healthRouter);
 app.use('/api/v1/projects', projectRouter);
+app.use('/api/v1/users', userRouter);
+app.use('/api/v1/auth', userRouter); // 权限校验也用 user router (共享 /check 端点)
 
 // Root
 app.get('/', (req, res) => {
