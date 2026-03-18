@@ -1,4 +1,6 @@
-import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings } from "./types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange } from "./types";
 
 // 全局版本自动升级设置
 let versionSettings: VersionSettings = {
@@ -268,6 +270,73 @@ const mockReleaseLogs: ReleaseLog[] = [
     bumpType: "patch",
     releasedAt: "2026-03-15T14:30:00Z",
     releasedBy: "system",
+  },
+];
+
+// ========== Mock 消息截图数据 ==========
+const mockVersionScreenshots: VersionMessageScreenshot[] = [
+  {
+    id: "ss-1",
+    versionId: "v1",
+    messageId: "msg-001",
+    messageContent: "完成了任务管理模块的开发，新增筛选、排序功能",
+    senderName: "张三",
+    senderAvatar: undefined,
+    screenshotUrl: "https://example.com/screenshots/ss-1.png",
+    thumbnailUrl: "https://example.com/screenshots/ss-1-thumb.png",
+    createdAt: "2026-01-12T10:00:00Z",
+  },
+  {
+    id: "ss-2",
+    versionId: "v1",
+    messageId: "msg-002",
+    messageContent: "修复了登录页面的样式问题",
+    senderName: "李四",
+    senderAvatar: undefined,
+    screenshotUrl: "https://example.com/screenshots/ss-2.png",
+    thumbnailUrl: "https://example.com/screenshots/ss-2-thumb.png",
+    createdAt: "2026-01-13T14:30:00Z",
+  },
+  {
+    id: "ss-3",
+    versionId: "v2",
+    messageId: "msg-003",
+    messageContent: "新增 Cron 定时任务管理界面",
+    senderName: "王五",
+    senderAvatar: undefined,
+    screenshotUrl: "https://example.com/screenshots/ss-3.png",
+    thumbnailUrl: "https://example.com/screenshots/ss-3-thumb.png",
+    createdAt: "2026-02-15T09:00:00Z",
+  },
+];
+
+// ========== Mock 变更摘要数据 ==========
+const mockChangelogs: VersionChangelog[] = [
+  {
+    id: "cl-1",
+    versionId: "v1",
+    title: "v1.0.0 变更日志",
+    content: "初始版本发布，包含核心功能",
+    changes: [
+      { type: "feature", description: "任务管理基础功能", files: ["app/tasks/page.tsx", "lib/api/tasks.ts"] },
+      { type: "feature", description: "用户认证系统", files: ["app/auth/page.tsx", "lib/auth.ts"] },
+      { type: "improvement", description: "优化页面加载性能", files: [] },
+    ],
+    generatedAt: "2026-01-15T10:00:00Z",
+    generatedBy: "system",
+  },
+  {
+    id: "cl-2",
+    versionId: "v2",
+    title: "v1.1.0 变更日志",
+    content: "任务管理增强版本",
+    changes: [
+      { type: "feature", description: "新增任务筛选功能", files: ["components/TaskFilter.tsx"] },
+      { type: "feature", description: "新增任务排序功能", files: ["components/TaskSort.tsx"] },
+      { type: "fix", description: "修复任务详情页加载慢的问题", files: ["app/tasks/[id]/page.tsx"] },
+    ],
+    generatedAt: "2026-02-01T14:30:00Z",
+    generatedBy: "system",
   },
 ];
 
@@ -695,7 +764,6 @@ export async function getReleaseLogs(versionId?: string): Promise<ReleaseLog[]> 
 }
 
 // React Query hooks
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 export function useVersions(page: number = 1, pageSize: number = 10, status: string = "all") {
   return useQuery({
@@ -905,6 +973,191 @@ export function useSetMainBranch() {
     mutationFn: (branchId: string) => setMainBranch(branchId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["branches"] });
+    },
+  });
+}
+
+// ========== Version Bump & Release Logs Hooks ==========
+
+export function useBumpVersion() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ versionId, bumpType }: { versionId: string; bumpType: VersionBumpType }) =>
+      bumpVersion(versionId, bumpType),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["versions"] });
+    },
+  });
+}
+
+export function useReleaseLogs(versionId?: string) {
+  return useQuery({
+    queryKey: ["releaseLogs", versionId],
+    queryFn: () => getReleaseLogs(versionId),
+  });
+}
+
+export function useVersionSettings() {
+  return useQuery({
+    queryKey: ["versionSettings"],
+    queryFn: () => Promise.resolve({ autoBump: true, bumpType: "patch" as const }),
+  });
+}
+
+export function useUpdateVersionSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (newSettings: Partial<VersionSettings>) => {
+      return { ...newSettings };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["versionSettings"] });
+    },
+  });
+}
+
+// ========== 消息截图 API 函数 ==========
+
+export async function getVersionScreenshots(versionId: string): Promise<ScreenshotListResponse> {
+  await delay(200);
+  const filtered = mockVersionScreenshots.filter((s) => s.versionId === versionId);
+  return {
+    data: filtered,
+    total: filtered.length,
+  };
+}
+
+export async function linkScreenshot(
+  versionId: string,
+  request: LinkScreenshotRequest
+): Promise<VersionMessageScreenshot> {
+  await delay(300);
+
+  const newScreenshot: VersionMessageScreenshot = {
+    id: `ss-${Date.now()}`,
+    versionId,
+    messageId: request.messageId,
+    messageContent: request.messageContent,
+    senderName: request.senderName,
+    senderAvatar: request.senderAvatar,
+    screenshotUrl: request.screenshotUrl,
+    thumbnailUrl: request.thumbnailUrl,
+    createdAt: new Date().toISOString(),
+  };
+
+  mockVersionScreenshots.unshift(newScreenshot);
+  return newScreenshot;
+}
+
+export async function unlinkScreenshot(screenshotId: string): Promise<boolean> {
+  await delay(200);
+  const index = mockVersionScreenshots.findIndex((s) => s.id === screenshotId);
+  if (index === -1) return false;
+  mockVersionScreenshots.splice(index, 1);
+  return true;
+}
+
+// ========== 变更摘要 API 函数 ==========
+
+export async function getVersionChangelog(versionId: string): Promise<ChangelogResponse | null> {
+  await delay(200);
+  const changelog = mockChangelogs.find((c) => c.versionId === versionId);
+  if (!changelog) return null;
+  return { data: changelog };
+}
+
+export async function generateChangelog(
+  request: GenerateChangelogRequest
+): Promise<ChangelogResponse> {
+  await delay(500); // 模拟生成时间
+
+  // 从版本信息生成变更摘要
+  const version = mockVersions.find((v) => v.id === request.versionId);
+  if (!version) {
+    throw new Error("Version not found");
+  }
+
+  // 模拟生成的变更
+  const mockChanges: ChangelogChange[] = [
+    { type: "feature", description: "新增功能模块", files: version.changedFiles.slice(0, 2) },
+    { type: "improvement", description: "优化用户体验", files: [] },
+    { type: "fix", description: "修复已知问题", files: version.changedFiles.slice(2) },
+  ];
+
+  const newChangelog: VersionChangelog = {
+    id: `cl-${Date.now()}`,
+    versionId: request.versionId,
+    title: request.title || `${version.version} 变更日志`,
+    content: `${version.title} - ${version.description}`,
+    changes: mockChanges,
+    generatedAt: new Date().toISOString(),
+    generatedBy: "system",
+  };
+
+  // 保存到 mock 数据中
+  const existingIndex = mockChangelogs.findIndex((c) => c.versionId === request.versionId);
+  if (existingIndex >= 0) {
+    mockChangelogs[existingIndex] = newChangelog;
+  } else {
+    mockChangelogs.unshift(newChangelog);
+  }
+
+  return { data: newChangelog };
+}
+
+// ========== 消息截图 Hooks ==========
+
+export function useVersionScreenshots(versionId: string) {
+  return useQuery({
+    queryKey: ["versionScreenshots", versionId],
+    queryFn: () => getVersionScreenshots(versionId),
+    enabled: !!versionId,
+  });
+}
+
+export function useLinkScreenshot() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ versionId, request }: { versionId: string; request: LinkScreenshotRequest }) =>
+      linkScreenshot(versionId, request),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["versionScreenshots", variables.versionId] });
+    },
+  });
+}
+
+export function useUnlinkScreenshot() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ screenshotId, versionId }: { screenshotId: string; versionId: string }) =>
+      unlinkScreenshot(screenshotId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["versionScreenshots", variables.versionId] });
+    },
+  });
+}
+
+// ========== 变更摘要 Hooks ==========
+
+export function useVersionChangelog(versionId: string) {
+  return useQuery({
+    queryKey: ["versionChangelog", versionId],
+    queryFn: () => getVersionChangelog(versionId),
+    enabled: !!versionId,
+  });
+}
+
+export function useGenerateChangelog() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (request: GenerateChangelogRequest) => generateChangelog(request),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["versionChangelog", variables.versionId] });
     },
   });
 }

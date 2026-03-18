@@ -520,3 +520,62 @@ export interface BranchListResponse {
   data: GitBranch[];
   total: number;
 }
+
+// ========== 版本消息截图类型 ==========
+
+export interface VersionMessageScreenshot {
+  id: string;
+  versionId: string;
+  messageId: string;
+  messageContent: string;
+  senderName: string;
+  senderAvatar?: string;
+  screenshotUrl: string;
+  thumbnailUrl?: string;
+  createdAt: string;
+}
+
+// 创建截图关联请求
+export interface LinkScreenshotRequest {
+  messageId: string;
+  messageContent: string;
+  senderName: string;
+  senderAvatar?: string;
+  screenshotUrl: string;
+  thumbnailUrl?: string;
+}
+
+// 截图列表响应
+export interface ScreenshotListResponse {
+  data: VersionMessageScreenshot[];
+  total: number;
+}
+
+// ========== 版本变更摘要类型 ==========
+
+export interface VersionChangelog {
+  id: string;
+  versionId: string;
+  title: string;
+  content: string;
+  changes: ChangelogChange[];
+  generatedAt: string;
+  generatedBy: string;
+}
+
+export interface ChangelogChange {
+  type: "feature" | "fix" | "improvement" | "breaking" | "docs" | "refactor" | "other";
+  description: string;
+  files?: string[];
+}
+
+// 创建变更摘要请求
+export interface GenerateChangelogRequest {
+  versionId: string;
+  title?: string;
+}
+
+// 变更摘要响应
+export interface ChangelogResponse {
+  data: VersionChangelog;
+}
