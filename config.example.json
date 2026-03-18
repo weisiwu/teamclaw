@@ -1,0 +1,86 @@
+{
+  "server": {
+    "port": 9700,
+    "host": "localhost",
+    "env": "development"
+  },
+  "database": {
+    "postgres": {
+      "host": "localhost",
+      "port": 5432,
+      "database": "teamclaw",
+      "user": "teamclaw",
+      "password": "your_postgres_password"
+    },
+    "redis": {
+      "host": "localhost",
+      "port": 6379,
+      "password": ""
+    },
+    "chromadb": {
+      "host": "localhost",
+      "port": 8000
+    }
+  },
+  "models": {
+    "light": {
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "api_key": "your_deepseek_api_key",
+      "max_tokens": 4096
+    },
+    "medium": {
+      "provider": "openai",
+      "model": "gpt-4o-mini",
+      "api_key": "your_openai_api_key",
+      "max_tokens": 16384
+    },
+    "strong": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514",
+      "api_key": "your_anthropic_api_key",
+      "max_tokens": 81920
+    }
+  },
+  "channels": {
+    "wechat": {
+      "enabled": false,
+      "puppet": "wechaty-puppet-wechat"
+    },
+    "feishu": {
+      "enabled": true,
+      "app_id": "your_feishu_app_id",
+      "app_secret": "your_feishu_app_secret"
+    }
+  },
+  "agents": {
+    "main": {
+      "name": "main",
+      "model": "strong"
+    },
+    "pm": {
+      "name": "pm",
+      "model": "medium"
+    },
+    "coder": {
+      "name": "coder",
+      "model": "medium"
+    },
+    "architect": {
+      "name": "architect",
+      "model": "strong"
+    },
+    "reviewer": {
+      "name": "reviewer",
+      "model": "light"
+    }
+  },
+  "workspace": {
+    "path": "~/.openclaw/workspace",
+    "projects_path": "~/Desktop/致富经/apps"
+  },
+  "logging": {
+    "level": "info",
+    "dir": "~/.openclaw/logs"
+  }
+}

@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { success } from './utils/response.js';
+import healthRouter from './routes/health.js';
 
 const app = express();
 const PORT = process.env.PORT || 9700;
@@ -8,10 +9,8 @@ const PORT = process.env.PORT || 9700;
 app.use(cors());
 app.use(express.json());
 
-// Health check
-app.get('/api/v1/health', (req, res) => {
-  res.json(success({ status: 'ok', timestamp: new Date().toISOString() }));
-});
+// Routes
+app.use('/api/v1', healthRouter);
 
 // Root
 app.get('/', (req, res) => {
