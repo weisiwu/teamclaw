@@ -1,17 +1,21 @@
 /**
  * VersionSettingsDialog Component
- * 版本自动升级设置对话框
+ * 版本自动升级和自动 Tag 设置对话框
  */
 "use client";
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { X, Settings, Save, Loader2, History } from "lucide-react";
+import { X, Settings, Save, Loader2, History, Tag } from "lucide-react";
 
 interface VersionSettings {
   autoBump: boolean;
   bumpType: 'patch' | 'minor' | 'major';
+  autoTag: boolean;
+  tagPrefix: 'v' | 'release' | 'version' | 'custom';
+  customPrefix?: string;
+  tagOnStatus?: string[];
 }
 
 interface ReleaseLog {
@@ -41,11 +45,18 @@ export function VersionSettingsDialog({
   isSaving,
   releaseLogs = [],
 }: VersionSettingsDialogProps) {
-  const [localSettings, setLocalSettings] = useState<VersionSettings>(settings);
-  const [activeTab, setActiveTab] = useState<'settings' | 'logs'>('settings');
+  const defaultSettings: VersionSettings = {
+    autoBump: true,
+    bumpType: 'patch',
+    autoTag: true,
+    tagPrefix: 'v',
+    tagOnStatus: ['published'],
+  };
+  const [localSettings, setLocalSettings] = useState<VersionSettings>({ ...defaultSettings, ...settings });
+  const [activeTab, setActiveTab] = useState<'version' | 'tag' | 'logs'>('version');
 
   useEffect(() => {
-    setLocalSettings(settings);
+    setLocalSettings(prev => ({ ...prev, ...settings }));
   }, [settings]);
 
   if (!isOpen) return null;
@@ -56,30 +67,32 @@ export function VersionSettingsDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* 背景遮罩 */}
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
-      {/* 对话框 */}
       <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-hidden flex flex-col">
-        {/* 标题 */}
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center gap-2">
             <Settings className="w-5 h-5" />
-            <h2 className="text-lg font-semibold">版本自动升级设置</h2>
+            <h2 className="text-lg font-semibold">版本设置</h2>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />
           </Button>
         </div>
 
-        {/* Tab 切换 */}
         <div className="flex border-b">
           <button
-            className={`flex-1 py-3 text-sm font-medium ${activeTab === 'settings' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}
-            onClick={() => setActiveTab('settings')}
+            className={`flex-1 py-3 text-sm font-medium ${activeTab === 'version' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}
+            onClick={() => setActiveTab('version')}
           >
-            <Settings className="w-4 h-4 inline mr-1" />
-            升级规则
+            版本升级
+          </button>
+          <button
+            className={`flex-1 py-3 text-sm font-medium ${activeTab === 'tag' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}
+            onClick={() => setActiveTab('tag')}
+          >
+            <Tag className="w-4 h-4 inline mr-1" />
+            自动 Tag
           </button>
           <button
             className={`flex-1 py-3 text-sm font-medium ${activeTab === 'logs' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}
@@ -90,11 +103,9 @@ export function VersionSettingsDialog({
           </button>
         </div>
 
-        {/* 内容 */}
         <div className="flex-1 overflow-y-auto p-4">
-          {activeTab === 'settings' ? (
+          {activeTab === 'version' && (
             <div className="space-y-6">
-              {/* 自动升级开关 */}
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
@@ -115,7 +126,6 @@ export function VersionSettingsDialog({
                 </CardContent>
               </Card>
 
-              {/* 递增类型选择 */}
               {localSettings.autoBump && (
                 <Card>
                   <CardHeader>
@@ -123,30 +133,26 @@ export function VersionSettingsDialog({
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
-                      {[
-                        { value: 'patch', label: 'Patch (x.x.1)', desc: '修复问题时使用' },
-                        { value: 'minor', label: 'Minor (x.1.0)', desc: '新增功能时使用' },
-                        { value: 'major', label: 'Major (1.0.0)', desc: '破坏性变更时使用' },
-                      ].map((option) => (
+                      {(['patch', 'minor', 'major'] as const).map((type) => (
                         <label
-                          key={option.value}
+                          key={type}
                           className={`flex items-center p-3 rounded-lg border cursor-pointer transition-colors ${
-                            localSettings.bumpType === option.value
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'hover:bg-gray-50'
+                            localSettings.bumpType === type ? 'border-blue-500 bg-blue-50' : 'hover:bg-gray-50'
                           }`}
                         >
                           <input
                             type="radio"
                             name="bumpType"
-                            value={option.value}
-                            checked={localSettings.bumpType === option.value}
-                            onChange={() => setLocalSettings({ ...localSettings, bumpType: option.value as 'patch' | 'minor' | 'major' })}
+                            value={type}
+                            checked={localSettings.bumpType === type}
+                            onChange={() => setLocalSettings({ ...localSettings, bumpType: type })}
                             className="mr-3"
                           />
                           <div>
-                            <div className="font-medium">{option.label}</div>
-                            <div className="text-sm text-gray-500">{option.desc}</div>
+                            <div className="font-medium">{type === 'patch' ? 'Patch (x.x.1)' : type === 'minor' ? 'Minor (x.1.0)' : 'Major (1.0.0)'}</div>
+                            <div className="text-sm text-gray-500">
+                              {type === 'patch' ? '修复问题时使用' : type === 'minor' ? '新增功能时使用' : '破坏性变更时使用'}
+                            </div>
                           </div>
                         </label>
                       ))}
@@ -154,49 +160,101 @@ export function VersionSettingsDialog({
                   </CardContent>
                 </Card>
               )}
+            </div>
+          )}
 
-              {/* 预览 */}
-              {localSettings.autoBump && (
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-600">
-                    当前版本 <span className="font-mono font-bold">v1.0.0</span> 发布后将自动升级为{' '}
-                    <span className="font-mono font-bold text-blue-600">
-                      v1.0.{localSettings.bumpType === 'patch' ? '1' : localSettings.bumpType === 'minor' ? '1.0' : '0.0.0'}
-                    </span>
-                  </p>
-                </div>
+          {activeTab === 'tag' && (
+            <div className="space-y-6">
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-medium">自动创建 Git Tag</h3>
+                      <p className="text-sm text-gray-500">版本发布时自动创建 Git Tag</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={localSettings.autoTag}
+                        onChange={(e) => setLocalSettings({ ...localSettings, autoTag: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {localSettings.autoTag && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Tag 前缀</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {(['v', 'release', 'version', 'custom'] as const).map((prefix) => (
+                        <label
+                          key={prefix}
+                          className={`flex items-center p-3 rounded-lg border cursor-pointer transition-colors ${
+                            localSettings.tagPrefix === prefix ? 'border-blue-500 bg-blue-50' : 'hover:bg-gray-50'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="tagPrefix"
+                            value={prefix}
+                            checked={localSettings.tagPrefix === prefix}
+                            onChange={() => setLocalSettings({ ...localSettings, tagPrefix: prefix })}
+                            className="mr-3"
+                          />
+                          <div className="flex-1">
+                            <div className="font-medium">{prefix === 'v' ? 'v' : prefix === 'release' ? 'release' : prefix === 'version' ? 'version' : '自定义'}</div>
+                            <div className="text-sm text-gray-500">
+                              {prefix === 'v' ? '例如: v1.0.0' : prefix === 'release' ? '例如: release/v1.0.0' : prefix === 'version' ? '例如: version/v1.0.0' : '使用自定义前缀'}
+                            </div>
+                          </div>
+                          <Tag className="w-5 h-5 text-gray-400" />
+                        </label>
+                      ))}
+                    </div>
+
+                    {localSettings.tagPrefix === 'custom' && (
+                      <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                        <label className="block text-sm font-medium mb-1">自定义前缀</label>
+                        <input
+                          type="text"
+                          value={localSettings.customPrefix || ''}
+                          onChange={(e) => setLocalSettings({ ...localSettings, customPrefix: e.target.value })}
+                          placeholder="例如: myapp-"
+                          className="w-full px-3 py-2 border rounded-md text-sm"
+                        />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               )}
             </div>
-          ) : (
-            /* 发布记录 */
+          )}
+
+          {activeTab === 'logs' && (
             <div className="space-y-3">
               {releaseLogs.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  暂无发布记录
-                </div>
+                <div className="text-center py-8 text-gray-500">暂无发布记录</div>
               ) : (
                 releaseLogs.map((log) => (
                   <Card key={log.id}>
                     <CardContent className="p-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-medium">{log.previousVersion}</span>
-                            <span className="text-gray-400">→</span>
-                            <span className="font-mono font-medium text-blue-600">{log.version}</span>
-                            <span className={`text-xs px-2 py-0.5 rounded ${
-                              log.bumpType === 'major' ? 'bg-red-100 text-red-700' :
-                              log.bumpType === 'minor' ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-green-100 text-green-700'
-                            }`}>
-                              {log.bumpType}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-400 mt-1">
-                            {new Date(log.releasedAt).toLocaleString('zh-CN')} · {log.releasedBy}
-                          </p>
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-medium">{log.previousVersion}</span>
+                        <span className="text-gray-400">→</span>
+                        <span className="font-mono font-medium text-blue-600">{log.version}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded ${log.bumpType === 'major' ? 'bg-red-100 text-red-700' : log.bumpType === 'minor' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                          {log.bumpType}
+                        </span>
                       </div>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {new Date(log.releasedAt).toLocaleString('zh-CN')} · {log.releasedBy}
+                      </p>
                     </CardContent>
                   </Card>
                 ))
@@ -205,11 +263,8 @@ export function VersionSettingsDialog({
           )}
         </div>
 
-        {/* 底部按钮 */}
         <div className="p-4 border-t flex justify-end gap-2">
-          <Button variant="outline" onClick={onClose}>
-            取消
-          </Button>
+          <Button variant="outline" onClick={onClose}>取消</Button>
           <Button onClick={handleSave} disabled={isSaving}>
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
             保存设置
