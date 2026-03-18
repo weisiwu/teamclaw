@@ -23,6 +23,7 @@ export { ChangeTimeline } from "./ChangeTimeline";
 export { BuildProgress } from "./BuildProgress";
 export { BuildLogViewer, getBuildHistory, addBuildLog, updateBuildLog, clearBuildHistory } from "./BuildLogViewer";
 export { BuildRetrySettingsDialog } from "./BuildRetrySettingsDialog";
+export { BuildTriggerDialog } from "./BuildTriggerDialog";
 export { BuildNotificationSettingsDialog } from "./BuildNotificationSettingsDialog";
 export { BuildEnvSelector } from "./BuildEnvSelector";
 export { BuildSettingsMenu } from "./BuildSettingsMenu";

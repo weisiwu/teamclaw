@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { RotateCcw } from 'lucide-react';
 
 interface BuildLog {
   id: string;
@@ -116,7 +117,7 @@ export function BuildLogViewer({ buildLogs, onClear }: BuildLogViewerProps) {
             
             {expandedId === log.id && (
               <div className="p-3 border-t bg-background">
-                <div className="flex justify-end mb-2">
+                <div className="flex justify-end gap-2 mb-2">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -125,6 +126,19 @@ export function BuildLogViewer({ buildLogs, onClear }: BuildLogViewerProps) {
                     className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
                   >
                     📋 复制日志
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // 触发重新构建（通过自定义事件通知父组件）
+                      window.dispatchEvent(new CustomEvent('rebuild-version', {
+                        detail: { versionName: log.versionName, buildId: log.buildId }
+                      }));
+                    }}
+                    className="text-xs text-blue-600 hover:text-blue-500 flex items-center gap-1"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    重新构建
                   </button>
                 </div>
                 <div className="font-mono text-xs bg-muted p-2 rounded max-h-48 overflow-y-auto">

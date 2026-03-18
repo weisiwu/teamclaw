@@ -19,7 +19,9 @@ import {
   XCircle,
   Loader2,
   X,
+  Play,
 } from "lucide-react";
+import { BuildTriggerDialog } from "./BuildTriggerDialog";
 
 interface VersionDetailsProps {
   version: Version | null;
@@ -29,6 +31,7 @@ interface VersionDetailsProps {
 
 export function VersionDetails({ version, open, onOpenChange }: VersionDetailsProps) {
   const [activeTab, setActiveTab] = useState<"info" | "logs" | "artifacts">("info");
+  const [buildDialogOpen, setBuildDialogOpen] = useState(false);
 
   if (!version || !open) return null;
 
@@ -82,9 +85,19 @@ export function VersionDetails({ version, open, onOpenChange }: VersionDetailsPr
               </Badge>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}>
-            <X className="w-5 h-5" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setBuildDialogOpen(true)}
+            >
+              <Play className="w-4 h-4 mr-1" />
+              开始构建
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}>
+              <X className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
 
         {/* 标签切换 */}
@@ -210,6 +223,12 @@ export function VersionDetails({ version, open, onOpenChange }: VersionDetailsPr
           )}
         </div>
       </div>
+
+      <BuildTriggerDialog
+        open={buildDialogOpen}
+        onOpenChange={setBuildDialogOpen}
+        presetVersion={version}
+      />
     </div>
   );
 }
