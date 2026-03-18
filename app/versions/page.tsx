@@ -49,7 +49,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel } from "@/components/versions";
+import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel, BuildLogViewer, getBuildHistory, addBuildLog, clearBuildHistory } from "@/components/versions";
 
 export default function VersionsPage() {
   const [page, setPage] = useState(1);
@@ -78,6 +78,18 @@ export default function VersionsPage() {
   // 消息截图相关状态
   const [isMessageSelectorOpen, setIsMessageSelectorOpen] = useState(false);
   const [screenshotVersionId, setScreenshotVersionId] = useState<string | null>(null);
+
+  // 构建历史相关状态
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [buildHistory, setBuildHistory] = useState<Array<{id: string; versionName: string; buildId: string; startTime: Date; endTime?: Date; status: 'success' | 'failed' | 'building'; logs: string[]}>>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [activeBuildId, setActiveBuildId] = useState<string | null>(null);
+  const [isBuildLogViewerOpen, setIsBuildLogViewerOpen] = useState(false);
+
+  // 加载构建历史
+  useEffect(() => {
+    setBuildHistory(getBuildHistory());
+  }, []);
 
   // Load download history from localStorage
   useEffect(() => {
@@ -233,6 +245,17 @@ export default function VersionsPage() {
 
   const handleBuild = async (version: Version) => {
     try {
+      // 添加构建历史记录
+      const buildLog = addBuildLog({
+        versionName: version.version,
+        buildId: `build-${Date.now()}`,
+        startTime: new Date(),
+        status: 'building',
+        logs: [`[${new Date().toLocaleTimeString()}] 开始构建版本 ${version.version}...`],
+      });
+      setActiveBuildId(buildLog.id);
+      setBuildHistory(getBuildHistory());
+      
       await triggerBuild.mutateAsync(version.id);
       setActionMessage({ type: 'success', text: `已触发 ${version.version} 构建` });
     } catch {
@@ -242,6 +265,17 @@ export default function VersionsPage() {
 
   const handleRebuild = async (version: Version) => {
     try {
+      // 添加构建历史记录
+      const buildLog = addBuildLog({
+        versionName: version.version,
+        buildId: `rebuild-${Date.now()}`,
+        startTime: new Date(),
+        status: 'building',
+        logs: [`[${new Date().toLocaleTimeString()}] 开始重新构建版本 ${version.version}...`],
+      });
+      setActiveBuildId(buildLog.id);
+      setBuildHistory(getBuildHistory());
+      
       await rebuildVersion.mutateAsync(version.id);
       setActionMessage({ type: 'success', text: `已重新构建 ${version.version}` });
     } catch {
@@ -355,6 +389,17 @@ export default function VersionsPage() {
           >
             <Tag className="w-4 h-4" />
             版本面板
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              setBuildHistory(getBuildHistory());
+              setIsBuildLogViewerOpen(true);
+            }}
+            className="gap-2"
+          >
+            <Play className="w-4 h-4" />
+            构建历史
           </Button>
           <Button 
             variant="outline" 
@@ -751,6 +796,32 @@ export default function VersionsPage() {
             setIsTagPanelOpen(false);
           }}
         />
+      )}
+
+      {/* 构建历史弹窗 */}
+      {isBuildLogViewerOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-3xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <Play className="w-6 h-6" />
+                <h3 className="text-xl font-semibold">构建历史</h3>
+                <span className="text-sm text-gray-500">({buildHistory.length} 条记录)</span>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setIsBuildLogViewerOpen(false)}>
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+
+            <BuildLogViewer
+              buildLogs={buildHistory}
+              onClear={() => {
+                clearBuildHistory();
+                setBuildHistory([]);
+              }}
+            />
+          </div>
+        </div>
       )}
 
       {/* 分支管理弹窗 */}
