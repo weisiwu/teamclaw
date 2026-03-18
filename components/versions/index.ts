@@ -4,6 +4,8 @@ export { UpgradePreviewDialog } from "./UpgradePreviewDialog";
 export { VersionTimeline } from "./VersionTimeline";
 export { SemanticSearchToggle } from "./SemanticSearchToggle";
 export { SimilarVersionsPanel } from "./SimilarVersionsPanel";
+export { TagLifecyclePanel } from "./TagLifecyclePanel";
+export { BatchTagOperations } from "./BatchTagOperations";
 export type { Snapshot } from "./SnapshotCompareDialog";
 
 /**

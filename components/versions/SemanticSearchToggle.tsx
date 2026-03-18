@@ -1,28 +1,42 @@
+/**
+ * SemanticSearchToggle Component
+ * 搜索模式切换开关
+ */
 "use client";
 
-import { Search } from "lucide-react";
+import { Search, Sparkles } from "lucide-react";
 
 interface SemanticSearchToggleProps {
-  isSemanticSearch: boolean;
+  enabled: boolean;
   onToggle: (enabled: boolean) => void;
 }
 
-export function SemanticSearchToggle({ isSemanticSearch, onToggle }: SemanticSearchToggleProps) {
+export function SemanticSearchToggle({ enabled, onToggle }: SemanticSearchToggleProps) {
   return (
     <div className="flex items-center gap-2">
       <button
-        type="button"
-        onClick={() => onToggle(!isSemanticSearch)}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
-          isSemanticSearch
-            ? "bg-purple-100 text-purple-700 border border-purple-300"
-            : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200"
+        onClick={() => onToggle(!enabled)}
+        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-all ${
+          enabled 
+            ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-md' 
+            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
         }`}
-        title={isSemanticSearch ? "语义搜索已开启" : "点击开启语义搜索"}
+        title={enabled ? '语义搜索已启用' : '启用语义搜索'}
       >
-        <Search className="w-4 h-4" />
-        <span>语义搜索</span>
+        {enabled ? (
+          <>
+            <Sparkles className="w-4 h-4" />
+            <span>语义搜索</span>
+          </>
+        ) : (
+          <>
+            <Search className="w-4 h-4" />
+            <span>关键词搜索</span>
+          </>
+        )}
       </button>
     </div>
   );
 }
+
+export default SemanticSearchToggle;

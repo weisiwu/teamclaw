@@ -53,7 +53,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel, BuildLogViewer, getBuildHistory, addBuildLog, clearBuildHistory, SnapshotCompareDialog, VersionTimeline, SimilarVersionsPanel } from "@/components/versions";
+import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel, BuildLogViewer, getBuildHistory, addBuildLog, clearBuildHistory, SnapshotCompareDialog, VersionTimeline, SimilarVersionsPanel, TagLifecyclePanel, BatchTagOperations } from "@/components/versions";
 import { BranchCompareDialog, BranchMergeDialog } from "@/components/branch";
 
 export default function VersionsPage() {
@@ -92,6 +92,10 @@ export default function VersionsPage() {
   // 分支管理状态
   const [isBranchPanelOpen, setIsBranchPanelOpen] = useState(false);
   const [isCreateBranchOpen, setIsCreateBranchOpen] = useState(false);
+  
+  // Tag 生命周期管理状态
+  const [isTagLifecycleOpen, setIsTagLifecycleOpen] = useState(false);
+  const [isBatchTagOpen, setIsBatchTagOpen] = useState(false);
   const [deleteBranchConfirmId, setDeleteBranchConfirmId] = useState<string | null>(null);
   const [newBranchForm, setNewBranchForm] = useState({
     name: '',
@@ -483,6 +487,22 @@ export default function VersionsPage() {
           >
             <Tag className="w-4 h-4" />
             版本面板
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setIsTagLifecycleOpen(true)}
+            className="gap-2"
+          >
+            <Tag className="w-4 h-4" />
+            Tag 生命周期
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setIsBatchTagOpen(true)}
+            className="gap-2"
+          >
+            <Tag className="w-4 h-4" />
+            批量 Tag
           </Button>
           <Button 
             variant="outline" 
@@ -1109,6 +1129,24 @@ export default function VersionsPage() {
           return true;
         }}
       />
+
+      {/* Tag 生命周期管理弹窗 */}
+      <Dialog open={isTagLifecycleOpen} onOpenChange={setIsTagLifecycleOpen}>
+        <DialogContent className="max-w-2xl" title="Tag 生命周期管理">
+          <div className="py-4">
+            <TagLifecyclePanel />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 批量 Tag 操作弹窗 */}
+      <Dialog open={isBatchTagOpen} onOpenChange={setIsBatchTagOpen}>
+        <DialogContent className="max-w-2xl" title="批量 Tag 操作">
+          <div className="py-4">
+            <BatchTagOperations />
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* 创建分支弹窗 */}
       {isCreateBranchOpen && (

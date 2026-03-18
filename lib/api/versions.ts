@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult } from "./types";
+import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult, SimilarVersion, TagLifecycleRecord, BatchTagResponse } from "./types";
 
 // 全局版本自动升级和 Tag 设置
 let versionSettings: VersionSettings = {
@@ -1409,105 +1409,101 @@ export function useUpgradeHistory(versionId: string) {
   });
 }
 
-// ========== 版本摘要向量 API ==========
+// ========== 版本向量搜索 API ==========
 
 const VECTOR_STORAGE_KEY = 'teamclaw_version_vectors';
-
-// 获取所有版本向量
-export function getVersionVectors(): VersionSummaryVector[] {
-  if (typeof window === 'undefined') return [];
-  const stored = localStorage.getItem(VECTOR_STORAGE_KEY);
-  return stored ? JSON.parse(stored) : [];
-}
-
-// 保存所有版本向量
-function saveVersionVectors(vectors: VersionSummaryVector[]): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(VECTOR_STORAGE_KEY, JSON.stringify(vectors));
-}
 
 // 生成版本摘要文本
 export function generateVersionSummary(version: Version): string {
   const parts = [
     version.version,
     version.title,
-    version.description,
+    version.description || '',
+    ...version.tags,
     ...version.changedFiles,
-  ].filter(Boolean);
-  return parts.join(' ');
+  ];
+  return parts.filter(Boolean).join(' ');
 }
 
-// 计算文本相似度（简化版：Jaccard 相似度）
-function calculateSimilarity(text1: string, text2: string): number {
-  const tokens1 = new Set(text1.toLowerCase().split(/\s+/).filter(Boolean));
-  const tokens2 = new Set(text2.toLowerCase().split(/\s+/).filter(Boolean));
-  
-  if (tokens1.size === 0 || tokens2.size === 0) return 0;
-  
-  const intersection = new Set(Array.from(tokens1).filter(x => tokens2.has(x)));
-  const union = new Set(Array.from(tokens1).concat(Array.from(tokens2)));
-  
-  return intersection.size / union.size;
-}
-
-// 生成向量哈希（简化版）
-function generateVectorHash(text: string): string {
+// 简单哈希函数（用于生成 vector hash）
+function simpleHash(text: string): string {
   let hash = 0;
   for (let i = 0; i < text.length; i++) {
     const char = text.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
     hash = hash & hash;
   }
-  return hash.toString(36);
+  return Math.abs(hash).toString(16);
 }
 
-// 存储版本向量
-export function storeVersionVector(version: Version): VersionSummaryVector {
-  const vectors = getVersionVectors();
-  const summaryText = generateVersionSummary(version);
-  const vectorHash = generateVectorHash(summaryText);
-  const now = new Date().toISOString();
+// 文本相似度计算（TF-IDF 简化版）
+function calculateSimilarity(text1: string, text2: string): number {
+  const words1 = new Set(text1.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+  const words2 = new Set(text2.toLowerCase().split(/\s+/).filter(w => w.length > 2));
   
-  const existingIndex = vectors.findIndex(v => v.versionId === version.id);
+  if (words1.size === 0 || words2.size === 0) return 0;
+  
+  const words1Arr = Array.from(words1);
+  const intersection = words1Arr.filter(x => words2.has(x));
+  const unionArr = Array.from(new Set([...words1Arr, ...Array.from(words2)]));
+  
+  return intersection.length / unionArr.length;
+}
+
+// 存储版本向量到 localStorage
+export function storeVersionVector(version: Version): VersionSummaryVector {
+  const summaryText = generateVersionSummary(version);
+  const vectorHash = simpleHash(summaryText);
+  
   const vector: VersionSummaryVector = {
     versionId: version.id,
     version: version.version,
     summaryText,
     vectorHash,
-    createdAt: existingIndex >= 0 ? vectors[existingIndex].createdAt : now,
-    updatedAt: now,
+    tags: version.tags,
+    createdAt: version.createdAt,
+    updatedAt: new Date().toISOString(),
   };
   
+  // 从 localStorage 读取现有向量
+  const stored = localStorage.getItem(VECTOR_STORAGE_KEY);
+  const vectors: VersionSummaryVector[] = stored ? JSON.parse(stored) : [];
+  
+  // 更新或添加向量
+  const existingIndex = vectors.findIndex(v => v.versionId === version.id);
   if (existingIndex >= 0) {
     vectors[existingIndex] = vector;
   } else {
     vectors.push(vector);
   }
   
-  saveVersionVectors(vectors);
+  // 保存回 localStorage
+  localStorage.setItem(VECTOR_STORAGE_KEY, JSON.stringify(vectors));
+  
   return vector;
 }
 
+// 获取所有版本向量
+export function getVersionVectors(): VersionSummaryVector[] {
+  const stored = localStorage.getItem(VECTOR_STORAGE_KEY);
+  return stored ? JSON.parse(stored) : [];
+}
+
 // 向量语义搜索
-export async function searchVersionsByVector(
-  query: string,
-  limit: number = 10,
-  _threshold: number = 0.1
-): Promise<VectorSearchResult[]> {
-  await delay(100);
-  
+export function searchVersionsByVector(
+  query: string, 
+  limit: number = 10
+): VectorSearchResult[] {
   const vectors = getVersionVectors();
-  const versions = await getVersions(1, 100, 'all');
-  
   const results: VectorSearchResult[] = [];
   
-  for (const version of versions.data) {
-    const vector = vectors.find(v => v.versionId === version.id);
-    const summaryText = vector?.summaryText || generateVersionSummary(version);
-    const similarity = calculateSimilarity(query, summaryText);
-    
-    if (similarity > _threshold) {
-      results.push({ version, similarity });
+  for (const vector of vectors) {
+    const similarity = calculateSimilarity(query, vector.summaryText);
+    if (similarity > 0.1) { // 阈值过滤
+      results.push({
+        version: vector,
+        similarity,
+      });
     }
   }
   
@@ -1518,31 +1514,36 @@ export async function searchVersionsByVector(
 }
 
 // 查找相似版本
-export async function findSimilarVersions(
-  versionId: string,
+export function findSimilarVersions(
+  versionId: string, 
   limit: number = 5
-): Promise<VectorSearchResult[]> {
-  await delay(50);
+): SimilarVersion[] {
+  const vectors = getVersionVectors();
+  const target = vectors.find(v => v.versionId === versionId);
   
-  const versions = await getVersions(1, 100, 'all');
-  const targetVersion = versions.data.find(v => v.id === versionId);
+  if (!target) return [];
   
-  if (!targetVersion) return [];
+  const results: SimilarVersion[] = [];
   
-  const targetVector = getVersionVectors().find(v => v.versionId === versionId);
-  const targetSummary = targetVector?.summaryText || generateVersionSummary(targetVersion);
-  
-  const results: VectorSearchResult[] = [];
-  
-  for (const version of versions.data) {
-    if (version.id === versionId) continue;
+  for (const vector of vectors) {
+    if (vector.versionId === versionId) continue;
     
-    const vector = getVersionVectors().find(v => v.versionId === version.id);
-    const summaryText = vector?.summaryText || generateVersionSummary(version);
-    const similarity = calculateSimilarity(targetSummary, summaryText);
+    const similarity = calculateSimilarity(target.summaryText, vector.summaryText);
+    
+    // 计算共同标签
+    const commonTags = target.tags.filter(tag => vector.tags.includes(tag));
+    
+    // 查找完整版本信息
+    const fullVersion = mockVersions.find(v => v.id === vector.versionId);
     
     if (similarity > 0.1) {
-      results.push({ version, similarity });
+      results.push({
+        versionId: vector.versionId,
+        version: vector.version,
+        title: fullVersion?.title || vector.version,
+        similarity,
+        commonTags,
+      });
     }
   }
   
@@ -1552,15 +1553,254 @@ export async function findSimilarVersions(
   return results.slice(0, limit);
 }
 
-// 初始化版本向量（批量）
-export async function initializeVersionVectors(): Promise<number> {
-  const versions = await getVersions(1, 100, 'all');
-  let count = 0;
+// 删除版本向量
+export function deleteVersionVector(versionId: string): void {
+  const stored = localStorage.getItem(VECTOR_STORAGE_KEY);
+  if (!stored) return;
   
-  for (const version of versions.data) {
-    storeVersionVector(version);
-    count++;
+  const vectors: VersionSummaryVector[] = JSON.parse(stored);
+  const filtered = vectors.filter(v => v.versionId !== versionId);
+  
+  localStorage.setItem(VECTOR_STORAGE_KEY, JSON.stringify(filtered));
+}
+
+// ========== 版本向量搜索 Hooks ==========
+
+export function useVersionVectors() {
+  return useQuery({
+    queryKey: ["versionVectors"],
+    queryFn: () => getVersionVectors(),
+  });
+}
+
+export function useSearchVersions(query: string, enabled: boolean = true) {
+  return useQuery({
+    queryKey: ["searchVersions", query],
+    queryFn: () => searchVersionsByVector(query),
+    enabled: enabled && query.length > 0,
+  });
+}
+
+export function useSimilarVersions(versionId: string, limit: number = 5) {
+  return useQuery({
+    queryKey: ["similarVersions", versionId, limit],
+    queryFn: () => findSimilarVersions(versionId, limit),
+    enabled: !!versionId,
+  });
+}
+
+export function useStoreVersionVector() {
+  return useMutation({
+    mutationFn: (version: Version) => {
+      storeVersionVector(version);
+      return Promise.resolve(version);
+    },
+    onSuccess: () => {
+      // Invalidate vectors cache
+    },
+  });
+}
+
+// ========== Tag 生命周期管理 ==========
+
+const TAG_STORAGE_KEY = "teamclaw_version_tags";
+
+// 从 localStorage 获取所有 Tag 记录
+function getStoredTags(): TagLifecycleRecord[] {
+  const stored = localStorage.getItem(TAG_STORAGE_KEY);
+  if (!stored) return [];
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return [];
+  }
+}
+
+// 保存 Tag 记录到 localStorage
+function saveTags(tags: TagLifecycleRecord[]): void {
+  localStorage.setItem(TAG_STORAGE_KEY, JSON.stringify(tags));
+}
+
+// 创建 Tag 记录
+export function createTagRecord(version: Version, tagName: string): TagLifecycleRecord {
+  const tags = getStoredTags();
+  const newTag: TagLifecycleRecord = {
+    id: `tag_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    name: tagName,
+    versionId: version.id,
+    version: version.version,
+    archived: false,
+    protected: false,
+    createdAt: new Date().toISOString(),
+  };
+  tags.push(newTag);
+  saveTags(tags);
+  return newTag;
+}
+
+// 归档/取消归档 Tag
+export function archiveTag(tagId: string, archive: boolean = true): TagLifecycleRecord | null {
+  const tags = getStoredTags();
+  const tagIndex = tags.findIndex(t => t.id === tagId);
+  if (tagIndex === -1) return null;
+  
+  if (tags[tagIndex].protected && archive) {
+    console.warn(`[Tag] Cannot archive protected tag: ${tags[tagIndex].name}`);
+    return null;
   }
   
-  return count;
+  tags[tagIndex].archived = archive;
+  tags[tagIndex].archivedAt = archive ? new Date().toISOString() : undefined;
+  saveTags(tags);
+  return tags[tagIndex];
+}
+
+// 设置/取消保护 Tag
+export function setTagProtection(tagId: string, protect: boolean = true): TagLifecycleRecord | null {
+  const tags = getStoredTags();
+  const tagIndex = tags.findIndex(t => t.id === tagId);
+  if (tagIndex === -1) return null;
+  
+  tags[tagIndex].protected = protect;
+  saveTags(tags);
+  return tags[tagIndex];
+}
+
+// 删除 Tag（带保护检查）
+export function deleteTagRecord(tagId: string): boolean {
+  const tags = getStoredTags();
+  const tag = tags.find(t => t.id === tagId);
+  
+  if (!tag) return false;
+  if (tag.protected) {
+    console.warn(`[Tag] Cannot delete protected tag: ${tag.name}`);
+    return false;
+  }
+  
+  const filtered = tags.filter(t => t.id !== tagId);
+  saveTags(filtered);
+  return true;
+}
+
+// 获取所有 Tag 记录
+export function getAllTags(): TagLifecycleRecord[] {
+  return getStoredTags();
+}
+
+// 获取版本关联的 Tags
+export function getVersionTags(versionId: string): TagLifecycleRecord[] {
+  const tags = getStoredTags();
+  return tags.filter(t => t.versionId === versionId);
+}
+
+// 批量创建 Tags
+export async function batchCreateTags(
+  versions: Version[], 
+  prefix: string = 'v'
+): Promise<BatchTagResponse> {
+  const results: BatchTagResponse['results'] = [];
+  let totalSuccess = 0;
+  let totalFailed = 0;
+  
+  for (const version of versions) {
+    try {
+      const tagName = version.version.startsWith('v') ? version.version : `${prefix}${version.version}`;
+      createTagRecord(version, tagName);
+      results.push({ versionId: version.id, success: true, tagName });
+      totalSuccess++;
+    } catch (error) {
+      results.push({ versionId: version.id, success: false, error: String(error) });
+      totalFailed++;
+    }
+  }
+  
+  return {
+    success: totalFailed === 0,
+    results,
+    totalSuccess,
+    totalFailed,
+  };
+}
+
+// 批量归档 Tags
+export async function batchArchiveTags(
+  versionIds: string[], 
+  archive: boolean = true
+): Promise<{ success: boolean; archived: number; failed: number }> {
+  const tags = getStoredTags();
+  let archived = 0;
+  let failed = 0;
+  
+  for (const tag of tags) {
+    if (versionIds.includes(tag.versionId)) {
+      if (archiveTag(tag.id, archive)) {
+        archived++;
+      } else {
+        failed++;
+      }
+    }
+  }
+  
+  return { success: failed === 0, archived, failed };
+}
+
+// 批量删除 Tags
+export async function batchDeleteTags(versionIds: string[]): Promise<{ success: boolean; deleted: number; failed: number }> {
+  const tags = getStoredTags();
+  let deleted = 0;
+  let failed = 0;
+  
+  for (const tag of tags) {
+    if (versionIds.includes(tag.versionId)) {
+      if (deleteTagRecord(tag.id)) {
+        deleted++;
+      } else {
+        failed++;
+      }
+    }
+  }
+  
+  return { success: failed === 0, deleted, failed };
+}
+
+// Hooks for Tag lifecycle
+export function useAllTags() {
+  return useQuery<TagLifecycleRecord[]>({
+    queryKey: ["allTags"],
+    queryFn: () => getAllTags(),
+  });
+}
+
+export function useVersionTags(versionId: string) {
+  return useQuery<TagLifecycleRecord[]>({
+    queryKey: ["versionTags", versionId],
+    queryFn: () => getVersionTags(versionId),
+  });
+}
+
+export function useArchiveTag() {
+  return useMutation({
+    mutationFn: ({ tagId, archive }: { tagId: string; archive: boolean }) => 
+      Promise.resolve(archiveTag(tagId, archive)),
+  });
+}
+
+export function useTagProtection() {
+  return useMutation({
+    mutationFn: ({ tagId, protect }: { tagId: string; protect: boolean }) =>
+      Promise.resolve(setTagProtection(tagId, protect)),
+  });
+}
+
+export function useDeleteTag() {
+  return useMutation({
+    mutationFn: (tagId: string) => Promise.resolve(deleteTagRecord(tagId)),
+  });
+}
+
+export function useBatchCreateTags() {
+  return useMutation({
+    mutationFn: ({ versions, prefix }: { versions: Version[]; prefix?: string }) =>
+      batchCreateTags(versions, prefix),
+  });
 }

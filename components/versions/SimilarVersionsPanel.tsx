@@ -1,75 +1,180 @@
+/**
+ * SimilarVersionsPanel Component
+ * 相似版本展示面板
+ */
 "use client";
 
-import { useEffect, useState } from "react";
-import { findSimilarVersions } from "@/lib/api/versions";
-import { Version, VectorSearchResult } from "@/lib/api/types";
+import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { 
+  GitBranch, 
+  Sparkles, 
+  Loader2, 
+  ExternalLink, 
+  RefreshCw,
+  ArrowRight
+} from "lucide-react";
+
+interface SimilarVersion {
+  versionId: string;
+  version: string;
+  title: string;
+  similarity: number;
+  commonTags: string[];
+}
 
 interface SimilarVersionsPanelProps {
   versionId: string;
-  onSelectVersion: (version: Version) => void;
+  onSelectVersion?: (versionId: string) => void;
+  onRefresh?: () => void;
+  isLoading?: boolean;
 }
 
-export function SimilarVersionsPanel({ versionId, onSelectVersion }: SimilarVersionsPanelProps) {
-  const [similarVersions, setSimilarVersions] = useState<VectorSearchResult[]>([]);
-  const [loading, setLoading] = useState(true);
+export function SimilarVersionsPanel({
+  versionId,
+  onSelectVersion,
+  onRefresh,
+  isLoading = false,
+}: SimilarVersionsPanelProps) {
+  const [expanded, setExpanded] = useState(false);
+  
+  // 获取相似版本数据（从缓存或重新计算）
+  const [similarVersions, setSimilarVersions] = useState<SimilarVersion[]>([]);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
-  useEffect(() => {
-    async function loadSimilarVersions() {
-      setLoading(true);
-      try {
-        const results = await findSimilarVersions(versionId, 5);
-        setSimilarVersions(results);
-      } catch (error) {
-        console.error("Failed to load similar versions:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
+  // 模拟从 localStorage 加载数据
+  const loadSimilarVersions = async () => {
+    if (!versionId) return;
+    
+    setHasLoaded(true);
+    // 动态导入以避免 SSR 问题
+    const { findSimilarVersions } = await import('@/lib/api/versions');
+    const results = findSimilarVersions(versionId, 5);
+    setSimilarVersions(results);
+  };
 
-    if (versionId) {
+  // 首次展开时加载数据
+  const handleToggle = () => {
+    if (!expanded && !hasLoaded) {
       loadSimilarVersions();
     }
-  }, [versionId]);
+    setExpanded(!expanded);
+  };
 
-  if (loading) {
-    return (
-      <div className="p-4 text-sm text-gray-500">
-        正在加载相似版本...
-      </div>
-    );
-  }
-
-  if (similarVersions.length === 0) {
-    return null;
-  }
+  const similarityColor = (score: number) => {
+    if (score >= 0.8) return 'text-green-600 bg-green-50';
+    if (score >= 0.5) return 'text-blue-600 bg-blue-50';
+    return 'text-gray-600 bg-gray-50';
+  };
 
   return (
-    <div className="border-t px-4 py-3 bg-gray-50">
-      <h4 className="text-sm font-medium text-gray-700 mb-3">
-        相似版本
-      </h4>
-      <div className="space-y-2">
-        {similarVersions.map((result) => (
-          <div
-            key={result.version.id}
-            className="flex items-center justify-between p-2 rounded-md hover:bg-gray-100 cursor-pointer transition-colors"
-            onClick={() => onSelectVersion(result.version)}
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">
-                {result.version.version}
-              </span>
-              <span className="text-xs text-gray-500">
-                {result.version.title}
-              </span>
-            </div>
-            <Badge variant="default" className="text-xs">
-              {Math.round(result.similarity * 100)}% 相似
-            </Badge>
+    <Card className="mt-6">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-purple-500" />
+            相似版本
+          </CardTitle>
+          <div className="flex gap-2">
+            {onRefresh && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => {
+                  onRefresh();
+                  loadSimilarVersions();
+                }}
+                disabled={isLoading}
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
+            )}
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleToggle}
+            >
+              {expanded ? '收起' : '展开'}
+            </Button>
           </div>
-        ))}
-      </div>
-    </div>
+        </div>
+      </CardHeader>
+      
+      {expanded && (
+        <CardContent>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-purple-500" />
+              <span className="ml-2 text-sm text-gray-500">正在分析...</span>
+            </div>
+          ) : similarVersions.length === 0 ? (
+            <div className="text-center py-6 text-gray-500">
+              <GitBranch className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+              <p className="text-sm">暂无相似版本</p>
+              <p className="text-xs text-gray-400 mt-1">
+                基于版本描述、标签和变更文件计算相似度
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {similarVersions.map((similar) => (
+                <div 
+                  key={similar.versionId}
+                  className="flex items-center gap-3 p-3 rounded-lg border hover:bg-gray-50 transition-colors"
+                >
+                  {/* 相似度指示器 */}
+                  <div className={`px-2 py-1 rounded text-sm font-medium ${similarityColor(similar.similarity)}`}>
+                    {(similar.similarity * 100).toFixed(0)}%
+                  </div>
+                  
+                  {/* 版本信息 */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-medium">{similar.version}</span>
+                      <ArrowRight className="w-3 h-3 text-gray-400" />
+                      <span className="text-gray-700 truncate">{similar.title}</span>
+                    </div>
+                    
+                    {/* 共同标签 */}
+                    {similar.commonTags.length > 0 && (
+                      <div className="flex gap-1 mt-1">
+                        {similar.commonTags.slice(0, 3).map((tag) => (
+                          <Badge key={tag} variant="default" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                        {similar.commonTags.length > 3 && (
+                          <span className="text-xs text-gray-400">+{similar.commonTags.length - 3}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* 操作按钮 */}
+                  {onSelectVersion && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => onSelectVersion(similar.versionId)}
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+              
+              {/* 说明 */}
+              <p className="text-xs text-gray-400 text-center pt-2">
+                基于版本摘要文本、标签和变更文件的相似度计算
+              </p>
+            </div>
+          )}
+        </CardContent>
+      )}
+    </Card>
   );
 }
+
+export default SimilarVersionsPanel;

@@ -687,6 +687,7 @@ export interface VersionSummaryVector {
   summaryText: string;
   // 简化：使用文本哈希模拟向量（实际应接入嵌入API）
   vectorHash: string;
+  tags: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -700,7 +701,7 @@ export interface VectorSearchRequest {
 
 // 向量搜索结果
 export interface VectorSearchResult {
-  version: Version;
+  version: VersionSummaryVector;
   similarity: number;
 }
 
@@ -709,4 +710,60 @@ export interface VectorStoreResponse {
   success: boolean;
   vector?: VersionSummaryVector;
   error?: string;
+}
+
+// 相似版本（用于 UI 展示）
+export interface SimilarVersion {
+  versionId: string;
+  version: string;
+  title: string;
+  similarity: number;
+  commonTags: string[];
+}
+
+// ========== Tag 生命周期管理类型 ==========
+
+// Git Tag 记录（用于生命周期管理）- localStorage 存储
+export interface TagLifecycleRecord {
+  id: string;
+  name: string;
+  versionId: string;
+  version: string;
+  archived: boolean;
+  protected: boolean;
+  createdAt: string;
+  archivedAt?: string;
+}
+
+// Tag 归档请求
+export interface ArchiveTagRequest {
+  tagId: string;
+  archive?: boolean; // true = 归档, false = 取消归档
+}
+
+// Tag 保护请求
+export interface TagProtectionRequest {
+  tagId: string;
+  protect?: boolean; // true = 保护, false = 取消保护
+}
+
+// Tag 批量操作请求
+export interface BatchTagRequest {
+  versionIds: string[];
+  action: 'create' | 'delete' | 'archive' | 'unarchive';
+  prefix?: string;
+  message?: string;
+}
+
+// Tag 批量操作响应
+export interface BatchTagResponse {
+  success: boolean;
+  results: {
+    versionId: string;
+    success: boolean;
+    tagName?: string;
+    error?: string;
+  }[];
+  totalSuccess: number;
+  totalFailed: number;
 }
