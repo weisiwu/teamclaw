@@ -1,3 +1,6 @@
+export { SnapshotCompareDialog } from "./SnapshotCompareDialog";
+export type { Snapshot } from "./SnapshotCompareDialog";
+
 /**
  * Version components export
  */

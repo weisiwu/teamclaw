@@ -14,6 +14,8 @@ import {
   useTriggerBuild,
   useRebuildVersion,
   useDownloadArtifact,
+  useDownloadHistory,
+  useAddDownloadRecord,
   useCreateGitTag,
   useVersionSnapshots,
   useCreateSnapshot,
@@ -41,6 +43,7 @@ import {
   VERSION_TAG_OPTIONS,
   VersionTag,
   CreateSnapshotRequest,
+  DOWNLOAD_FORMAT_OPTIONS,
 } from "@/lib/api/types";
 import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch as GitBranchIcon, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag, Image, FileCode } from "lucide-react";
 import {
@@ -49,7 +52,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel, BuildLogViewer, getBuildHistory, addBuildLog, clearBuildHistory } from "@/components/versions";
+import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel, BuildLogViewer, getBuildHistory, addBuildLog, clearBuildHistory, SnapshotCompareDialog } from "@/components/versions";
 
 export default function VersionsPage() {
   const [page, setPage] = useState(1);
@@ -63,7 +66,26 @@ export default function VersionsPage() {
   const [compareVersions, setCompareVersions] = useState<[string, string] | null>(null);
   const [isTagPanelOpen, setIsTagPanelOpen] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
-  const [downloadHistory, setDownloadHistory] = useState<Array<{versionId: string; version: string; time: string; url: string}>>([]);
+  const [downloadFormat, setDownloadFormat] = useState<Record<string, string>>({});
+  const [downloadRetryCount, setDownloadRetryCount] = useState<Record<string, number>>({});
+  
+  // 下载历史（云同步）
+  const { data: downloadHistoryData } = useDownloadHistory();
+  const addDownloadRecord = useAddDownloadRecord();
+  
+  // 本地下载历史（用于显示）
+  const [localDownloadHistory, setLocalDownloadHistory] = useState<Array<{versionId: string; version: string; format: string; time: string; url: string}>>([]);
+  
+  // 合并下载历史（云端 + 本地）
+  const downloadHistory = downloadHistoryData?.length 
+    ? downloadHistoryData.map(d => ({
+        versionId: d.versionId,
+        version: d.version,
+        format: d.format,
+        time: d.downloadedAt,
+        url: d.url,
+      }))
+    : localDownloadHistory;
   
   // 分支管理状态
   const [isBranchPanelOpen, setIsBranchPanelOpen] = useState(false);
@@ -96,18 +118,27 @@ export default function VersionsPage() {
     const saved = localStorage.getItem('downloadHistory');
     if (saved) {
       try {
-        setDownloadHistory(JSON.parse(saved));
+        setLocalDownloadHistory(JSON.parse(saved));
       } catch (e) {
         console.error('Failed to parse download history:', e);
       }
     }
   }, []);
 
-  // Save download history to localStorage
-  const saveDownloadHistory = (entry: {versionId: string; version: string; time: string; url: string}) => {
-    const newHistory = [entry, ...downloadHistory].slice(0, 20); // Keep last 20 entries
-    setDownloadHistory(newHistory);
+  // Save download history to localStorage and cloud
+  const saveDownloadHistory = (entry: {versionId: string; version: string; format: string; time: string; url: string}) => {
+    // Save to local
+    const newHistory = [entry, ...localDownloadHistory].slice(0, 20);
+    setLocalDownloadHistory(newHistory);
     localStorage.setItem('downloadHistory', JSON.stringify(newHistory));
+    
+    // Cloud sync (async)
+    addDownloadRecord.mutate({
+      versionId: entry.versionId,
+      version: entry.version,
+      format: entry.format,
+      url: entry.url,
+    });
   };
 
   const pageSize = 10;
@@ -283,21 +314,49 @@ export default function VersionsPage() {
     }
   };
 
+  // 下载重试函数
+  const downloadWithRetry = async (
+    versionId: string, 
+    format: string, 
+    retries: number = 3
+  ): Promise<{ success: boolean; url: string }> => {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const result = await downloadArtifact.mutateAsync({ versionId, format });
+        if (result.success) {
+          return result;
+        }
+      } catch (error) {
+        console.log(`Download attempt ${attempt} failed, retrying...`);
+        if (attempt === retries) {
+          throw error;
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // 指数退避
+      }
+    }
+    return { success: false, url: '' };
+  };
+
   const handleDownload = async (version: Version) => {
+    const format = downloadFormat[version.id] || 'zip';
+    const maxRetries = 3;
+    let currentRetry = downloadRetryCount[version.id] || 0;
+    
     try {
       // Start progress simulation
       setDownloadProgress(prev => ({ ...prev, [version.id]: 10 }));
       
-      const result = await downloadArtifact.mutateAsync(version.id);
+      const result = await downloadWithRetry(version.id, format, maxRetries);
       
       // Simulate progress
       setDownloadProgress(prev => ({ ...prev, [version.id]: 50 }));
       
       if (result.success && result.url) {
-        // Save to history
+        // Save to history with format
         saveDownloadHistory({
           versionId: version.id,
           version: version.version,
+          format,
           time: new Date().toLocaleString('zh-CN'),
           url: result.url
         });
@@ -306,14 +365,19 @@ export default function VersionsPage() {
         
         // Open download URL
         window.open(result.url, '_blank');
-        setActionMessage({ type: 'success', text: '开始下载产物' });
+        setActionMessage({ type: 'success', text: `开始下载 (${format})` });
         
-        // Clear progress after a short delay
+        // Clear progress and retry count after a short delay
         setTimeout(() => {
           setDownloadProgress(prev => {
             const newProgress = { ...prev };
             delete newProgress[version.id];
             return newProgress;
+          });
+          setDownloadRetryCount(prev => {
+            const newRetry = { ...prev };
+            delete newRetry[version.id];
+            return newRetry;
           });
         }, 1000);
       } else {
@@ -325,13 +389,33 @@ export default function VersionsPage() {
         setActionMessage({ type: 'error', text: '下载链接不存在' });
       }
     } catch {
+      // Handle retry
+      currentRetry++;
+      if (currentRetry < maxRetries) {
+        setDownloadRetryCount(prev => ({ ...prev, [version.id]: currentRetry }));
+        setActionMessage({ type: 'error', text: `下载失败，正在重试 (${currentRetry}/${maxRetries})` });
+        // 自动重试
+        await new Promise(resolve => setTimeout(resolve, 1000 * currentRetry));
+        return handleDownload(version);
+      }
+      
       setDownloadProgress(prev => {
         const newProgress = { ...prev };
         delete newProgress[version.id];
         return newProgress;
       });
-      setActionMessage({ type: 'error', text: '下载失败' });
+      setDownloadRetryCount(prev => {
+        const newRetry = { ...prev };
+        delete newRetry[version.id];
+        return newRetry;
+      });
+      setActionMessage({ type: 'error', text: `下载失败，已重试 ${maxRetries} 次` });
     }
+  };
+
+  // 处理格式选择
+  const handleFormatChange = (versionId: string, format: string) => {
+    setDownloadFormat(prev => ({ ...prev, [versionId]: format }));
   };
 
   const handleCreateTag = async (version: Version, options?: { tagName?: string; message?: string; force?: boolean }) => {
@@ -634,23 +718,46 @@ export default function VersionsPage() {
                         >
                           <Loader2 className="w-4 h-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDownload(version)}
-                          disabled={!version.artifactUrl || downloadArtifact.isPending || !!downloadProgress[version.id]}
-                          title="下载产物"
-                          className={downloadProgress[version.id] ? "text-blue-600" : ""}
-                        >
-                          {downloadProgress[version.id] ? (
-                            <div className="flex items-center gap-1">
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              <span className="text-xs">{downloadProgress[version.id]}%</span>
-                            </div>
-                          ) : (
-                            <Download className="w-4 h-4" />
-                          )}
-                        </Button>
+                        <div className="relative group">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDownload(version)}
+                            disabled={!version.artifactUrl || downloadArtifact.isPending || !!downloadProgress[version.id]}
+                            title="下载产物"
+                            className={downloadProgress[version.id] ? "text-blue-600" : ""}
+                          >
+                            {downloadProgress[version.id] ? (
+                              <div className="flex items-center gap-1">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <span className="text-xs">{downloadProgress[version.id]}%</span>
+                                {downloadRetryCount[version.id] > 0 && (
+                                  <span className="text-xs text-orange-500">({downloadRetryCount[version.id]})</span>
+                                )}
+                              </div>
+                            ) : (
+                              <Download className="w-4 h-4" />
+                            )}
+                          </Button>
+                          {/* 格式选择下拉 */}
+                          <div className="absolute right-0 top-full mt-1 bg-white border rounded-lg shadow-lg py-1 z-10 hidden group-hover:block min-w-[140px]">
+                            {DOWNLOAD_FORMAT_OPTIONS.map((opt) => (
+                              <button
+                                key={opt.value}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleFormatChange(version.id, opt.value);
+                                  handleDownload(version);
+                                }}
+                                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 ${
+                                  downloadFormat[version.id] === opt.value ? 'bg-blue-50 text-blue-600' : ''
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1131,6 +1238,7 @@ function VersionDetailDialog({
 }) {
   const [activeTab, setActiveTab] = useState<"info" | "snapshots" | "screenshots" | "changelog">("info");
   const [isCreateSnapshotOpen, setIsCreateSnapshotOpen] = useState(false);
+  const [isCompareDialogOpen, setIsCompareDialogOpen] = useState(false);
   const [restoreConfirmId, setRestoreConfirmId] = useState<string | null>(null);
   const [snapshotForm, setSnapshotForm] = useState<CreateSnapshotRequest>({
     name: "",
@@ -1333,17 +1441,29 @@ function VersionDetailDialog({
           <div>
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-medium text-gray-500">版本快照</h4>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsCreateSnapshotOpen(true)}
-                disabled={isCreatingSnapshot}
-              >
-                {isCreatingSnapshot ? (
-                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                ) : null}
-                创建快照
-              </Button>
+              <div className="flex gap-2">
+                {snapshots && snapshots.length >= 2 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsCompareDialogOpen(true)}
+                  >
+                    <GitCompare className="w-4 h-4 mr-1" />
+                    对比
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsCreateSnapshotOpen(true)}
+                  disabled={isCreatingSnapshot}
+                >
+                  {isCreatingSnapshot ? (
+                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  ) : null}
+                  创建快照
+                </Button>
+              </div>
             </div>
             
             {/* Tab 切换 */}

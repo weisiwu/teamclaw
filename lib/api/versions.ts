@@ -606,8 +606,11 @@ export async function rebuildVersion(versionId: string): Promise<{ success: bool
   return triggerBuild(versionId);
 }
 
-// 下载产物
-export async function downloadArtifact(versionId: string): Promise<{ success: boolean; url: string }> {
+// 下载产物（支持多格式）
+export async function downloadArtifact(
+  versionId: string, 
+  format: string = 'zip'
+): Promise<{ success: boolean; url: string }> {
   await delay(200);
   
   const version = mockVersions.find((v) => v.id === versionId);
@@ -615,7 +618,54 @@ export async function downloadArtifact(versionId: string): Promise<{ success: bo
     return { success: false, url: '' };
   }
   
-  return { success: true, url: version.artifactUrl };
+  // 根据格式生成不同的下载 URL
+  const baseUrl = version.artifactUrl;
+  const formatUrls: Record<string, string> = {
+    'zip': baseUrl.replace('.zip', `-${format}.zip`) || `${baseUrl}.zip`,
+    'tar.gz': baseUrl.replace('.zip', `-${format}.tar.gz`) || `${baseUrl}.tar.gz`,
+    'apk': baseUrl.replace('.zip', `-android.apk`) || `${baseUrl}-android.apk`,
+    'ipa': baseUrl.replace('.zip', `-ios.ipa`) || `${baseUrl}-ios.ipa`,
+    'exe': baseUrl.replace('.zip', `-windows.exe`) || `${baseUrl}-windows.exe`,
+    'dmg': baseUrl.replace('.zip', `-macos.dmg`) || `${baseUrl}-macos.dmg`,
+  };
+  
+  return { success: true, url: formatUrls[format] || baseUrl };
+}
+
+// 下载历史记录（Mock 数据）
+const mockDownloadHistory: Array<{
+  id: string;
+  versionId: string;
+  version: string;
+  format: string;
+  url: string;
+  downloadedAt: string;
+}> = [
+  { id: 'dl-1', versionId: 'v1', version: 'v1.0.0', format: 'zip', url: 'https://example.com/v1.0.0.zip', downloadedAt: '2026-03-15 10:30:00' },
+  { id: 'dl-2', versionId: 'v2', version: 'v1.1.0', format: 'tar.gz', url: 'https://example.com/v1.1.0.tar.gz', downloadedAt: '2026-03-10 14:20:00' },
+];
+
+// 获取下载历史
+export async function getDownloadHistory(): Promise<typeof mockDownloadHistory> {
+  await delay(100);
+  return [...mockDownloadHistory];
+}
+
+// 添加下载记录
+export async function addDownloadRecord(record: {
+  versionId: string;
+  version: string;
+  format: string;
+  url: string;
+}): Promise<{ id: string }> {
+  await delay(50);
+  const newRecord = {
+    id: `dl-${Date.now()}`,
+    ...record,
+    downloadedAt: new Date().toLocaleString('zh-CN'),
+  };
+  mockDownloadHistory.unshift(newRecord);
+  return { id: newRecord.id };
 }
 
 // ========== 快照管理 API ==========
@@ -902,7 +952,28 @@ export function useRebuildVersion() {
 
 export function useDownloadArtifact() {
   return useMutation({
-    mutationFn: (versionId: string) => downloadArtifact(versionId),
+    mutationFn: ({ versionId, format = 'zip' }: { versionId: string; format?: string }) => 
+      downloadArtifact(versionId, format),
+  });
+}
+
+// 下载历史 Hook（支持重试和云同步）
+export function useDownloadHistory() {
+  return useQuery({
+    queryKey: ["downloadHistory"],
+    queryFn: () => getDownloadHistory(),
+  });
+}
+
+export function useAddDownloadRecord() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (record: { versionId: string; version: string; format: string; url: string }) => 
+      addDownloadRecord(record),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["downloadHistory"] });
+    },
   });
 }
 

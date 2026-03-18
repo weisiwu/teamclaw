@@ -604,3 +604,31 @@ export interface GenerateChangelogRequest {
 export interface ChangelogResponse {
   data: VersionChangelog;
 }
+
+// ========== 下载记录类型 ==========
+
+export type DownloadFormat = 'zip' | 'tar.gz' | 'apk' | 'ipa' | 'exe' | 'dmg';
+
+export interface DownloadRecord {
+  id: string;
+  versionId: string;
+  version: string;
+  format: DownloadFormat;
+  url: string;
+  downloadedAt: string;
+  downloadedBy?: string;
+}
+
+export interface DownloadHistoryResponse {
+  data: DownloadRecord[];
+  total: number;
+}
+
+export const DOWNLOAD_FORMAT_OPTIONS = [
+  { value: 'zip', label: 'ZIP (.zip)', desc: '通用压缩包' },
+  { value: 'tar.gz', label: 'TAR.GZ (.tar.gz)', desc: 'Linux/Unix 压缩包' },
+  { value: 'apk', label: 'APK (.apk)', desc: 'Android 安装包' },
+  { value: 'ipa', label: 'IPA (.ipa)', desc: 'iOS 安装包' },
+  { value: 'exe', label: 'EXE (.exe)', desc: 'Windows 安装程序' },
+  { value: 'dmg', label: 'DMG (.dmg)', desc: 'macOS 磁盘镜像' },
+] as const;
