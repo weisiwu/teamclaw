@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult, SimilarVersion, TagLifecycleRecord, BatchTagResponse, BuildEnhancementSettings, BuildNotificationSettings, BuildEnvironment, BUILD_ENVIRONMENTS, DEFAULT_BUILD_RETRY_SETTINGS, DEFAULT_NOTIFICATION_SETTINGS } from "./types";
+import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult, SimilarVersion, TagLifecycleRecord, BatchTagResponse, BuildEnhancementSettings, BuildNotificationSettings, BuildEnvironment, BUILD_ENVIRONMENTS, DEFAULT_BUILD_RETRY_SETTINGS, DEFAULT_NOTIFICATION_SETTINGS, BatchDownloadRequest, BatchDownloadResponse, DownloadUrlVerification, DownloadStats } from "./types";
 
 // 全局版本自动升级和 Tag 设置
 let versionSettings: VersionSettings = {
@@ -1896,3 +1896,127 @@ export async function triggerBuildWithRetry(
 export function getBuildEnvironments(): BuildEnvironment[] {
   return BUILD_ENVIRONMENTS;
 }
+
+// ========== 产物下载增强 API (iter-22) ==========
+
+// 批量下载产物
+export async function batchDownloadArtifacts(
+  request: BatchDownloadRequest
+): Promise<BatchDownloadResponse> {
+  await delay(300);
+  
+  const results = await Promise.all(
+    request.versionIds.map(async (versionId) => {
+      const version = mockVersions.find((v) => v.id === versionId);
+      if (!version || !version.artifactUrl) {
+        return {
+          versionId,
+          version: version?.version || 'unknown',
+          url: '',
+          success: false,
+          error: 'Version or artifact not found',
+        };
+      }
+      
+      const baseUrl = version.artifactUrl;
+      const formatUrls: Record<string, string> = {
+        'zip': baseUrl,
+        'tar.gz': baseUrl.replace('.zip', '.tar.gz'),
+        'apk': baseUrl.replace('.zip', '-android.apk'),
+        'ipa': baseUrl.replace('.zip', '-ios.ipa'),
+        'exe': baseUrl.replace('.zip', '-windows.exe'),
+        'dmg': baseUrl.replace('.zip', '-macos.dmg'),
+      };
+      
+      return {
+        versionId,
+        version: version.version,
+        url: formatUrls[request.format] || baseUrl,
+        success: true,
+      };
+    })
+  );
+  
+  return { success: true, results };
+}
+
+// 验证下载链接
+export async function verifyDownloadUrl(
+  versionId: string,
+  url: string
+): Promise<DownloadUrlVerification> {
+  await delay(200);
+  
+  const version = mockVersions.find((v) => v.id === versionId);
+  if (!version) {
+    return {
+      versionId,
+      version: '',
+      url,
+      isValid: false,
+      error: 'Version not found',
+    };
+  }
+  
+  // Mock 验证结果
+  const isValid = !!version.artifactUrl && url.includes(version.version);
+  
+  return {
+    versionId,
+    version: version.version,
+    url,
+    isValid,
+    fileSize: isValid ? Math.floor(Math.random() * 100) + 10 : undefined,
+    lastModified: isValid ? new Date().toISOString() : undefined,
+    error: isValid ? undefined : 'Invalid URL',
+  };
+}
+
+// 获取下载统计
+export async function getDownloadStats(): Promise<DownloadStats> {
+  await delay(150);
+  
+  // 基于现有下载历史生成统计
+  const allDownloads = [...mockDownloadHistory];
+  
+  // 按版本统计
+  const versionCounts: Record<string, number> = {};
+  allDownloads.forEach((d) => {
+    versionCounts[d.version] = (versionCounts[d.version] || 0) + 1;
+  });
+  const downloadsByVersion = Object.entries(versionCounts).map(([version, count]) => ({
+    version,
+    count,
+  }));
+  
+  // 按格式统计
+  const formatCounts: Record<string, number> = {};
+  allDownloads.forEach((d) => {
+    formatCounts[d.format] = (formatCounts[d.format] || 0) + 1;
+  });
+  const downloadsByFormat = Object.entries(formatCounts).map(([format, count]) => ({
+    format,
+    count,
+  }));
+  
+  // 最近7天趋势（Mock）
+  const recentTrend = [];
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    recentTrend.push({
+      date: date.toISOString().split('T')[0],
+      count: Math.floor(Math.random() * 10) + 1,
+    });
+  }
+  
+  return {
+    totalDownloads: allDownloads.length,
+    downloadsByVersion,
+    downloadsByFormat,
+    recentTrend,
+  };
+}
+
+// Re-export types for convenience
+export type { BatchDownloadRequest, BatchDownloadResponse, DownloadUrlVerification, DownloadStats } from './types';

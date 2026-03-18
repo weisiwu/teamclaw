@@ -25,4 +25,7 @@ export { BuildRetrySettingsDialog } from "./BuildRetrySettingsDialog";
 export { BuildNotificationSettingsDialog } from "./BuildNotificationSettingsDialog";
 export { BuildEnvSelector } from "./BuildEnvSelector";
 export { BuildSettingsMenu } from "./BuildSettingsMenu";
+export { BatchDownloadDialog } from "./BatchDownloadDialog";
+export { DownloadStatsPanel } from "./DownloadStatsPanel";
+export { DownloadUrlVerifier } from "./DownloadUrlVerifier";
 export type { MessageItem } from "./MessageSelector";

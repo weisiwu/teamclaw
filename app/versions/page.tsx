@@ -46,14 +46,14 @@ import {
   CreateSnapshotRequest,
   DOWNLOAD_FORMAT_OPTIONS,
 } from "@/lib/api/types";
-import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch as GitBranchIcon, GitMerge, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag, Image, FileCode, History, FolderOpen } from "lucide-react";
+import { Pencil, Trash2, Plus, Loader2, Search, X, GitBranch as GitBranchIcon, GitMerge, Star, Play, Download, Calendar, Clock, FileText, GitCompare, Tag, Image, FileCode, History, FolderOpen, BarChart3 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel, BuildLogViewer, getBuildHistory, addBuildLog, clearBuildHistory, SnapshotCompareDialog, VersionTimeline, SimilarVersionsPanel, TagLifecyclePanel, BatchTagOperations, TagGroupManager, useTagGroups, useFavoriteTags, BuildSettingsMenu, BuildEnvSelector } from "@/components/versions";
+import { MessageSelector, MessageItem, ScreenshotGallery, ChangelogPanel, BuildLogViewer, getBuildHistory, addBuildLog, clearBuildHistory, SnapshotCompareDialog, VersionTimeline, SimilarVersionsPanel, TagLifecyclePanel, BatchTagOperations, TagGroupManager, useTagGroups, useFavoriteTags, BuildSettingsMenu, BuildEnvSelector, BatchDownloadDialog, DownloadStatsPanel } from "@/components/versions";
 import { BranchCompareDialog, BranchMergeDialog } from "@/components/branch";
 
 export default function VersionsPage() {
@@ -99,6 +99,8 @@ export default function VersionsPage() {
   // Tag 生命周期管理状态
   const [isTagLifecycleOpen, setIsTagLifecycleOpen] = useState(false);
   const [isBatchTagOpen, setIsBatchTagOpen] = useState(false);
+  const [isBatchDownloadOpen, setIsBatchDownloadOpen] = useState(false);
+  const [isDownloadStatsOpen, setIsDownloadStatsOpen] = useState(false);
   const [deleteBranchConfirmId, setDeleteBranchConfirmId] = useState<string | null>(null);
   const [newBranchForm, setNewBranchForm] = useState({
     name: '',
@@ -532,6 +534,22 @@ export default function VersionsPage() {
           >
             <GitCompare className="w-4 h-4" />
             版本对比
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setIsBatchDownloadOpen(true)}
+            className="gap-2"
+          >
+            <Download className="w-4 h-4" />
+            批量下载
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setIsDownloadStatsOpen(true)}
+            className="gap-2"
+          >
+            <BarChart3 className="w-4 h-4" />
+            下载统计
           </Button>
           <Button onClick={handleAdd} className="gap-2">
             <Plus className="w-4 h-4" />
@@ -1162,6 +1180,28 @@ export default function VersionsPage() {
         <DialogContent className="max-w-2xl" title="批量 Tag 操作">
           <div className="py-4">
             <BatchTagOperations />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 批量下载弹窗 */}
+      <Dialog open={isBatchDownloadOpen} onOpenChange={setIsBatchDownloadOpen}>
+        <DialogContent className="max-w-2xl" title="批量下载产物">
+          <div className="py-4">
+            <BatchDownloadDialog
+              isOpen={isBatchDownloadOpen}
+              onClose={() => setIsBatchDownloadOpen(false)}
+              versions={versions.map(v => ({ id: v.id, version: v.version, artifactUrl: v.artifactUrl || undefined }))}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 下载统计弹窗 */}
+      <Dialog open={isDownloadStatsOpen} onOpenChange={setIsDownloadStatsOpen}>
+        <DialogContent className="max-w-lg" title="下载统计">
+          <div className="py-4">
+            <DownloadStatsPanel />
           </div>
         </DialogContent>
       </Dialog>

@@ -866,3 +866,51 @@ export const DEFAULT_NOTIFICATION_SETTINGS: BuildNotificationSettings = {
   notifyOn: 'failure',
   notifyChannels: ['feishu'],
 };
+
+// ========== 产物下载增强 (iter-22) ==========
+
+// 批量下载请求
+export interface BatchDownloadRequest {
+  versionIds: string[];
+  format: string;
+}
+
+// 批量下载响应
+export interface BatchDownloadResponse {
+  success: boolean;
+  results: Array<{
+    versionId: string;
+    version: string;
+    url: string;
+    success: boolean;
+    error?: string;
+  }>;
+}
+
+// 下载链接验证结果
+export interface DownloadUrlVerification {
+  versionId: string;
+  version: string;
+  url: string;
+  isValid: boolean;
+  fileSize?: number;
+  lastModified?: string;
+  error?: string;
+}
+
+// 下载统计
+export interface DownloadStats {
+  totalDownloads: number;
+  downloadsByVersion: Array<{
+    version: string;
+    count: number;
+  }>;
+  downloadsByFormat: Array<{
+    format: string;
+    count: number;
+  }>;
+  recentTrend: Array<{
+    date: string;
+    count: number;
+  }>;
+}
