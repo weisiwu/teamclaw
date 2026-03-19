@@ -115,7 +115,7 @@ export function analyzeGitHistory(projectPath: string): GitHistoryAnalysis {
   }
   const total = commits.length || 1;
   const topAuthors = Array.from(authorMap.entries())
-    .map(([name, commits: number]) => ({ name, commits, percentage: Math.round((commits / total) * 100) }))
+    .map(([name, commitsCount]) => ({ name, commits: commitsCount, percentage: Math.round((commitsCount / total) * 100) }))
     .sort((a, b) => b.commits - a.commits)
     .slice(0, 5);
 

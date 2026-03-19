@@ -347,3 +347,4 @@ router.post("/check", async (req: Request, res: Response) => {
     res.status(500).json(error(500, "权限校验失败"));
   }
 });
+export default router;

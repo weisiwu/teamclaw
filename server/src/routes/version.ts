@@ -278,6 +278,16 @@ router.post('/', (req: Request, res: Response) => {
     tagCreated = createTag(effectiveProjectPath, tagName, `Release ${version} - ${title}`);
     if (tagCreated) {
       db.prepare('UPDATE versions SET tag_created = 1 WHERE id = ?').run(id);
+      // Create tag record in DB via tagService
+      createTagRecord({
+        name: tagName,
+        versionId: id,
+        versionName: version,
+        message: `Release ${version} - ${title}`,
+        createdBy: 'system',
+        commitHash: undefined,
+        annotation: `Release ${version} - ${title}`,
+      });
     }
   } catch (err) {
     console.warn('[version] Failed to create git tag:', err);

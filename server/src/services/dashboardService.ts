@@ -5,8 +5,7 @@
 
 import { DashboardOverview } from '../models/dashboard.js';
 import { taskLifecycle } from './taskLifecycle.js';
-import { agentService } from './agentService.js';
-import { versionService } from './gitService.js';
+import { getTeamOverviewData } from './agentService.js';
 
 export class DashboardService {
   /**
@@ -21,7 +20,7 @@ export class DashboardService {
     const cancelled = tasks.filter((t) => t.status === 'cancelled').length;
 
     // Agent stats
-    const teamOverview = agentService.getTeamOverview();
+    const teamOverview = getTeamOverviewData();
     const busy = teamOverview.agents.filter((a) => a.status === 'busy').length;
 
     // Token stats (simplified - last 30 days from tokenStatsService)
