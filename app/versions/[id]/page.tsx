@@ -13,6 +13,7 @@ import { ArtifactsPanel } from "@/components/versions/ArtifactsPanel";
 import { RollbackDialog } from "@/components/versions/RollbackDialog";
 import { RollbackHistoryPanel } from "@/components/versions/RollbackHistoryPanel";
 import { UpgradeConfigDialog } from "@/components/versions/UpgradeConfigDialog";
+import { VersionChangeLogPanel } from "@/components/versions/VersionChangeLogPanel";
 
 const API_BASE = "/api/v1";
 
@@ -25,7 +26,7 @@ export default function VersionDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRegeneratingTag, setIsRegeneratingTag] = useState(false);
   const [tagMessage, setTagMessage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"details" | "bumpHistory" | "artifacts" | "rollback">("details");
+  const [activeTab, setActiveTab] = useState<"details" | "bumpHistory" | "artifacts" | "rollback" | "changelog">("details");
   const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false);
   const [upgradeConfigOpen, setUpgradeConfigOpen] = useState(false);
   const [isUpgrading, setIsUpgrading] = useState(false);
@@ -175,6 +176,17 @@ export default function VersionDetailPage() {
             <RotateCcw className="w-4 h-4" />
             版本回退
           </button>
+          <button
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+              activeTab === "changelog"
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-500 hover:bg-gray-100"
+            }`}
+            onClick={() => setActiveTab("changelog")}
+          >
+            <FileText className="w-4 h-4" />
+            变更记录
+          </button>
         </div>
       </div>
 
@@ -218,6 +230,17 @@ export default function VersionDetailPage() {
           <div className="bg-white rounded-xl border p-5">
             <RollbackHistoryPanel versionId={id} />
           </div>
+        </div>
+      ) : activeTab === "changelog" ? (
+        <div className="bg-white rounded-xl border p-5">
+          <h2 className="text-sm font-medium text-gray-500 mb-4 flex items-center gap-2">
+            <FileText className="w-4 h-4" />
+            变更记录
+          </h2>
+          <VersionChangeLogPanel
+            versionId={id}
+            versionCreatedAt={version.createdAt}
+          />
         </div>
       ) : (
         <div className="space-y-6">

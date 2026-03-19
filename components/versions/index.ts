@@ -22,6 +22,7 @@ export { MessageSelector } from "./MessageSelector";
 export { ScreenshotGallery } from "./ScreenshotGallery";
 export { ChangelogPanel } from "./ChangelogPanel";
 export { ChangeTimeline } from "./ChangeTimeline";
+export { VersionChangeLogPanel } from "./VersionChangeLogPanel";
 export { BuildProgress } from "./BuildProgress";
 export { BuildLogViewer, getBuildHistory, addBuildLog, updateBuildLog, clearBuildHistory } from "./BuildLogViewer";
 export { BuildRetrySettingsDialog } from "./BuildRetrySettingsDialog";
