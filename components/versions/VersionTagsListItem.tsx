@@ -1,0 +1,78 @@
+"use client";
+
+import { GitTag } from "@/lib/api/types";
+import { Tag, Calendar, User, GitCommit } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { CopyButton } from "./CopyButton";
+
+interface VersionTagsListItemProps {
+  tag: GitTag;
+  onClick: (tag: GitTag) => void;
+}
+
+const statusConfig = {
+  active: { label: "活跃", variant: "success" as const },
+  archived: { label: "已归档", variant: "warning" as const },
+  protected: { label: "保护", variant: "info" as const },
+};
+
+export function VersionTagsListItem({ tag, onClick }: VersionTagsListItemProps) {
+  const status = statusConfig[tag.status];
+  const date = new Date(tag.taggerDate).toLocaleDateString("zh-CN", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+
+  return (
+    <div
+      className="flex items-center gap-4 p-4 border border-gray-100 rounded-xl hover:border-gray-200 hover:shadow-sm cursor-pointer transition-all bg-white"
+      onClick={() => onClick(tag)}
+    >
+      {/* Tag icon + version */}
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+          <Tag className="w-5 h-5 text-blue-600" />
+        </div>
+        <div>
+          <div className="font-mono font-semibold text-gray-900 text-sm">
+            {tag.name}
+          </div>
+          <Badge variant={status.variant} className="text-[10px] mt-0.5">
+            {status.label}
+          </Badge>
+        </div>
+      </div>
+
+      {/* Commit message */}
+      <div className="flex-1 min-w-0">
+        <div className="text-sm text-gray-700 truncate" title={tag.subject}>
+          {tag.subject}
+        </div>
+        <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
+          <span className="flex items-center gap-1">
+            <GitCommit className="w-3 h-3" />
+            <span className="font-mono">{tag.commit}</span>
+            <CopyButton text={tag.commit} size="sm" />
+          </span>
+          <span className="flex items-center gap-1">
+            <User className="w-3 h-3" />
+            {tag.author}
+          </span>
+        </div>
+      </div>
+
+      {/* Date + copy tag */}
+      <div className="flex-shrink-0 text-right">
+        <div className="flex items-center gap-1 text-xs text-gray-500 justify-end">
+          <Calendar className="w-3 h-3" />
+          {date}
+        </div>
+        <div className="flex items-center justify-end gap-1 mt-1">
+          <span className="text-xs font-mono text-blue-600">{tag.name}</span>
+          <CopyButton text={tag.name} size="sm" />
+        </div>
+      </div>
+    </div>
+  );
+}
