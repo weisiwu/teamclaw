@@ -172,3 +172,166 @@ export async function getConvertedDocs(projectId: string): Promise<ConvertedDoc[
   
   return result;
 }
+
+// Language detection from file extension for syntax highlighting
+const LANG_MAP: Record<string, string> = {
+  '.ts': 'typescript', '.tsx': 'tsx', '.js': 'javascript', '.jsx': 'jsx',
+  '.py': 'python', '.rb': 'ruby', '.go': 'go', '.rs': 'rust',
+  '.java': 'java', '.kt': 'kotlin', '.swift': 'swift', '.c': 'c',
+  '.cpp': 'cpp', '.cc': 'cpp', '.h': 'c', '.hpp': 'cpp',
+  '.cs': 'csharp', '.php': 'php', '.pl': 'perl', '.sh': 'bash',
+  '.bash': 'bash', '.zsh': 'bash', '.fish': 'bash',
+  '.sql': 'sql', '.graphql': 'graphql', '.gql': 'graphql',
+  '.json': 'json', '.yaml': 'yaml', '.yml': 'yaml', '.xml': 'xml',
+  '.html': 'html', '.css': 'css', '.scss': 'scss', '.less': 'less',
+  '.md': 'markdown', '.rst': 'rst',
+  '.dockerfile': 'dockerfile', '.tf': 'hcl', '.hcl': 'hcl',
+  '.toml': 'toml', '.ini': 'ini', '.conf': 'ini',
+  '.diff': 'diff', '.patch': 'diff', '.gitignore': 'gitignore',
+  '.env': 'bash', '.csv': 'csv', '.log': 'log',
+};
+
+/**
+ * Convert a source code file to syntax-highlighted HTML
+ */
+export function codeToHtml(filePath: string, content: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  const lang = LANG_MAP[ext] || 'plaintext';
+  const escaped = content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Simple keyword highlighting for common languages
+  const highlighted = applyBasicHighlight(escaped, lang);
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${path.basename(filePath)}</title>
+<style>
+  body { font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, 'Courier New', monospace; background: #1e1e1e; color: #d4d4d4; margin: 0; padding: 20px; }
+  .line { display: flex; line-height: 1.6; font-size: 13px; }
+  .line-num { color: #858585; min-width: 50px; padding-right: 16px; text-align: right; user-select: none; }
+  .line-content { white-space: pre; flex: 1; overflow-x: auto; }
+  .keyword { color: #569cd6; font-weight: bold; }
+  .string { color: #ce9178; }
+  .number { color: #b5cea8; }
+  .comment { color: #6a9955; font-style: italic; }
+  .function { color: #dcdcaa; }
+  .type { color: #4ec9b0; }
+  .operator { color: #d4d4d4; }
+  pre { margin: 0; }
+  .line:hover { background: #2a2d2e; }
+</style>
+</head>
+<body>
+<pre>${highlighted}</pre>
+</body>
+</html>`;
+}
+
+// Basic syntax highlighting without external deps
+function applyBasicHighlight(code: string, lang: string): string {
+  // Wrap each line
+  const lines = code.split('\n');
+  return lines.map((line, i) => {
+    const num = `<span class="line-num">${i + 1}</span>`;
+    const highlighted = highlightLine(line, lang);
+    return `<div class="line">${num}<span class="line-content">${highlighted}</span></div>`;
+  }).join('\n');
+}
+
+const KEYWORDS: Record<string, string[]> = {
+  typescript: ['const', 'let', 'var', 'function', 'class', 'interface', 'type', 'enum', 'import', 'export', 'from', 'return', 'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'try', 'catch', 'finally', 'throw', 'new', 'this', 'super', 'extends', 'implements', 'public', 'private', 'protected', 'readonly', 'async', 'await', 'yield', 'static', 'get', 'set', 'of', 'in', 'typeof', 'instanceof', 'void', 'null', 'undefined', 'true', 'false', 'any', 'never', 'unknown', 'as', 'keyof', 'infer'],
+  javascript: ['const', 'let', 'var', 'function', 'class', 'import', 'export', 'from', 'return', 'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'try', 'catch', 'finally', 'throw', 'new', 'this', 'super', 'extends', 'async', 'await', 'yield', 'static', 'get', 'set', 'of', 'in', 'typeof', 'instanceof', 'void', 'null', 'undefined', 'true', 'false', 'default', 'delete'],
+  python: ['def', 'class', 'import', 'from', 'as', 'return', 'if', 'elif', 'else', 'for', 'while', 'try', 'except', 'finally', 'with', 'raise', 'pass', 'break', 'continue', 'and', 'or', 'not', 'in', 'is', 'None', 'True', 'False', 'lambda', 'yield', 'global', 'nonlocal', 'assert', 'del', 'async', 'await'],
+  sql: ['SELECT', 'FROM', 'WHERE', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'TABLE', 'INDEX', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'ON', 'AND', 'OR', 'NOT', 'IN', 'IS', 'NULL', 'AS', 'ORDER', 'BY', 'GROUP', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'ALL', 'DISTINCT', 'COUNT', 'SUM', 'AVG', 'MAX', 'MIN', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'CONSTRAINT'],
+  bash: ['if', 'then', 'else', 'elif', 'fi', 'for', 'while', 'do', 'done', 'case', 'esac', 'in', 'function', 'return', 'exit', 'echo', 'read', 'export', 'local', 'readonly', 'unset', 'shift', 'set', 'source', 'alias', 'cd', 'pwd', 'ls', 'mkdir', 'rm', 'cp', 'mv', 'cat', 'grep', 'sed', 'awk', 'find', 'xargs', 'sort', 'uniq', 'wc', 'head', 'tail', 'cut', 'tr', 'test', 'true', 'false'],
+};
+
+function highlightLine(line: string, lang: string): string {
+  // Simple tokenizer-based highlighting
+  const keywords = KEYWORDS[lang] || KEYWORDS['javascript'];
+
+  // Escape HTML first (already done by caller)
+  let result = line;
+
+  // Highlight strings (double and single quoted)
+  result = result.replace(/(["'`])(?:(?!\1)[^\\]|\\.)*\1/g, '<span class="string">$&</span>');
+
+  // Highlight comments
+  if (lang === 'python') {
+    result = result.replace(/(#.*)$/gm, '<span class="comment">$1</span>');
+  } else if (lang === 'sql') {
+    result = result.replace(/(--[^\n]*)/g, '<span class="comment">$1</span>');
+  } else {
+    result = result.replace(/(\/\/[^\n]*)/g, '<span class="comment">$1</span>');
+    result = result.replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="comment">$1</span>');
+  }
+
+  // Highlight numbers
+  result = result.replace(/\b(\d+\.?\d*)\b/g, '<span class="number">$1</span>');
+
+  // Highlight keywords (careful not to highlight inside strings)
+  for (const kw of keywords) {
+    const boundary = lang === 'python' ? `\\b${kw}\\b` : `\\b${kw}\\b`;
+    try {
+      result = result.replace(new RegExp(boundary, 'g'), `<span class="keyword">${kw}</span>`);
+    } catch {
+      // Skip invalid regex
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Get preview of any supported file type as HTML
+ */
+export function getFilePreview(filePath: string): string | null {
+  if (!fs.existsSync(filePath)) return null;
+
+  const ext = path.extname(filePath).toLowerCase();
+  const supportedCodeExts = Object.keys(LANG_MAP);
+
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+
+    if (supportedCodeExts.includes(ext)) {
+      return codeToHtml(filePath, content);
+    }
+
+    if (ext === '.md') {
+      return markdownToHtml(content, filePath);
+    }
+
+    if (ext === '.txt') {
+      const escaped = content
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${path.basename(filePath)}</title><style>
+        body { font-family: monospace; background: #fafafa; margin: 20px; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+      </style></head><body><pre>${escaped}</pre></body></html>`;
+    }
+
+    if (['.json', '.yaml', '.yml', '.xml'].includes(ext)) {
+      const escaped = content
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${path.basename(filePath)}</title><style>
+        body { font-family: monospace; background: #1e1e1e; color: #d4d4d4; margin: 20px; padding: 20px; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+      </style></head><body><pre>${escaped}</pre></body></html>`;
+    }
+
+    return null; // Unsupported type for preview
+  } catch {
+    return null;
+  }
+}

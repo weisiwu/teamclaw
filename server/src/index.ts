@@ -22,6 +22,7 @@ import buildRouter from './routes/build.js';
 import artifactRouter from './routes/artifact.js';
 import branchRouter from './routes/branch.js';
 import llmRouter from './routes/llm.js';
+import downloadRouter from './routes/download.js';
 import { getArtifactsRootDir } from './services/artifactStore.js';
 import './services/taskInit.js'; // 初始化任务机制钩子
 
@@ -63,6 +64,7 @@ app.use('/api/v1/tags', tagRouter);
 app.use('/api/v1/builds', buildRouter);
 app.use('/api/v1/artifacts', artifactRouter);
 app.use('/api/v1/branches', branchRouter);
+app.use('/api/v1/downloads', downloadRouter);
 app.use('/api/v1/llm', llmRouter);
 
 // Root

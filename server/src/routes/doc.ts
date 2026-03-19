@@ -198,4 +198,21 @@ router.get('/stats/overview', (req, res) => {
   }));
 });
 
+// ========== 文档在线预览 ==========
+
+// 在线预览文档 GET /api/v1/docs/:docId/preview
+router.get('/:docId/preview', (req, res) => {
+  const { getFilePreview } = require('../services/docConverter');
+  const filePath = docService.getDocFilePath(req.params.docId);
+  if (!filePath) {
+    return res.status(404).json(error('DOC_NOT_FOUND', '文档不存在'));
+  }
+  const html = getFilePreview(filePath);
+  if (!html) {
+    return res.status(415).json(error('UNSUPPORTED_TYPE', '该文件类型不支持在线预览'));
+  }
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
+});
+
 export default router;
