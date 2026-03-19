@@ -117,14 +117,16 @@ export const memberApi = {
   },
 
   // 创建成员
-  async create(data: CreateMemberRequest): Promise<Member> {
-    const payload: CreateUserPayload = {
+  async create(data: CreateMemberRequest & { changedBy?: string; reason?: string }): Promise<Member> {
+    const payload: CreateUserPayload & Record<string, string> = {
       name: data.name,
       role: data.role === "sub_admin" ? "vice_admin" : data.role,
-      wechatId: (data as unknown as Record<string, string>).wechatId,
-      feishuId: (data as unknown as Record<string, string>).feishuId,
-      remark: (data as unknown as Record<string, string>).remark,
     };
+    if ((data as unknown as Record<string, string>).wechatId) payload.wechatId = (data as unknown as Record<string, string>).wechatId;
+    if ((data as unknown as Record<string, string>).feishuId) payload.feishuId = (data as unknown as Record<string, string>).feishuId;
+    if ((data as unknown as Record<string, string>).remark) payload.remark = (data as unknown as Record<string, string>).remark;
+    if (data.changedBy) payload.changedBy = data.changedBy;
+    if (data.reason) payload.reason = data.reason;
 
     const u = await request<BackendUser>("/api/v1/users", {
       method: "POST",
@@ -135,14 +137,16 @@ export const memberApi = {
   },
 
   // 更新成员
-  async update(id: string, data: UpdateMemberRequest): Promise<Member> {
-    const payload: UpdateUserPayload = {};
+  async update(id: string, data: UpdateMemberRequest & { changedBy?: string; reason?: string }): Promise<Member> {
+    const payload: UpdateUserPayload & Record<string, string> = {};
     if (data.name !== undefined) payload.name = data.name;
     if (data.role !== undefined) {
       payload.role = data.role === "sub_admin" ? "vice_admin" : data.role;
     }
     const remark = (data as unknown as Record<string, string>).remark;
     if (remark !== undefined) payload.remark = remark;
+    if (data.changedBy) payload.changedBy = data.changedBy;
+    if (data.reason) payload.reason = data.reason;
 
     const u = await request<BackendUser>(`/api/v1/users/${id}`, {
       method: "PUT",
@@ -158,6 +162,93 @@ export const memberApi = {
       method: "DELETE",
     });
   },
+
+  // 获取成员的角色变更历史
+  async getRoleHistory(userId: string, limit = 20) {
+    return request<{ list: RoleChangeRecord[]; total: number }>(
+      `/api/v1/users/${userId}/role-history`,
+      { params: { limit: String(limit) } }
+    );
+  },
+
+  // 获取最近所有角色变更记录
+  async getRecentRoleChanges(limit = 50) {
+    return request<{ list: RoleChangeRecord[]; total: number }>(
+      "/api/v1/users/role-changes",
+      { params: { limit: String(limit) } }
+    );
+  },
+
+  // 获取角色变更统计
+  async getRoleChangeStats(days = 7) {
+    return request<Record<string, number>>(
+      "/api/v1/users/role-stats",
+      { params: { days: String(days) } }
+    );
+  },
+
+  // 授予权限委托
+  async grantDelegation(delegatorId: string, delegateId: string, permissions: string[], expiresAt?: string) {
+    const body: Record<string, string | string[]> = { delegatorId, delegateId, permissions };
+    if (expiresAt) body.expiresAt = expiresAt;
+    return request<DelegationRecord>("/api/v1/users/delegations", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  // 撤销权限委托
+  async revokeDelegation(delegatorId: string, delegateId: string) {
+    return request<{ revoked: boolean }>("/api/v1/users/delegations", {
+      method: "DELETE",
+      body: JSON.stringify({ delegatorId, delegateId }),
+    });
+  },
+
+  // 获取用户收到的权限委托
+  async getDelegationsForUser(userId: string) {
+    return request<{ list: DelegationRecord[]; total: number }>(
+      `/api/v1/users/${userId}/delegations`
+    );
+  },
+
+  // 获取用户发出的权限委托
+  async getDelegationsByUser(userId: string) {
+    return request<{ list: DelegationRecord[]; total: number }>(
+      `/api/v1/users/${userId}/delegations-by`
+    );
+  },
+
+  // 获取用户的细粒度资源权限映射
+  async getPermissionMap(userId: string) {
+    return request<ResourcePermission[]>(`/api/v1/users/${userId}/permissions`);
+  },
 };
+
+// ============ 扩展类型 ============
+interface RoleChangeRecord {
+  id: string;
+  userId: string;
+  fromRole: string | null;
+  toRole: string;
+  changedBy: string;
+  reason?: string;
+  timestamp: string;
+}
+
+interface DelegationRecord {
+  id: string;
+  delegatorId: string;
+  delegateId: string;
+  permissions: string[];
+  expiresAt: string | null;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+interface ResourcePermission {
+  resource: string;
+  actions: string[];
+}
 
 export default memberApi;
