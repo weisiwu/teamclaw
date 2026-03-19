@@ -1509,3 +1509,141 @@ router.get('/:id/bump-preview', (req: Request, res: Response) => {
     previews,
   }));
 });
+
+// ========== Version Vector Store (ChromaDB) ==========
+
+import {
+  storeVersionVector,
+  searchSimilarVersions,
+  deleteVersionVector,
+  VersionVectorEntry
+} from '../services/versionVectorStore.js';
+import {
+  generateVersionChangelog,
+  saveChangelog,
+  loadChangelog,
+  getFileChanges,
+  ChangeTrackerResult
+} from '../services/changeTracker.js';
+
+// POST /api/v1/versions/:id/vector — Store version summary in ChromaDB vector store
+router.post('/:id/vector', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    if (!row) {
+      res.status(404).json(error(404, 'Version not found'));
+      return;
+    }
+
+    const entry: VersionVectorEntry = {
+      versionId: id,
+      versionTag: row.version as string,
+      summary: (row.summary as string) || '',
+      commits: JSON.parse((row.commits as string) || '[]'),
+      relatedTasks: JSON.parse((row.related_tasks as string) || '[]'),
+      createdAt: row.created_at as string,
+      tokenUsed: (row.token_used as number) || 0
+    };
+
+    await storeVersionVector(entry);
+    res.json(success({ stored: true, versionId: id }));
+  } catch (err) {
+    console.error('[vector] Store error:', err);
+    res.status(500).json(error(500, '向量存储失败'));
+  }
+});
+
+// GET /api/v1/versions/:id/vector/search — Search similar versions by natural language
+router.get('/vector/search', async (req: Request, res: Response) => {
+  try {
+    const { q, limit } = req.query as { q?: string; limit?: string };
+    if (!q) {
+      res.status(400).json(error(400, 'Missing query parameter: q'));
+      return;
+    }
+    const results = await searchSimilarVersions(q, parseInt(limit || '5', 10));
+    res.json(success({ results }));
+  } catch (err) {
+    console.error('[vector] Search error:', err);
+    res.status(500).json(error(500, '向量搜索失败'));
+  }
+});
+
+// DELETE /api/v1/versions/:id/vector — Delete version from vector store
+router.delete('/:id/vector', async (req: Request, res: Response) => {
+  try {
+    await deleteVersionVector(req.params.id);
+    res.json(success({ deleted: true }));
+  } catch (err) {
+    console.error('[vector] Delete error:', err);
+    res.status(500).json(error(500, '向量删除失败'));
+  }
+});
+
+// GET /api/v1/versions/:id/changelog — Generate and return version changelog
+router.get('/:id/changelog', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    if (!row) {
+      res.status(404).json(error(404, 'Version not found'));
+      return;
+    }
+
+    const versionTag = row.version as string;
+    const projectPath = (row.project_path as string) ||
+      path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', id);
+
+    const relatedTasks = JSON.parse((row.related_tasks as string) || '[]');
+    const result: ChangeTrackerResult = await generateVersionChangelog(projectPath, versionTag, relatedTasks);
+
+    // Auto-save to disk
+    saveChangelog(versionTag, result.markdown);
+
+    res.json(success(result));
+  } catch (err) {
+    console.error('[changelog] Generate error:', err);
+    res.status(500).json(error(500, '变更日志生成失败'));
+  }
+});
+
+// GET /api/v1/versions/:id/changelog/file — Get saved changelog markdown from disk
+router.get('/:id/changelog/file', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const row = db.prepare('SELECT version FROM versions WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  if (!row) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+  const versionTag = row.version as string;
+  const saved = loadChangelog(versionTag);
+  if (saved) {
+    res.json(success({ markdown: saved, source: 'file' }));
+  } else {
+    res.status(404).json(error(404, 'Changelog file not found'));
+  }
+});
+
+// GET /api/v1/versions/:id/file-changes — Get changed files for a version
+router.get('/:id/file-changes', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { from, to } = req.query as { from?: string; to?: string };
+    const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    if (!row) {
+      res.status(404).json(error(404, 'Version not found'));
+      return;
+    }
+    const projectPath = (row.project_path as string) ||
+      path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', id);
+    const versionTag = row.version as string;
+    const fromRef = (from as string) || `${versionTag}~5`;
+    const toRef = (to as string) || versionTag;
+    const changes = getFileChanges(projectPath, fromRef, toRef);
+    res.json(success({ changes, from: fromRef, to: toRef }));
+  } catch (err) {
+    console.error('[file-changes] Error:', err);
+    res.status(500).json(error(500, '文件变更获取失败'));
+  }
+});

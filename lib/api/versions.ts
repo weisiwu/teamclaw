@@ -2841,3 +2841,121 @@ export function useVersionTimeline(versionId: string | null) {
     staleTime: 30 * 1000,
   });
 }
+
+// ========== ChromaDB Vector Store API ==========
+
+export interface VersionChromaEntry {
+  versionId: string;
+  versionTag: string;
+  summary: string;
+  commits: string[];
+  relatedTasks: string[];
+  createdAt: string;
+  tokenUsed: number;
+}
+
+export interface SimilarVersionResult {
+  versionId: string;
+  versionTag: string;
+  summary: string;
+  createdAt: string;
+  similarity: number;
+}
+
+export async function indexVersionToChromaDb(versionId: string): Promise<{ stored: boolean }> {
+  const res = await fetch(`${API_BASE}/versions/${versionId}/vector`, { method: 'POST' });
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) return json.data;
+  throw new Error(json.message || '向量存储失败');
+}
+
+export function useIndexVersionToChromaDb() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: indexVersionToChromaDb,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['versions'] }),
+  });
+}
+
+export async function searchVersionsInChroma(
+  query: string,
+  limit: number = 5
+): Promise<SimilarVersionResult[]> {
+  const res = await fetch(`${API_BASE}/versions/vector/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) return json.data.results;
+  throw new Error(json.message || '向量搜索失败');
+}
+
+export function useSearchVersionsInChroma(query: string, limit?: number) {
+  return useQuery({
+    queryKey: ['versionChromaSearch', query, limit],
+    queryFn: () => searchVersionsInChroma(query, limit),
+    enabled: query.length > 2,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+// ========== Git Changelog API ==========
+
+export interface ChangelogFileChange {
+  path: string;
+  status: 'added' | 'modified' | 'deleted';
+  additions: number;
+  deletions: number;
+}
+
+export interface GitChangelogResult {
+  versionTag: string;
+  generatedAt: string;
+  markdown: string;
+  commitCount: number;
+  fileChanges: ChangelogFileChange[];
+  summary: {
+    features: string[];
+    fixes: string[];
+    improvements: string[];
+    technical: string[];
+  };
+  screenshots: string[];
+}
+
+export async function getGitChangelog(versionId: string): Promise<GitChangelogResult> {
+  const res = await fetch(`${API_BASE}/versions/${versionId}/changelog`);
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) return json.data;
+  throw new Error(json.message || '获取变更日志失败');
+}
+
+export function useGitChangelog(versionId: string | null) {
+  return useQuery({
+    queryKey: ['gitChangelog', versionId],
+    queryFn: () => getGitChangelog(versionId!),
+    enabled: Boolean(versionId),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export async function getGitFileChanges(
+  versionId: string,
+  from?: string,
+  to?: string
+): Promise<{ changes: ChangelogFileChange[]; from: string; to: string }> {
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  const url = `${API_BASE}/versions/${versionId}/file-changes${params.size > 0 ? `?${params}` : ''}`;
+  const res = await fetch(url);
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) return json.data;
+  throw new Error(json.message || '获取文件变更失败');
+}
+
+export function useGitFileChanges(versionId: string | null, from?: string, to?: string) {
+  return useQuery({
+    queryKey: ['gitFileChanges', versionId, from, to],
+    queryFn: () => getGitFileChanges(versionId!, from, to),
+    enabled: Boolean(versionId),
+    staleTime: 5 * 60 * 1000,
+  });
+}
