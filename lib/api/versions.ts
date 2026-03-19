@@ -2045,16 +2045,40 @@ export function setTagProtection(tagId: string, protect: boolean = true): TagLif
 export function deleteTagRecord(tagId: string): boolean {
   const tags = getStoredTags();
   const tag = tags.find(t => t.id === tagId);
-  
+
   if (!tag) return false;
   if (tag.protected) {
     console.warn(`[Tag] Cannot delete protected tag: ${tag.name}`);
     return false;
   }
-  
+
   const filtered = tags.filter(t => t.id !== tagId);
   saveTags(filtered);
   return true;
+}
+
+// 重命名 Tag
+export function renameTagRecord(tagId: string, newName: string): TagLifecycleRecord | null {
+  const tags = getStoredTags();
+  const tagIndex = tags.findIndex(t => t.id === tagId);
+  if (tagIndex === -1) return null;
+
+  const tag = tags[tagIndex];
+  if (tag.protected) {
+    console.warn(`[Tag] Cannot rename protected tag: ${tag.name}`);
+    return null;
+  }
+
+  // 检查新名称是否冲突
+  const existing = tags.find(t => t.name === newName && t.id !== tagId);
+  if (existing) {
+    console.warn(`[Tag] Tag name already exists: ${newName}`);
+    return null;
+  }
+
+  tags[tagIndex].name = newName;
+  saveTags(tags);
+  return tags[tagIndex];
 }
 
 // 获取所有 Tag 记录
@@ -2170,6 +2194,13 @@ export function useTagProtection() {
 export function useDeleteTag() {
   return useMutation({
     mutationFn: (tagId: string) => Promise.resolve(deleteTagRecord(tagId)),
+  });
+}
+
+export function useRenameTag() {
+  return useMutation({
+    mutationFn: ({ tagId, name }: { tagId: string; name: string }) =>
+      Promise.resolve(renameTagRecord(tagId, name)),
   });
 }
 

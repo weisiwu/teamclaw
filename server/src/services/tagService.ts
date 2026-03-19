@@ -2,6 +2,7 @@
 // 管理 Git tag 的持久化记录，支持归档、保护、删除等操作
 
 import { TagRecord, TagConfig } from '../models/tag.js';
+import { createTag as gitCreateTag, deleteTag as gitDeleteTag } from './gitService.js';
 
 // 内存存储（接入真实 DB 时替换为数据库查询）
 const tagStore = new Map<string, TagRecord>();
@@ -125,7 +126,7 @@ export function shouldAutoTag(status: string): boolean {
   return tagConfig.tagOnStatus.includes(status);
 }
 
-// 自动为版本创建 tag 记录
+// 自动为版本创建 tag 记录 + 实际 git tag
 export function autoCreateTagForVersion(
   versionId: string,
   versionName: string,
@@ -134,6 +135,7 @@ export function autoCreateTagForVersion(
     commitHash?: string;
     message?: string;
     createdBy?: string;
+    projectPath?: string; // 项目路径，用于创建实际 git tag
   }
 ): TagRecord | null {
   if (!shouldAutoTag('published')) return null;
@@ -144,7 +146,7 @@ export function autoCreateTagForVersion(
   const existing = getTagByName(tagName);
   if (existing) return existing;
 
-  return createTagRecord({
+  const record = createTagRecord({
     name: tagName,
     versionId,
     versionName,
@@ -153,4 +155,65 @@ export function autoCreateTagForVersion(
     createdBy: options?.createdBy,
     annotation: options?.message || `Version ${versionName} released`,
   });
+
+  // 如果提供了项目路径，同时创建实际的 git tag
+  if (options?.projectPath) {
+    try {
+      gitCreateTag(options.projectPath, tagName, options?.message || `Release ${versionName}`);
+    } catch (err) {
+      console.warn(`[tagService] Failed to create git tag ${tagName} at ${options.projectPath}:`, err);
+    }
+  }
+
+  return record;
+}
+
+// 重命名 tag（更新记录 + git tag）
+export function renameTag(
+  id: string,
+  newName: string,
+  options?: { projectPath?: string }
+): TagRecord | null {
+  const record = tagStore.get(id);
+  if (!record) return null;
+  if (record.protected) return null;
+
+  const oldName = record.name;
+
+  // 更新 git tag（如果提供了 projectPath）
+  if (options?.projectPath && oldName !== newName) {
+    try {
+      gitDeleteTag(options.projectPath, oldName);
+      gitCreateTag(options.projectPath, newName, record.annotation || record.message);
+    } catch (err) {
+      console.warn(`[tagService] Failed to rename git tag ${oldName} -> ${newName}:`, err);
+    }
+  }
+
+  // 更新记录
+  record.name = newName;
+  record.annotation = record.annotation || record.message;
+  tagStore.set(id, record);
+  return record;
+}
+
+// 删除 tag（删除记录 + git tag）
+export function removeTag(
+  id: string,
+  options?: { projectPath?: string }
+): boolean {
+  const record = tagStore.get(id);
+  if (!record) return false;
+  if (record.protected) return false;
+
+  // 删除 git tag（如果提供了 projectPath）
+  if (options?.projectPath) {
+    try {
+      gitDeleteTag(options.projectPath, record.name);
+    } catch (err) {
+      console.warn(`[tagService] Failed to delete git tag ${record.name}:`, err);
+    }
+  }
+
+  return tagStore.delete(id);
 }

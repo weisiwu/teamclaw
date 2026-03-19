@@ -270,9 +270,10 @@ router.put('/:id', (req: Request, res: Response) => {
     if (settings.autoTag && settings.tagOnStatus.includes('published')) {
       v.gitTag = makeTagName(newVersionStr, settings.tagPrefix, settings.customPrefix);
       v.gitTagCreatedAt = new Date().toISOString();
-      // 创建 Tag 记录（持久化）
+      // 创建 Tag 记录（持久化）+ 实际 git tag
       autoCreateTagForVersion(v.id, newVersionStr, {
         message: `Release ${newVersionStr} - ${v.title || ''}`,
+        projectPath: (v as { projectPath?: string }).projectPath,
       });
     }
 
@@ -325,9 +326,10 @@ router.post('/:id/bump', async (req: Request, res: Response) => {
   if (settings.autoTag && settings.tagOnStatus.includes('published')) {
     v.gitTag = makeTagName(newVersion, settings.tagPrefix, settings.customPrefix);
     v.gitTagCreatedAt = new Date().toISOString();
-    // 创建 Tag 记录（持久化）
+    // 创建 Tag 记录（持久化）+ 实际 git tag
     autoCreateTagForVersion(v.id, newVersion, {
       message: `Release ${newVersion} - ${v.title || ''}`,
+      projectPath: (v as { projectPath?: string }).projectPath,
     });
   }
 
@@ -665,11 +667,12 @@ router.post('/:id/git-tags', (req: Request, res: Response) => {
     v.gitTagCreatedAt = new Date().toISOString();
     v.updatedAt = new Date().toISOString();
     versions.set(v.id, v);
-    // 同时在 Tag 生命周期系统中创建记录
+    // 同时在 Tag 生命周期系统中创建记录（+ 实际 git tag 已在上面创建）
     autoCreateTagForVersion(v.id, v.version, {
       name,
       message,
       createdBy: 'user',
+      projectPath,
     });
   }
 

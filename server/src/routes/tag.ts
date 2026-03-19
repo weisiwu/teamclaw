@@ -19,6 +19,8 @@ import {
   makeTagName,
   shouldAutoTag,
   autoCreateTagForVersion,
+  renameTag,
+  removeTag,
 } from '../services/tagService.js';
 
 const router = Router();
@@ -113,7 +115,7 @@ router.post('/', (req: Request, res: Response) => {
   res.status(201).json(success(record));
 });
 
-// DELETE /api/v1/tags/:id — 删除标签记录
+// DELETE /api/v1/tags/:id — 删除标签记录（同时删除 git tag）
 router.delete('/:id', (req: Request, res: Response) => {
   const record = getTagRecord(req.params.id);
   if (!record) {
@@ -126,8 +128,33 @@ router.delete('/:id', (req: Request, res: Response) => {
     return;
   }
 
-  const deleted = deleteTagRecord(req.params.id);
+  const { projectPath } = req.body as { projectPath?: string };
+  const deleted = removeTag(req.params.id, { projectPath });
   res.json(success({ deleted }));
+});
+
+// PUT /api/v1/tags/:id/rename — 重命名标签（同时更新 git tag）
+router.put('/:id/rename', (req: Request, res: Response) => {
+  const { name, projectPath } = req.body as { name: string; projectPath?: string };
+
+  if (!name) {
+    res.status(400).json(error(400, 'name is required'));
+    return;
+  }
+
+  const existing = getTagByName(name);
+  if (existing && existing.id !== req.params.id) {
+    res.status(409).json(error(409, `Tag ${name} already exists`));
+    return;
+  }
+
+  const updated = renameTag(req.params.id, name, { projectPath });
+  if (!updated) {
+    res.status(404).json(error(404, 'Tag not found or protected'));
+    return;
+  }
+
+  res.json(success(updated));
 });
 
 // ========== 生命周期操作 ==========
