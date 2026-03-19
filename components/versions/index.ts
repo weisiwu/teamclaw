@@ -32,6 +32,7 @@ export { BatchDownloadDialog } from "./BatchDownloadDialog";
 export { DownloadStatsPanel } from "./DownloadStatsPanel";
 export { DownloadUrlVerifier } from "./DownloadUrlVerifier";
 export { BuildHistoryPanel } from "./BuildHistoryPanel";
+export { ArtifactsPanel } from "./ArtifactsPanel";
 export type { MessageItem } from "./MessageSelector";
 
 /**
