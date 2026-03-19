@@ -1,67 +1,52 @@
-// File storage service for screenshots
-import { promises as fs } from 'fs';
+/**
+ * File Storage Service — Save uploaded images to public/screenshots/
+ */
+
 import path from 'path';
-import { randomUUID } from 'crypto';
+import fs from 'fs';
+import { promisify } from 'util';
+import crypto from 'crypto';
 
-const STORAGE_DIR = process.env.SCREENSHOT_DIR || './public/screenshots';
+const writeFileAsync = promisify(fs.writeFile);
+const unlinkAsync = promisify(fs.unlink);
+const mkdirAsync = promisify(fs.mkdir);
 
-export interface SaveResult {
-  url: string;
-  thumbnailUrl: string;
-  fileName: string;
-}
+const SCREENSHOTS_DIR = path.join(process.cwd(), 'public', 'screenshots');
 
-export async function ensureDir(dirPath: string): Promise<void> {
+async function ensureDir(dir: string) {
   try {
-    await fs.mkdir(dirPath, { recursive: true });
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+    await mkdirAsync(dir, { recursive: true });
+  } catch {
+    // Already exists
   }
 }
 
 export async function saveScreenshot(
   versionId: string,
-  imageData: string, // Base64 data:image/xxx;base64,xxxx or URL
-  originalName?: string
-): Promise<SaveResult> {
-  const versionDir = path.join(STORAGE_DIR, versionId);
-  await ensureDir(versionDir);
+  imageData: string
+): Promise<{ url: string; filename: string }> {
+  await ensureDir(SCREENSHOTS_DIR);
 
-  const id = randomUUID().slice(0, 8);
-  const ext = getExtensionFromData(imageData) || '.png';
-  const fileName = `ss-${id}${ext}`;
-  const filePath = path.join(versionDir, fileName);
+  // imageData can be data:image/png;base64,... or raw base64
+  const matches = imageData.match(/^data:([^;]+);base64,(.+)$/);
+  let buffer: Buffer;
+  let ext = 'png';
 
-  // Handle Base64 image data
-  if (imageData.startsWith('data:image')) {
-    const base64Match = imageData.match(/^data:image\/\w+;base64,(.+)$/);
-    if (base64Match) {
-      const buffer = Buffer.from(base64Match[1], 'base64');
-      await fs.writeFile(filePath, buffer);
-    }
-  } else if (imageData.startsWith('http')) {
-    // It's a URL - just store the URL as-is for now
-    // In production, you would fetch and save the image
-    const urlFileName = `ss-${id}.txt`;
-    const urlFilePath = path.join(versionDir, urlFileName);
-    await fs.writeFile(urlFilePath, imageData);
-    return {
-      url: imageData,
-      thumbnailUrl: imageData,
-      fileName,
-    };
+  if (matches) {
+    ext = matches[1].split('/')[1] || 'png';
+    buffer = Buffer.from(matches[2], 'base64');
   } else {
-    // Raw base64 without prefix
-    const buffer = Buffer.from(imageData, 'base64');
-    await fs.writeFile(filePath, buffer);
+    buffer = Buffer.from(imageData, 'base64');
   }
 
-  // For thumbnail, we just use the same image for now
-  // In production, use sharp to resize
+  const filename = `${versionId}_${crypto.randomUUID().slice(0, 8)}.${ext}`;
+  const filePath = path.join(SCREENSHOTS_DIR, filename);
+
+  await writeFileAsync(filePath, buffer);
+
   return {
-    url: `/screenshots/${versionId}/${fileName}`,
-    thumbnailUrl: `/screenshots/${versionId}/${fileName}`,
-    fileName,
+    url: `/screenshots/${filename}`,
+    filename,
   };
 }
 
@@ -69,33 +54,23 @@ export async function deleteScreenshotFile(
   versionId: string,
   screenshotUrl: string
 ): Promise<void> {
-  // Extract filename from URL
-  const fileName = screenshotUrl.split('/').pop() || '';
-  if (!fileName) return;
-
-  const filePath = path.join(STORAGE_DIR, versionId, fileName);
   try {
-    await fs.unlink(filePath);
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+    // screenshotUrl is like /screenshots/filename.ext
+    const filename = path.basename(screenshotUrl);
+    const filePath = path.join(SCREENSHOTS_DIR, filename);
+
+    if (fs.existsSync(filePath)) {
+      await unlinkAsync(filePath);
+    }
+  } catch {
+    // Ignore errors on delete
   }
 }
 
 export async function listScreenshotFiles(versionId: string): Promise<string[]> {
-  const versionDir = path.join(STORAGE_DIR, versionId);
-  try {
-    const files = await fs.readdir(versionDir);
-    return files.filter(f => !f.startsWith('.')).map(f => `/screenshots/${versionId}/${f}`);
-  } catch {
-    return [];
-  }
-}
-
-function getExtensionFromData(data: string): string | null {
-  const match = data.match(/^data:image\/(\w+);base64,/);
-  if (match) {
-    const ext = match[1];
-    return ext === 'jpeg' ? '.jpg' : `.${ext}`;
-  }
-  return null;
+  await ensureDir(SCREENSHOTS_DIR);
+  const files = await fs.promises.readdir(SCREENSHOTS_DIR);
+  return files
+    .filter(f => f.startsWith(versionId))
+    .map(f => `/screenshots/${f}`);
 }

@@ -1705,6 +1705,8 @@ export async function generateVersionSummaryLLM(version: Version): Promise<Versi
   // 使用结构化提取生成摘要（不调用 LLM，避免 key 暴露）
   return {
     versionId: version.id,
+    title: version.title || version.version,
+    content: buildVersionText(version),
     features: extractFeatures(version),
     changes: [],
     fixes: [],

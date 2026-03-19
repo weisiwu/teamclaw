@@ -1,95 +1,162 @@
-// Version changelog/summary data model for version tracking
+/**
+ * VersionSummary Model — In-memory + JSON file persistence
+ */
+
+export interface VersionChange {
+  type: 'feature' | 'fix' | 'improvement' | 'breaking' | 'docs' | 'refactor' | 'other';
+  description: string;
+  files?: string[];
+}
+
 export interface VersionSummary {
   id: string;
   versionId: string;
+  title: string;
   content: string;
   features: string[];
-  changes: string[];
   fixes: string[];
+  changes: string[];
   breaking: string[];
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
+  changes_detail: VersionChange[];
+  generatedAt: string;
+  generatedBy: string; // 'AI' | 'manual' | 'system'
+  branchName?: string;
 }
 
-// In-memory storage
 const summaries = new Map<string, VersionSummary>();
+const indexByVersion = new Map<string, string>(); // versionId -> summaryId
 
-// Sample data
-const sampleSummaries: VersionSummary[] = [
-  {
-    id: 'sum-001',
-    versionId: 'v1',
-    content: '初始版本发布，包含基础功能框架。',
-    features: ['用户认证', '基础首页'],
-    changes: [],
-    fixes: [],
-    breaking: [],
-    createdBy: '系统',
-    createdAt: '2026-03-01T10:00:00Z',
-    updatedAt: '2026-03-01T10:00:00Z',
-  },
-  {
-    id: 'sum-002',
-    versionId: 'v2',
-    content: '新增完整的用户管理功能，支持 CRUD 操作。',
-    features: ['用户管理', '角色权限', '用户列表', '搜索筛选'],
-    changes: ['优化认证流程', '更新依赖版本'],
-    fixes: ['修复登录超时问题', '修复列表分页bug'],
-    breaking: [],
-    createdBy: '系统',
-    createdAt: '2026-03-10T14:00:00Z',
-    updatedAt: '2026-03-10T14:00:00Z',
-  },
-];
+function persist() {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const dataDir = path.join(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dataDir, 'summaries.json'),
+      JSON.stringify(Array.from(summaries.values()))
+    );
+  } catch {
+    // Ignore
+  }
+}
 
-sampleSummaries.forEach(s => summaries.set(s.versionId, s));
+function load() {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const file = path.join(process.cwd(), 'data', 'summaries.json');
+    if (fs.existsSync(file)) {
+      const data: VersionSummary[] = JSON.parse(fs.readFileSync(file, 'utf-8'));
+      data.forEach(s => {
+        summaries.set(s.id, s);
+        indexByVersion.set(s.versionId, s.id);
+      });
+    }
+  } catch {
+    // Start fresh
+  }
+}
+
+load();
 
 export const VersionSummaryModel = {
-  findAll(): VersionSummary[] {
-    return Array.from(summaries.values()).sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    );
-  },
-
-  findByVersionId(versionId: string): VersionSummary | undefined {
-    return summaries.get(versionId);
-  },
-
-  create(data: Omit<VersionSummary, 'id' | 'createdAt' | 'updatedAt'>): VersionSummary {
-    const now = new Date().toISOString();
+  create(data: Omit<VersionSummary, 'id' | 'generatedAt'>): VersionSummary {
+    const id = `sum_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const summary: VersionSummary = {
       ...data,
-      id: `sum-${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      createdAt: now,
-      updatedAt: now,
+      id,
+      generatedAt: new Date().toISOString(),
     };
-    summaries.set(data.versionId, summary);
+    summaries.set(id, summary);
+    indexByVersion.set(data.versionId, id);
+    persist();
     return summary;
   },
 
-  update(versionId: string, data: Partial<Omit<VersionSummary, 'id' | 'versionId' | 'createdAt'>>): VersionSummary | undefined {
-    const existing = summaries.get(versionId);
+  findById(id: string): VersionSummary | undefined {
+    return summaries.get(id);
+  },
+
+  findByVersionId(versionId: string): VersionSummary | undefined {
+    const id = indexByVersion.get(versionId);
+    return id ? summaries.get(id) : undefined;
+  },
+
+  update(versionId: string, data: {
+    content?: string;
+    features?: string[];
+    fixes?: string[];
+    changes?: string[];
+    breaking?: string[];
+  }): VersionSummary | undefined {
+    const existing = this.findByVersionId(versionId);
     if (!existing) return undefined;
 
     const updated: VersionSummary = {
       ...existing,
       ...data,
-      updatedAt: new Date().toISOString(),
+      // Rebuild changes_detail from categorized items
+      changes_detail: [
+        ...(data.features || existing.features).map(d => ({ type: 'feature' as const, description: d })),
+        ...(data.fixes || existing.fixes).map(d => ({ type: 'fix' as const, description: d })),
+        ...(data.changes || existing.changes).map(d => ({ type: 'improvement' as const, description: d })),
+        ...(data.breaking || existing.breaking).map(d => ({ type: 'breaking' as const, description: d })),
+      ],
+      generatedAt: new Date().toISOString(),
+      generatedBy: 'manual',
     };
-    summaries.set(versionId, updated);
+
+    summaries.set(existing.id, updated);
+    indexByVersion.set(versionId, existing.id);
+    persist();
     return updated;
   },
 
-  upsert(data: Omit<VersionSummary, 'id' | 'createdAt' | 'updatedAt'>): VersionSummary {
-    const existing = summaries.get(data.versionId);
+  upsert(data: {
+    versionId: string;
+    content: string;
+    features?: string[];
+    fixes?: string[];
+    changes?: string[];
+    breaking?: string[];
+    createdBy?: string;
+    title?: string;
+  }): VersionSummary {
+    const existing = this.findByVersionId(data.versionId);
     if (existing) {
-      return this.update(data.versionId, data)!;
+      return this.update(data.versionId, {
+        content: data.content,
+        features: data.features,
+        fixes: data.fixes,
+        changes: data.changes,
+        breaking: data.breaking,
+      })!;
     }
-    return this.create(data);
+    return this.create({
+      versionId: data.versionId,
+      title: data.title || '',
+      content: data.content,
+      features: data.features || [],
+      fixes: data.fixes || [],
+      changes: data.changes || [],
+      breaking: data.breaking || [],
+      changes_detail: [
+        ...(data.features || []).map(d => ({ type: 'feature' as const, description: d })),
+        ...(data.fixes || []).map(d => ({ type: 'fix' as const, description: d })),
+        ...(data.changes || []).map(d => ({ type: 'improvement' as const, description: d })),
+        ...(data.breaking || []).map(d => ({ type: 'breaking' as const, description: d })),
+      ],
+      generatedBy: data.createdBy || 'AI',
+    });
   },
 
   delete(versionId: string): boolean {
-    return summaries.delete(versionId);
+    const id = indexByVersion.get(versionId);
+    if (!id) return false;
+    summaries.delete(id);
+    indexByVersion.delete(versionId);
+    persist();
+    return true;
   },
 };

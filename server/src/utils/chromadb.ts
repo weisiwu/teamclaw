@@ -1,16 +1,16 @@
-import { Client } from 'chromadb';
+import { ChromaClient } from 'chromadb';
 
-let client: Client | null = null;
+let client: ChromaClient | null = null;
 
-export function createChromaClient(): Client {
+export function createChromaClient(): ChromaClient {
   if (!client) {
     const url = process.env.CHROMA_URL || 'http://localhost:8000';
-    client = new Client({ host: url });
+    client = new ChromaClient({ host: url });
   }
   return client;
 }
 
 export async function getOrCreateCollection(name: string) {
-  const client = createChromaClient();
-  return await client.getOrCreateCollection({ name });
+  const c = createChromaClient();
+  return await c.getOrCreateCollection({ name });
 }

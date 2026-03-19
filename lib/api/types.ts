@@ -407,13 +407,19 @@ export interface Version {
 
 // 版本摘要结构
 export interface VersionSummary {
+  id?: string;
   versionId: string;
+  title: string;
+  content: string;           // overview text (backend field)
+  text?: string;             // legacy alias for content
   features: string[];       // 本版本新增功能
-  changes: string[];        // 变更内容
+  changes: string[];        // 变更内容 (improvements)
   fixes: string[];          // Bug 修复
-  breaking: string[];        // 破坏性变更
-  text: string;             // 原始摘要文本
+  breaking: string[];       // 破坏性变更
+  changes_detail?: ChangelogChange[]; // detailed change list
   generatedAt: string;
+  generatedBy?: string;     // 'AI' | 'manual' | 'system'
+  branchName?: string;
 }
 
 export interface CreateVersionRequest {

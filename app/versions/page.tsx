@@ -2845,9 +2845,9 @@ function VersionSummaryPanel({ summary, generating, onRegenerate }: VersionSumma
       </div>
 
       {/* 摘要文本 */}
-      {summary.text && (
+      {(summary.content || summary.text) && (
         <div className="bg-blue-50 rounded-lg p-4">
-          <p className="text-sm text-blue-900 font-medium">{summary.text}</p>
+          <p className="text-sm text-blue-900 font-medium">{summary.content || summary.text}</p>
           <p className="text-xs text-blue-600 mt-2">
             生成时间: {new Date(summary.generatedAt).toLocaleString("zh-CN")}
           </p>

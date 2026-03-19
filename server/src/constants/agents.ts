@@ -128,3 +128,9 @@ export function getTeamOverview(): { level: AgentLevel; agents: AgentConfig[] }[
     agents: getAgentsByLevel(level as AgentLevel),
   }));
 }
+
+export function getAvailableAgents(level?: AgentLevel): AgentConfig[] {
+  const agents = level != null ? getAgentsByLevel(level) : AGENT_TEAM;
+  // For now all agents are available (extend with status tracking later)
+  return agents;
+}

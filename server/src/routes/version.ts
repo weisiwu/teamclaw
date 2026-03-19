@@ -3,6 +3,7 @@ import { success, error } from '../utils/response.js';
 import { ScreenshotModel } from '../models/screenshot.js';
 import { VersionSummaryModel } from '../models/versionSummary.js';
 import { saveScreenshot, deleteScreenshotFile } from '../services/fileStorage.js';
+import { generateChangelogFromCommits } from '../services/changelogGenerator.js';
 
 const router = Router();
 
@@ -510,40 +511,35 @@ router.delete('/:id/summary', (req: Request, res: Response) => {
   res.json(success({ deleted }));
 });
 
-// POST /api/v1/versions/:id/summary/generate - Generate changelog from commits (mock AI)
-router.post('/:id/summary/generate', (req: Request, res: Response) => {
-  const { id } = req.params;
+// POST /api/v1/versions/:id/summary/generate - Generate changelog from commits via AI
+router.post('/:id/summary/generate', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { commitLog, branchName } = req.body as { commitLog?: string; branchName?: string };
 
-  // Mock AI-generated changelog based on version
-  const mockChanges = [
-    '优化代码结构和类型定义',
-    '新增功能模块和 API 端点',
-    '修复已知的边界条件问题',
-    '提升构建和部署流程',
-  ];
+    // Generate via AI (or fallback rule-based)
+    const generated = await generateChangelogFromCommits(
+      id,
+      commitLog || 'feat: initial implementation\nfix: bug fixes',
+      branchName
+    );
 
-  const mockFeatures = [
-    '支持版本关联截图上传',
-    '变更摘要自动生成',
-    '多环境构建支持',
-  ];
+    const summary = VersionSummaryModel.upsert({
+      versionId: id,
+      title: generated.title,
+      content: generated.content,
+      features: generated.features,
+      fixes: generated.fixes,
+      changes: generated.improvements,
+      breaking: generated.breaking,
+      createdBy: 'AI',
+    });
 
-  const mockFixes = [
-    '修复版本列表分页问题',
-    '修复构建状态显示延迟',
-  ];
-
-  const summary = VersionSummaryModel.upsert({
-    versionId: id,
-    content: `版本 ${id} 包含多项功能增强和问题修复。主要更新：${mockFeatures.join('、')}。`,
-    features: mockFeatures,
-    changes: mockChanges,
-    fixes: mockFixes,
-    breaking: [],
-    createdBy: 'AI',
-  });
-
-  res.json(success(summary));
+    res.json(success(summary));
+  } catch (err) {
+    console.error('Changelog generation error:', err);
+    res.status(500).json(error(500, '变更摘要生成失败'));
+  }
 });
 
 export default router;
