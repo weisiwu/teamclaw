@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT } from "@/lib/api/types";
 import { useBuildArtifacts, useVersionScreenshots, useVersionChangelog, useRefreshVersionSummary } from "@/lib/api/versions";
+import { useLatestBuild, useRebuildBuild } from "@/lib/api/builds";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScreenshotGallery, ChangelogPanel, VersionTimeline } from "@/components/versions";
@@ -24,6 +25,7 @@ import {
   Play,
   Image,
   History,
+  RefreshCw,
 } from "lucide-react";
 import { BuildTriggerDialog } from "./BuildTriggerDialog";
 
@@ -54,8 +56,28 @@ export function VersionDetails(props: VersionDetailsProps) {
   const { data: changelogData } = useVersionChangelog(version?.id || "");
   const refreshSummaryMutation = useRefreshVersionSummary();
 
+  // 构建相关 hooks
+  const { data: latestBuild } = useLatestBuild(version?.id || "");
+  const rebuildBuild = useRebuildBuild();
+  const [rebuilding, setRebuilding] = useState(false);
+
   const screenshots = screenshotsData?.data || [];
   const changelog = changelogData?.data || null;
+
+  const handleRebuild = async () => {
+    if (!latestBuild?.id || !version) return;
+    setRebuilding(true);
+    try {
+      await rebuildBuild.mutateAsync({
+        buildId: latestBuild.id,
+        triggeredBy: 'user',
+      });
+    } catch (err) {
+      console.error('Rebuild failed:', err);
+    } finally {
+      setRebuilding(false);
+    }
+  };
 
   const handleRefreshSummary = () => {
     if (!version?.id) return;
@@ -109,6 +131,17 @@ export function VersionDetails(props: VersionDetailsProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {latestBuild && latestBuild.status === 'success' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRebuild}
+                disabled={rebuilding || rebuildBuild.isPending}
+              >
+                <RefreshCw className={`w-4 h-4 mr-1 ${rebuilding || rebuildBuild.isPending ? 'animate-spin' : ''}`} />
+                重新打包
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -203,6 +236,24 @@ export function VersionDetails(props: VersionDetailsProps) {
                     <GitBranch className="w-4 h-4 text-gray-400" />
                     {version.commitCount} 次提交
                   </p>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-500">最近构建</label>
+                  {latestBuild ? (
+                    <div className="flex items-center gap-2">
+                      {latestBuild.status === 'success' && <CheckCircle className="w-4 h-4 text-green-500" />}
+                      {latestBuild.status === 'failed' && <XCircle className="w-4 h-4 text-red-500" />}
+                      {(latestBuild.status === 'building' || latestBuild.status === 'pending') && <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />}
+                      <span className={latestBuild.status === 'success' ? 'text-green-600' : latestBuild.status === 'failed' ? 'text-red-600' : 'text-blue-600'}>
+                        {latestBuild.status === 'success' ? '成功' : latestBuild.status === 'failed' ? '失败' : latestBuild.status === 'building' ? '构建中...' : '排队中'}
+                      </span>
+                      {latestBuild.duration && (
+                        <span className="text-xs text-gray-400">({Math.round(latestBuild.duration / 1000)}s)</span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-gray-400">暂无构建记录</span>
+                  )}
                 </div>
               </div>
               <div>
