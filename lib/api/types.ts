@@ -534,6 +534,8 @@ export interface BumpVersionResponse {
   version?: Version;
   previousVersion?: string;
   newVersion?: string;
+  bumpType?: VersionBumpType;
+  gitTag?: string;
   error?: string;
 }
 

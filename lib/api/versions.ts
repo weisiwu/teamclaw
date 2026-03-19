@@ -11,7 +11,33 @@ let versionSettings: VersionSettings = {
   tagOnStatus: ['published'],
 };
 
+const API_BASE = '/api/v1';
+
 // 获取版本设置
+export async function getVersionSettingsAPI(): Promise<VersionSettings> {
+  const res = await fetch(`${API_BASE}/versions/settings`);
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) {
+    return json.data;
+  }
+  throw new Error(json.message || 'Failed to fetch version settings');
+}
+
+// 更新版本设置（包含自动升级和自动 Tag）
+export async function updateVersionSettingsAPI(settings: Partial<VersionSettings>): Promise<VersionSettings> {
+  const res = await fetch(`${API_BASE}/versions/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  });
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) {
+    return json.data;
+  }
+  throw new Error(json.message || 'Failed to update version settings');
+}
+
+// 获取版本设置（同步版本，用于初始化）
 export function getVersionSettings(): VersionSettings {
   return { ...versionSettings };
 }
@@ -28,6 +54,19 @@ export function updateVersionSettings(settings: Partial<VersionSettings>): Versi
   
   console.log('[Version Settings] Updated:', versionSettings);
   return { ...versionSettings };
+}
+
+// 带 API 同步的更新版本设置
+export async function syncUpdateVersionSettings(settings: Partial<VersionSettings>): Promise<VersionSettings> {
+  try {
+    const updated = await updateVersionSettingsAPI(settings);
+    versionSettings = updated;
+    return updated;
+  } catch (err) {
+    // Fallback to local update if server is unavailable
+    console.warn('[Version Settings] Server unavailable, using local settings:', err);
+    return updateVersionSettings(settings);
+  }
 }
 
 // Mock 分支数据
@@ -405,6 +444,19 @@ export async function getVersions(
   pageSize: number = 10,
   status: string = "all"
 ): Promise<VersionListResponse> {
+  // Try server API first
+  try {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+    if (status !== 'all') params.set('status', status);
+    const res = await fetch(`${API_BASE}/versions?${params}`);
+    const json = await res.json();
+    if (json.code === 200 || json.code === 0) {
+      return json.data;
+    }
+  } catch {
+    // Fall through to mock
+  }
+
   await delay(300);
 
   let filtered = [...mockVersions];
@@ -428,12 +480,35 @@ export async function getVersions(
 
 // 获取单个版本
 export async function getVersion(id: string): Promise<Version | null> {
+  try {
+    const res = await fetch(`${API_BASE}/versions/${id}`);
+    const json = await res.json();
+    if ((json.code === 200 || json.code === 0) && json.data) {
+      return json.data;
+    }
+  } catch {
+    // Fall through to mock
+  }
   await delay(200);
   return mockVersions.find((v) => v.id === id) || null;
 }
 
 // 创建版本
 export async function createVersion(request: CreateVersionRequest): Promise<Version> {
+  try {
+    const res = await fetch(`${API_BASE}/versions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    const json = await res.json();
+    if (json.code === 201 || json.code === 200 || json.code === 0) {
+      return json.data;
+    }
+  } catch {
+    // Fall through to mock
+  }
+
   await delay(300);
 
   const newVersion: Version = {
@@ -471,6 +546,21 @@ export async function updateVersion(
   id: string,
   request: UpdateVersionRequest
 ): Promise<Version | null> {
+  // Try server API first
+  try {
+    const res = await fetch(`${API_BASE}/versions/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    const json = await res.json();
+    if (json.code === 200 || json.code === 0) {
+      return json.data.version;
+    }
+  } catch {
+    // Fall through to mock
+  }
+
   await delay(300);
 
   const index = mockVersions.findIndex((v) => v.id === id);
@@ -546,6 +636,17 @@ export async function updateVersion(
 
 // 删除版本
 export async function deleteVersion(id: string): Promise<boolean> {
+  // Try server API first
+  try {
+    const res = await fetch(`${API_BASE}/versions/${id}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (json.code === 200 || json.code === 0 || json.code === 204) {
+      return true;
+    }
+  } catch {
+    // Fall through to mock
+  }
+
   await delay(200);
 
   const index = mockVersions.findIndex((v) => v.id === id);
@@ -834,6 +935,27 @@ export async function toggleBranchProtection(request: BranchProtectionRequest): 
 
 // 手动触发版本号递增
 export async function bumpVersion(versionId: string, bumpType: VersionBumpType): Promise<BumpVersionResponse> {
+  // Try server-side bump first
+  try {
+    const res = await fetch(`${API_BASE}/versions/${versionId}/bump`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bumpType }),
+    });
+    const json = await res.json();
+    if (json.code === 200 || json.code === 0) {
+      return {
+        success: true,
+        previousVersion: json.data.previousVersion,
+        newVersion: json.data.newVersion,
+        bumpType: json.data.bumpType,
+        gitTag: json.data.gitTag,
+      };
+    }
+  } catch {
+    // Fall through to mock
+  }
+  
   await delay(300);
   
   const index = mockVersions.findIndex(v => v.id === versionId);
@@ -1174,7 +1296,14 @@ export function useReleaseLogs(versionId?: string) {
 export function useVersionSettings() {
   return useQuery({
     queryKey: ["versionSettings"],
-    queryFn: () => getVersionSettings(),
+    queryFn: async () => {
+      try {
+        return await getVersionSettingsAPI();
+      } catch {
+        return getVersionSettings();
+      }
+    },
+    staleTime: 1000 * 60,
   });
 }
 
@@ -1183,7 +1312,7 @@ export function useUpdateVersionSettings() {
 
   return useMutation({
     mutationFn: async (newSettings: Partial<VersionSettings>) => {
-      return updateVersionSettings(newSettings);
+      return syncUpdateVersionSettings(newSettings);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["versionSettings"] });
