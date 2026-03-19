@@ -6,10 +6,12 @@ import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT, VERSION_STATU
 import { getVersion } from "@/lib/api/versions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Tag, Calendar, Clock, GitBranch, FileText, Star, RefreshCw, History, Download } from "lucide-react";
+import { Loader2, ArrowLeft, Tag, Calendar, Clock, GitBranch, FileText, Star, RefreshCw, History, Download, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { BumpHistoryPanel } from "@/components/versions/BumpHistoryPanel";
 import { ArtifactsPanel } from "@/components/versions/ArtifactsPanel";
+import { RollbackDialog } from "@/components/versions/RollbackDialog";
+import { RollbackHistoryPanel } from "@/components/versions/RollbackHistoryPanel";
 
 const API_BASE = "/api/v1";
 
@@ -22,7 +24,8 @@ export default function VersionDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRegeneratingTag, setIsRegeneratingTag] = useState(false);
   const [tagMessage, setTagMessage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"details" | "bumpHistory" | "artifacts">("details");
+  const [activeTab, setActiveTab] = useState<"details" | "bumpHistory" | "artifacts" | "rollback">("details");
+  const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -141,6 +144,17 @@ export default function VersionDetailPage() {
             <Download className="w-4 h-4" />
             产物下载
           </button>
+          <button
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+              activeTab === "rollback"
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-500 hover:bg-gray-100"
+            }`}
+            onClick={() => setActiveTab("rollback")}
+          >
+            <RotateCcw className="w-4 h-4" />
+            版本回退
+          </button>
         </div>
       </div>
 
@@ -155,6 +169,35 @@ export default function VersionDetailPage() {
       ) : activeTab === "bumpHistory" ? (
         <div>
           <BumpHistoryPanel versionId={id} />
+        </div>
+      ) : activeTab === "rollback" ? (
+        <div className="space-y-4">
+          {/* Rollback action bar */}
+          <div className="bg-white rounded-xl border p-4 flex items-center justify-between">
+            <div>
+              <h3 className="font-medium text-gray-900 flex items-center gap-2">
+                <RotateCcw className="w-4 h-4" />
+                版本回退
+              </h3>
+              <p className="text-sm text-gray-500 mt-0.5">
+                将项目回退到任意历史版本，支持标签、分支或提交记录
+              </p>
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setRollbackDialogOpen(true)}
+            >
+              <RotateCcw className="w-4 h-4" />
+              执行回退
+            </Button>
+          </div>
+
+          {/* Rollback history */}
+          <div className="bg-white rounded-xl border p-5">
+            <RollbackHistoryPanel versionId={id} />
+          </div>
         </div>
       ) : (
         <div className="space-y-6">
@@ -276,6 +319,16 @@ export default function VersionDetailPage() {
         )}
         </div>
       )}
+
+      <RollbackDialog
+        version={version}
+        open={rollbackDialogOpen}
+        onOpenChange={setRollbackDialogOpen}
+        onRollbackComplete={() => {
+          // Refresh version data after rollback
+          getVersion(id).then(setVersion).catch(console.error);
+        }}
+      />
     </div>
   );
 }

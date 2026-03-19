@@ -87,6 +87,25 @@ export function runMigrations() {
       branch_name TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_version_summaries_version ON version_summaries(version_id);
+
+    CREATE TABLE IF NOT EXISTS rollback_history (
+      id TEXT PRIMARY KEY,
+      version_id TEXT NOT NULL,
+      version_name TEXT NOT NULL,
+      target_ref TEXT NOT NULL,
+      target_type TEXT NOT NULL CHECK (target_type IN ('tag', 'branch', 'commit')),
+      mode TEXT NOT NULL CHECK (mode IN ('revert', 'checkout')),
+      previous_ref TEXT,
+      new_branch TEXT,
+      backup_created INTEGER DEFAULT 0,
+      message TEXT,
+      success INTEGER NOT NULL,
+      error TEXT,
+      performed_by TEXT DEFAULT 'developer',
+      performed_at TEXT DEFAULT (datetime('now')),
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_rollback_history_version ON rollback_history(version_id, created_at DESC);
   `);
 
   // Add git_tag columns if they don't exist (iter-79)

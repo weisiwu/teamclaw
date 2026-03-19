@@ -2450,7 +2450,7 @@ export async function getDownloadStats(): Promise<DownloadStats> {
 }
 
 // Re-export types for convenience
-export type { BatchDownloadRequest, BatchDownloadResponse, DownloadUrlVerification, DownloadStats } from './types';
+export type { BatchDownloadRequest, BatchDownloadResponse, DownloadUrlVerification, DownloadStats, RollbackHistoryRecord } from './types';
 
 // Build Artifacts API
 const ARTIFACTS_API = "/api/v1/build/artifacts";

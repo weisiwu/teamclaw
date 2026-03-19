@@ -1039,14 +1039,19 @@ export interface VersionRollbackResponse {
 export interface RollbackHistoryRecord {
   id: string;
   versionId: string;
-  fromVersion: string;
-  toVersion: string;
+  versionName: string;
+  targetRef: string;
+  targetType: "tag" | "branch" | "commit";
   mode: "revert" | "checkout";
-  performedBy: string;
-  performedAt: string;
-  message: string;
+  previousRef?: string;
+  newBranch?: string;
   backupCreated: boolean;
-  status: "success" | "failed";
+  message?: string;
+  success: boolean;
+  error?: string;
+  performedBy?: string;
+  performedAt: string;
+  createdAt: string;
 }
 
 // ========== 变更时间线 ==========

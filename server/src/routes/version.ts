@@ -840,8 +840,7 @@ router.post('/:id/create-tag', (req: Request, res: Response) => {
 });
 
 // In-memory rollback history store (same pattern as tag/tokens modules)
-import { RollbackRecord } from '../models/rollbackRecord.js';
-const rollbackHistory: RollbackRecord[] = [];
+import { RollbackRecord, RollbackRecordModel } from '../models/rollbackRecord.js';
 
 // ========== Rollback Routes ==========
 
@@ -854,7 +853,7 @@ router.get('/:id/rollback-history', (req: Request, res: Response) => {
     return;
   }
 
-  const history = rollbackHistory.filter(r => r.versionId === req.params.id);
+  const history = RollbackRecordModel.findByVersionId(req.params.id);
   res.json(success(history));
 });
 
@@ -926,8 +925,8 @@ router.post('/:id/rollback', (req: Request, res: Response) => {
     result = rollbackToTag(projectPath, target, { createBranch: shouldCreateBranch, branchName: shouldCreateBranch ? `rollback/${row.version}` : undefined });
   }
 
-  // Record in rollback history
-  const record: RollbackRecord = {
+  // Record in rollback history (DB persistence)
+  RollbackRecordModel.create({
     id: `rb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     versionId: req.params.id,
     versionName: row.version as string,
@@ -941,9 +940,7 @@ router.post('/:id/rollback', (req: Request, res: Response) => {
     error: result.error,
     performedBy: 'developer',
     performedAt: new Date().toISOString(),
-    createdAt: new Date().toISOString(),
-  };
-  rollbackHistory.push(record);
+  });
 
   res.json(success(result));
 });
