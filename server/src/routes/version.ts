@@ -10,6 +10,7 @@ import { listArtifacts, deleteArtifacts, getArtifactInfo, getArtifactStream, imp
 import { rollbackToTag, rollbackToBranch, rollbackToCommit, getRollbackPreview, getRollbackTargets } from '../services/rollbackService.js';
 import { compareTwoVersions, quickCompare } from '../services/versionCompare.js';
 import { performBump, formatBumpSummary } from '../services/versionBump.js';
+import { autoCreateTagForVersion, makeTagName as makeTagNameFromConfig } from '../services/tagService.js';
 import { isValidSemver, bumpVersion } from '../services/semver.js';
 import path from 'path';
 import os from 'os';
@@ -249,6 +250,10 @@ router.put('/:id', (req: Request, res: Response) => {
     if (settings.autoTag && settings.tagOnStatus.includes('published')) {
       v.gitTag = makeTagName(newVersionStr, settings.tagPrefix, settings.customPrefix);
       v.gitTagCreatedAt = new Date().toISOString();
+      // 创建 Tag 记录（持久化）
+      autoCreateTagForVersion(v.id, newVersionStr, {
+        message: `Release ${newVersionStr} - ${v.title || ''}`,
+      });
     }
 
     v.releasedAt = new Date().toISOString();
@@ -300,6 +305,10 @@ router.post('/:id/bump', async (req: Request, res: Response) => {
   if (settings.autoTag && settings.tagOnStatus.includes('published')) {
     v.gitTag = makeTagName(newVersion, settings.tagPrefix, settings.customPrefix);
     v.gitTagCreatedAt = new Date().toISOString();
+    // 创建 Tag 记录（持久化）
+    autoCreateTagForVersion(v.id, newVersion, {
+      message: `Release ${newVersion} - ${v.title || ''}`,
+    });
   }
 
   versions.set(v.id, v);
@@ -592,6 +601,12 @@ router.post('/:id/git-tags', (req: Request, res: Response) => {
     v.gitTagCreatedAt = new Date().toISOString();
     v.updatedAt = new Date().toISOString();
     versions.set(v.id, v);
+    // 同时在 Tag 生命周期系统中创建记录
+    autoCreateTagForVersion(v.id, v.version, {
+      name,
+      message,
+      createdBy: 'user',
+    });
   }
 
   res.json(success({ created, tag: name, tagExists: tagExists(projectPath, name) }));
