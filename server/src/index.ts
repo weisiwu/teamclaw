@@ -5,6 +5,7 @@ import healthRouter from './routes/health.js';
 import projectRouter from './routes/project.js';
 import userRouter from './routes/user.js';
 import versionRouter from './routes/version.js';
+import agentRouter from './routes/agent.js';
 
 const app = express();
 const PORT = process.env.PORT || 9700;
@@ -18,6 +19,7 @@ app.use('/api/v1/projects', projectRouter);
 app.use('/api/v1/users', userRouter);
 app.use('/api/v1/auth', userRouter); // 权限校验也用 user router (共享 /check 端点)
 app.use('/api/v1/versions', versionRouter);
+app.use('/api/v1/agents', agentRouter);
 
 // Root
 app.get('/', (req, res) => {
