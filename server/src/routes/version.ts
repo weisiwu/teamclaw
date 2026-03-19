@@ -10,7 +10,7 @@ import { listArtifacts, deleteArtifacts, getArtifactInfo, getArtifactStream, imp
 import { rollbackToTag, rollbackToBranch, rollbackToCommit, getRollbackPreview, getRollbackTargets } from '../services/rollbackService.js';
 import { compareTwoVersions, quickCompare } from '../services/versionCompare.js';
 import { performBump, formatBumpSummary } from '../services/versionBump.js';
-import { autoCreateTagForVersion, makeTagName as makeTagNameFromConfig } from '../services/tagService.js';
+import { autoCreateTagForVersion, makeTagName as makeTagNameFromConfig, createTagRecord } from '../services/tagService.js';
 import { isValidSemver, bumpVersion } from '../services/semver.js';
 import path from 'path';
 import os from 'os';
@@ -451,6 +451,48 @@ router.post('/:id/build', async (req: Request, res: Response) => {
       v.artifactUrl = `/artifacts/${v.id}/${v.version}`;
     }
 
+    // Auto-bump on build success: create a new bumped version + tag + tag record
+    let autoBumped = false;
+    let bumpedVersion: Version | undefined;
+    if (result.success && settings.autoBump) {
+      const prevVersion = v.version;
+      const newVersionStr = autoBumpVersion(v.version, settings.bumpType);
+      const tagName = makeTagName(newVersionStr, settings.tagPrefix, settings.customPrefix);
+
+      // Create new version record for the bumped version
+      const newId = `v${Date.now()}`;
+      bumpedVersion = {
+        ...v,
+        id: newId,
+        version: newVersionStr,
+        title: `Build ${newVersionStr}`,
+        status: 'draft',
+        gitTag: tagName,
+        gitTagCreatedAt: new Date().toISOString(),
+        buildStatus: 'success',
+        artifactUrl: v.artifactUrl,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isMain: false,
+        commitCount: v.commitCount,
+        changedFiles: v.changedFiles,
+      };
+      versions.set(newId, bumpedVersion);
+
+      // Create Tag record in tag store
+      createTagRecord({
+        name: tagName,
+        versionId: newId,
+        versionName: newVersionStr,
+        message: `Auto-bump from build ${v.id} (${prevVersion} → ${newVersionStr})`,
+        createdBy: 'system',
+        commitHash: undefined,
+        annotation: undefined,
+      });
+
+      autoBumped = true;
+    }
+
     versions.set(v.id, v);
 
     res.json(success({
@@ -462,6 +504,8 @@ router.post('/:id/build', async (req: Request, res: Response) => {
       artifactsUrl: v.artifactUrl,
       outputExcerpt: result.output.slice(-2000),
       errorOutput: result.errorOutput.slice(-2000),
+      autoBumped,
+      bumpedVersion: bumpedVersion ? { id: bumpedVersion.id, version: bumpedVersion.version, gitTag: bumpedVersion.gitTag } : undefined,
     }));
   } catch (err: unknown) {
     v.buildStatus = 'failed';
@@ -1154,6 +1198,66 @@ router.post('/:id/bump-with-task', (req: Request, res: Response) => {
     version: v,
     bump: result,
     summary: formatBumpSummary(result),
+  }));
+});
+
+// POST /api/v1/versions/:id/auto-bump — Manually trigger auto-bump (creates new bumped version)
+router.post('/:id/auto-bump', (req: Request, res: Response) => {
+  const v = versions.get(req.params.id);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  const { bumpType } = req.body as { bumpType?: VersionBumpType };
+  const type = bumpType || settings.bumpType;
+
+  if (!isValidSemver(v.version)) {
+    res.status(400).json(error(400, `Invalid semver: ${v.version}`));
+    return;
+  }
+
+  const prevVersion = v.version;
+  const newVersionStr = autoBumpVersion(v.version, type);
+  const tagName = makeTagName(newVersionStr, settings.tagPrefix, settings.customPrefix);
+
+  // Create new version record
+  const newId = `v${Date.now()}`;
+  const newVersionRecord: Version = {
+    ...v,
+    id: newId,
+    version: newVersionStr,
+    title: `${newVersionStr}`,
+    status: 'draft',
+    gitTag: tagName,
+    gitTagCreatedAt: new Date().toISOString(),
+    buildStatus: v.buildStatus,
+    artifactUrl: v.artifactUrl,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    isMain: false,
+    commitCount: v.commitCount,
+    changedFiles: v.changedFiles,
+  };
+  versions.set(newId, newVersionRecord);
+
+  // Create Tag record
+  createTagRecord({
+    name: tagName,
+    versionId: newId,
+    versionName: newVersionStr,
+    message: `Auto-bump triggered manually (${prevVersion} → ${newVersionStr})`,
+    createdBy: 'system',
+    commitHash: undefined,
+    annotation: undefined,
+  });
+
+  res.json(success({
+    previousVersion: prevVersion,
+    newVersion: newVersionRecord,
+    bumpType: type,
+    tagName,
+    autoBumped: true,
   }));
 });
 

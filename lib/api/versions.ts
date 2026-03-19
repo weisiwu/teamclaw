@@ -2688,3 +2688,41 @@ export function useBumpPreview(versionId: string, taskType?: string) {
     staleTime: 60 * 1000,
   });
 }
+
+// ========== Auto-Bump API (build-triggered version bump) ==========
+
+export interface AutoBumpResponse {
+  previousVersion: string;
+  newVersion: Version;
+  bumpType: VersionBumpType;
+  tagName: string;
+  autoBumped: boolean;
+}
+
+export async function triggerAutoBump(
+  versionId: string,
+  bumpType?: VersionBumpType
+): Promise<AutoBumpResponse> {
+  const res = await fetch(`${API_BASE}/versions/${versionId}/auto-bump`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bumpType }),
+  });
+  const json = await res.json();
+  if ((json.code === 200 || json.code === 0) && json.data) {
+    return json.data;
+  }
+  throw new Error(json.message || 'Auto-bump failed');
+}
+
+export function useAutoBump() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ versionId, bumpType }: { versionId: string; bumpType?: VersionBumpType }) =>
+      triggerAutoBump(versionId, bumpType),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['versions'] });
+      queryClient.invalidateQueries({ queryKey: ['versionSettings'] });
+    },
+  });
+}
