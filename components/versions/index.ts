@@ -31,4 +31,5 @@ export { BuildSettingsMenu } from "./BuildSettingsMenu";
 export { BatchDownloadDialog } from "./BatchDownloadDialog";
 export { DownloadStatsPanel } from "./DownloadStatsPanel";
 export { DownloadUrlVerifier } from "./DownloadUrlVerifier";
+export { BuildHistoryPanel } from "./BuildHistoryPanel";
 export type { MessageItem } from "./MessageSelector";

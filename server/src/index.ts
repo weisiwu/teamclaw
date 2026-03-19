@@ -18,6 +18,7 @@ import adminConfigRouter from './routes/adminConfig.js';
 import auditLogRouter from './routes/auditLog.js';
 import webhookRouter from './routes/webhook.js';
 import tagRouter from './routes/tag.js';
+import buildRouter from './routes/build.js';
 import llmRouter from './routes/llm.js';
 import { getArtifactsRootDir } from './services/artifactStore.js';
 import './services/taskInit.js'; // 初始化任务机制钩子
@@ -57,6 +58,7 @@ app.use('/api/v1/admin/config', adminConfigRouter);
 app.use('/api/v1/admin/audit-logs', auditLogRouter);
 app.use('/api/v1/admin/webhooks', webhookRouter);
 app.use('/api/v1/tags', tagRouter);
+app.use('/api/v1/builds', buildRouter);
 app.use('/api/v1/llm', llmRouter);
 
 // Root
