@@ -612,7 +612,24 @@ router.post('/:id/git-tags', (req: Request, res: Response) => {
   res.json(success({ created, tag: name, tagExists: tagExists(projectPath, name) }));
 });
 
+// In-memory rollback history store (same pattern as tag/tokens modules)
+import { RollbackRecord } from '../models/rollbackRecord.js';
+const rollbackHistory: RollbackRecord[] = [];
+
 // ========== Rollback Routes ==========
+
+// In-memory rollback history (same pattern as other modules)
+// GET /api/v1/versions/:id/rollback-history — Get rollback history for a version
+router.get('/:id/rollback-history', (req: Request, res: Response) => {
+  const v = versions.get(req.params.id);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  const history = rollbackHistory.filter(r => r.versionId === req.params.id);
+  res.json(success(history));
+});
 
 // GET /api/v1/versions/:id/rollback-targets — Get available rollback targets
 router.get('/:id/rollback-targets', (req: Request, res: Response) => {
@@ -681,6 +698,25 @@ router.post('/:id/rollback', (req: Request, res: Response) => {
     // Default to tag
     result = rollbackToTag(projectPath, target, { createBranch: shouldCreateBranch, branchName: shouldCreateBranch ? `rollback/${v.version}` : undefined });
   }
+
+  // Record in rollback history
+  const record: RollbackRecord = {
+    id: `rb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    versionId: v.id,
+    versionName: v.version,
+    targetRef: target,
+    targetType: type || 'tag',
+    mode: type === 'branch' ? 'checkout' : 'revert',
+    previousRef: result.previousRef,
+    newBranch: result.newBranch,
+    backupCreated: shouldCreateBranch || false,
+    success: result.success,
+    error: result.error,
+    performedBy: 'developer',
+    performedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+  };
+  rollbackHistory.push(record);
 
   res.json(success(result));
 });

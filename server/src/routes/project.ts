@@ -3,6 +3,8 @@ import { success, error } from '../utils/response.js';
 import { Project, ImportTask, ImportStep } from '../models/project.js';
 import { cloneOrCopyProject } from '../services/gitClone.js';
 import { scanDirectory } from '../services/fileScanner.js';
+import { query as vectorQuery } from '../services/vectorStore.js';
+import { analyzeGitHistory } from '../services/gitHistoryAnalysis.js';
 
 const router = Router();
 
@@ -139,7 +141,56 @@ router.get('/import/:taskId', (req: Request, res: Response) => {
   res.json(success({ task }));
 });
 
-// 6. DELETE /api/v1/projects/:id — 删除项目
+// 6b. GET /api/v1/projects/:id/vector-search — 向量语义搜索
+router.get('/:id/vector-search', async (req: Request, res: Response) => {
+  const project = projects.get(req.params.id);
+  if (!project) {
+    res.status(404).json(error(404, 'Project not found'));
+    return;
+  }
+
+  const { q, topK } = req.query as { q?: string; topK?: string };
+  if (!q) {
+    res.status(400).json(error(400, 'q (query) is required'));
+    return;
+  }
+
+  try {
+    const collectionName = `proj_${project.name}`;
+    const results = await vectorQuery(collectionName, q, parseInt(topK || '5', 10));
+    res.json(success({ query: q, results }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Vector search failed';
+    res.status(500).json(error(500, message));
+  }
+});
+
+// 6c. GET /api/v1/projects/:id/git-history — Git历史分析
+router.get('/:id/git-history', (req: Request, res: Response) => {
+  const project = projects.get(req.params.id);
+  if (!project) {
+    res.status(404).json(error(404, 'Project not found'));
+    return;
+  }
+
+  const basePath = project.localPath ||
+    (project.source === 'url' ? `${process.env.HOME}/.openclaw/projects/${project.name}` : null);
+
+  if (!basePath) {
+    res.status(400).json(error(400, 'Project path not available for git analysis'));
+    return;
+  }
+
+  try {
+    const analysis = analyzeGitHistory(basePath);
+    res.json(success({ analysis }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Git history analysis failed';
+    res.status(500).json(error(500, message));
+  }
+});
+
+// 7. DELETE /api/v1/projects/:id — 删除项目
 router.delete('/:id', (req: Request, res: Response) => {
   const project = projects.get(req.params.id);
   if (!project) {

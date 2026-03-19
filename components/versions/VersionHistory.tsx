@@ -5,10 +5,9 @@
 "use client";
 
 import { useState } from "react";
-import { Version, VersionListResponse } from "@/lib/api/types";
+import { Version } from "@/lib/api/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useVersions } from "@/lib/api/versions";
 import { RollbackDialog } from "./RollbackDialog";
 import { Calendar, GitBranch, Play, CheckCircle, XCircle, Clock, FileText, X, RotateCcw } from "lucide-react";
 
@@ -33,8 +32,6 @@ interface HistoryEvent {
 export function VersionHistory({ version, open, onOpenChange }: VersionHistoryProps) {
   const [filter, setFilter] = useState<OperationType | "all">("all");
   const [rollbackOpen, setRollbackOpen] = useState(false);
-  const { data: versionData } = useVersions(1, 1000, "all");
-  const allVersions = (versionData as VersionListResponse)?.data || [];
 
   if (!version || !open) return null;
 
@@ -266,7 +263,6 @@ export function VersionHistory({ version, open, onOpenChange }: VersionHistoryPr
       version={version}
       open={rollbackOpen}
       onOpenChange={setRollbackOpen}
-      allVersions={allVersions}
       onRollbackComplete={() => {
         onOpenChange(false);
       }}

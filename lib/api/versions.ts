@@ -2398,6 +2398,7 @@ export interface RollbackRequest {
   versionId: string;
   targetVersion: string;
   mode: "revert" | "checkout";
+  createBackup?: boolean;
   message?: string;
 }
 
@@ -2409,35 +2410,82 @@ export interface RollbackResponse {
   rollbackedAt?: string;
 }
 
-const rollbackHistory: RollbackHistoryRecord[] = [];
+export interface RollbackTarget {
+  name: string;
+  type: "tag" | "branch";
+  commit?: string;
+  date?: string;
+  isCurrent?: boolean;
+  isRemote?: boolean;
+}
+
+export interface RollbackTargetsResponse {
+  tags: Array<{ name: string; commit: string; date: string; message?: string }>;
+  branches: Array<{ name: string; isCurrent: boolean; isRemote: boolean }>;
+}
+
+export async function getRollbackTargetsAPI(versionId: string): Promise<RollbackTargetsResponse> {
+  const res = await fetch(`${API_BASE}/versions/${versionId}/rollback-targets`);
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) {
+    return json.data;
+  }
+  throw new Error(json.message || 'Failed to fetch rollback targets');
+}
+
+export function useRollbackTargets(versionId: string) {
+  return useQuery({
+    queryKey: ["rollbackTargets", versionId],
+    queryFn: () => getRollbackTargetsAPI(versionId),
+    enabled: !!versionId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export async function getRollbackPreviewAPI(versionId: string, ref: string): Promise<unknown> {
+  const res = await fetch(`${API_BASE}/versions/${versionId}/rollback-preview?ref=${encodeURIComponent(ref)}`);
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) {
+    return json.data;
+  }
+  throw new Error(json.message || 'Failed to fetch rollback preview');
+}
+
+export function useRollbackPreview(versionId: string, ref: string | null) {
+  return useQuery({
+    queryKey: ["rollbackPreview", versionId, ref],
+    queryFn: () => getRollbackPreviewAPI(versionId, ref!),
+    enabled: !!versionId && !!ref,
+    staleTime: 60 * 1000,
+  });
+}
 
 export async function rollbackVersion(request: RollbackRequest): Promise<RollbackResponse> {
   console.log("[Version Rollback] Initiating rollback:", request);
-  
-  // 模拟 API 延迟
-  await new Promise((r) => setTimeout(r, 800));
-  
-  const record: RollbackHistoryRecord = {
-    id: `rb-${Date.now()}`,
-    versionId: request.versionId,
-    fromVersion: request.versionId,
-    toVersion: request.targetVersion,
-    mode: request.mode,
-    performedBy: "developer",
-    performedAt: new Date().toISOString(),
-    message: request.message || `Rollback to ${request.targetVersion}`,
-    backupCreated: true,
-    status: "success",
-  };
-  
-  rollbackHistory.push(record);
-  
+
+  // Map mode to backend type: revert -> tag, checkout -> branch
+  const type = request.mode === "revert" ? "tag" : "branch";
+
+  const res = await fetch(`${API_BASE}/versions/${request.versionId}/rollback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      target: request.targetVersion,
+      type,
+      createBranch: request.createBackup ?? true,
+    }),
+  });
+
+  const json = await res.json();
+  if (!res.ok || (json.code !== 200 && json.code !== 0)) {
+    throw new Error(json.message || "回退请求失败");
+  }
+
   return {
-    success: true,
-    rollbackId: record.id,
-    newVersionId: `v${Date.now()}`,
-    message: `Successfully rolled back to ${request.targetVersion}`,
-    rollbackedAt: record.performedAt,
+    success: json.data?.success ?? true,
+    rollbackId: `rb-${Date.now()}`,
+    message: json.data?.message || `成功回退到 ${request.targetVersion}`,
+    rollbackedAt: new Date().toISOString(),
   };
 }
 
@@ -2454,11 +2502,17 @@ export function useRollbackVersion() {
 }
 
 export async function getRollbackHistory(versionId?: string): Promise<RollbackHistoryRecord[]> {
-  await new Promise((r) => setTimeout(r, 300));
-  if (versionId) {
-    return rollbackHistory.filter((r) => r.versionId === versionId);
+  if (!versionId) return [];
+  try {
+    const res = await fetch(`${API_BASE}/versions/${versionId}/rollback-history`);
+    const json = await res.json();
+    if (json.code === 200 || json.code === 0) {
+      return json.data || [];
+    }
+  } catch {
+    // Fallback to empty
   }
-  return rollbackHistory;
+  return [];
 }
 
 export function useRollbackHistory(versionId?: string) {
