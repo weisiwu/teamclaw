@@ -1,51 +1,184 @@
-version: "3.8"
+# ============================================================
+# TeamClaw Production Docker Compose
+# Usage: docker-compose -f docker-compose.yml up -d
+# ============================================================
+
+version: "3.9"
 
 services:
-  app:
+  # ── Frontend (Next.js) ────────────────────────────────────
+  frontend:
     build:
       context: .
       dockerfile: Dockerfile
+      target: runner
+    container_name: teamclaw-frontend
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
     environment:
       - NODE_ENV=production
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
-      - NEXTAUTH_URL=${NEXTAUTH_URL}
-      - DATABASE_URL=${DATABASE_URL}
-      - API_KEY=${API_KEY}
-    env_file:
-      - .env
+      - PORT=3000
+      - SERVER_PORT=${SERVER_PORT:-9700}
+      - SERVER_HOST=server
+    depends_on:
+      server:
+        condition: service_healthy
     restart: unless-stopped
+    networks:
+      - teamclaw-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
-  db:
-    image: postgres:16-alpine
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=teamclaw
+  # ── Backend Server (Express) ──────────────────────────────
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    container_name: teamclaw-server
     ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - "${SERVER_PORT:-9700}:9700"
+    environment:
+      - NODE_ENV=production
+      - PORT=9700
+      - HOST=0.0.0.0
+      # Database
+      - DATABASE_URL=${DATABASE_URL:-postgresql://teamclaw:password@postgres:5432/teamclaw}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-teamclaw}
+      - DB_USER=${DB_USER:-teamclaw}
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+      # Redis
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      # ChromaDB
+      - CHROMA_HOST=${CHROMA_HOST:-chroma}
+      - CHROMA_PORT=8000
+      # LLM Keys
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # Auth
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - FEISHU_APP_ID=${FEISHU_APP_ID:-}
+      - FEISHU_APP_SECRET=${FEISHU_APP_SECRET:-}
+      # Server URL (for CORS/webhooks)
+      - SERVER_URL=${SERVER_URL:-http://localhost:9700}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chroma:
+        condition: service_healthy
     restart: unless-stopped
+    networks:
+      - teamclaw-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9700/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - teamclaw-artifacts:/app/artifacts
 
+  # ── PostgreSQL ────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: teamclaw-postgres
+    environment:
+      - POSTGRES_DB=${DB_NAME:-teamclaw}
+      - POSTGRES_USER=${DB_USER:-teamclaw}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/db-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    restart: unless-stopped
+    networks:
+      - teamclaw-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-teamclaw} -d ${DB_NAME:-teamclaw}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── Redis ─────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    container_name: teamclaw-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
-      - redis_data:/data
+      - redis-data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
     restart: unless-stopped
+    networks:
+      - teamclaw-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  chromadb:
+  # ── ChromaDB (Vector Store) ────────────────────────────────
+  chroma:
     image: chromadb/chroma:latest
-    ports:
-      - "8000:8000"
+    container_name: teamclaw-chroma
     volumes:
-      - chromadb_data:/chroma/chroma/chroma_home
+      - chroma-data:/chroma/chroma
+    ports:
+      - "${CHROMA_PORT:-8000}:8000"
     restart: unless-stopped
+    networks:
+      - teamclaw-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ── Nginx (Reverse Proxy) ─────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: teamclaw-nginx
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/teamclaw.conf:ro
+      # SSL certificates (mount in production)
+      # - /path/to/certs:/etc/nginx/certs:ro
+    depends_on:
+      frontend:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - teamclaw-net
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  teamclaw-net:
+    driver: bridge
 
 volumes:
-  postgres_data:
-  redis_data:
-  chromadb_data:
+  postgres-data:
+  redis-data:
+  chroma-data:
+  teamclaw-artifacts:

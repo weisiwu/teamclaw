@@ -30,7 +30,12 @@ yarn-error.log*
 .env
 .env.local
 .env*.local
+.env.production
 config.json
+
+# deployment artifacts
+deployment-package.tar.gz
+deploy-package/
 
 # vercel
 .vercel
