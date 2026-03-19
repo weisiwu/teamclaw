@@ -838,6 +838,26 @@ export interface BatchTagResponse {
   totalFailed: number;
 }
 
+// ========== GitTag 类型 ==========
+
+export interface GitTag {
+  name: string;           // tag 名
+  version: string;        // 版本号（如 v1.0.0）
+  commit: string;         // commit hash (short)
+  commitHash: string;    // 完整 commit hash
+  subject: string;       // commit message 第一行
+  author: string;         // 作者名
+  authorEmail: string;    // 作者邮箱
+  taggerDate: string;    // Tag 创建时间 (ISO)
+  projectName: string;    // 所属项目名
+  status: "active" | "archived" | "protected";
+}
+
+export interface TagListResponse {
+  data: GitTag[];
+  total: number;
+}
+
 // ========== Tag 生命周期管理类型 ==========
 
 export interface TagRecord {
