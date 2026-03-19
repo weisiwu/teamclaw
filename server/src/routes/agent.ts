@@ -6,6 +6,17 @@
  * GET  /api/v1/agents/:name/sessions - 获取 Agent 历史会话
  * POST /api/v1/agents/:name/dispatch - 向指定 Agent 分发任务
  * GET  /api/v1/agents/team         - 获取团队编排概览
+ *
+ * 执行引擎 (新增):
+ * POST /api/v1/agents/execute       - 派发执行任务
+ * GET  /api/v1/agents/executions    - 获取执行历史
+ * GET  /api/v1/agents/executions/:executionId - 获取执行详情
+ * POST /api/v1/agents/:name/abort   - 强制终止执行
+ *
+ * 健康监控 (新增):
+ * GET  /api/v1/agents/health        - 获取团队健康报告
+ * POST /api/v1/agents/health/check  - 触发健康检查+自动恢复
+ * GET  /api/v1/agents/health/heartbeat/:name - 记录心跳
  */
 
 import { Router } from "express";
@@ -22,7 +33,23 @@ import {
   completeTask,
   getActiveTasks,
 } from "../services/dispatchService.js";
-import { DispatchRequest } from "../models/agent.js";
+import {
+  dispatchToAgent,
+  getExecution,
+  getExecutionHistory,
+  abortExecution,
+  getAgentExecutionStats,
+  getAgentExecutionState,
+  DispatchRequest,
+  ExecutionContext,
+} from "../services/agentExecution.js";
+import {
+  getTeamHealthReport,
+  runHealthCheck,
+  recordHeartbeat,
+  getHeartbeatHistory,
+} from "../services/agentHealth.js";
+import { DispatchRequest as DispatchReqModel } from "../models/agent.js";
 
 const router = Router();
 
@@ -76,7 +103,7 @@ router.post("/:name/dispatch", (req, res) => {
     return res.status(400).json(error("缺少必填字段：fromAgent, taskId, taskTitle"));
   }
 
-  const dispatchReq: DispatchRequest = {
+  const dispatchReq: DispatchReqModel = {
     fromAgent,
     toAgent: name,
     taskId,
@@ -108,6 +135,116 @@ router.post("/:name/complete", (req, res) => {
 router.get("/tasks/active", (req, res) => {
   const tasks = getActiveTasks();
   res.json(success({ list: tasks, total: tasks.length }));
+});
+
+// ============ 执行引擎路由 ============
+
+// POST /api/v1/agents/execute - 派发执行任务
+router.post("/execute", (req, res) => {
+  const { dispatcher, targetAgent, taskId, prompt, timeoutMs, model } = req.body;
+
+  if (!dispatcher || !targetAgent || !taskId || !prompt) {
+    return res.status(400).json(error("缺少必填字段：dispatcher, targetAgent, taskId, prompt"));
+  }
+
+  const result = dispatchToAgent({ dispatcher, targetAgent, taskId, prompt, timeoutMs, model });
+
+  if ("error" in result) {
+    return res.status(400).json(error(result.error));
+  }
+
+  res.json(success(result));
+});
+
+// GET /api/v1/agents/executions - 获取执行历史
+router.get("/executions", (req, res) => {
+  const { agentName, dispatcher, taskId, status, limit, offset } = req.query;
+
+  const result = getExecutionHistory({
+    agentName: agentName as string,
+    dispatcher: dispatcher as string,
+    taskId: taskId as string,
+    status: status as ExecutionContext["status"],
+    limit: limit ? parseInt(limit as string) : 20,
+    offset: offset ? parseInt(offset as string) : 0,
+  });
+
+  res.json(success(result));
+});
+
+// GET /api/v1/agents/executions/:executionId - 获取执行详情
+router.get("/executions/:executionId", (req, res) => {
+  const { executionId } = req.params;
+  const execution = getExecution(executionId);
+
+  if (!execution) {
+    return res.status(404).json(error(`执行记录 ${executionId} 不存在`));
+  }
+
+  res.json(success(execution));
+});
+
+// GET /api/v1/agents/:name/execution-state - 获取 Agent 当前执行状态
+router.get("/:name/execution-state", (req, res) => {
+  const { name } = req.params;
+  const state = getAgentExecutionState(name);
+  res.json(success(state || null));
+});
+
+// GET /api/v1/agents/:name/stats - 获取 Agent 执行统计
+router.get("/:name/stats", (req, res) => {
+  const { name } = req.params;
+  const allStats = getAgentExecutionStats(name);
+  const stats = allStats[name] || { total: 0, completed: 0, failed: 0, timeout: 0, avgDurationMs: 0 };
+  res.json(success(stats));
+});
+
+// POST /api/v1/agents/:name/abort - 强制终止 Agent 当前执行
+router.post("/:name/abort", (req, res) => {
+  const { name } = req.params;
+  const { reason } = req.body;
+
+  const aborted = abortExecution(name, reason || "手动终止");
+  if (!aborted) {
+    return res.status(404).json(error(`Agent '${name}' 当前无执行任务可终止`));
+  }
+
+  res.json(success({ aborted: true, reason }));
+});
+
+// GET /api/v1/agents/executions/stats - 获取所有 Agent 执行统计
+router.get("/executions/stats", (req, res) => {
+  const stats = getAgentExecutionStats();
+  res.json(success(stats));
+});
+
+// ============ 健康监控路由 ============
+
+// GET /api/v1/agents/health - 获取团队健康报告
+router.get("/health", (req, res) => {
+  const report = getTeamHealthReport();
+  res.json(success(report));
+});
+
+// POST /api/v1/agents/health/check - 触发健康检查+自动恢复
+router.post("/health/check", (req, res) => {
+  const result = runHealthCheck();
+  res.json(success(result));
+});
+
+// POST /api/v1/agents/health/heartbeat/:name - 记录 Agent 心跳
+router.post("/health/heartbeat/:name", (req, res) => {
+  const { name } = req.params;
+  recordHeartbeat(name);
+  res.json(success({ recorded: true, agent: name, at: new Date().toISOString() }));
+});
+
+// GET /api/v1/agents/health/heartbeat/:name - 获取心跳历史
+router.get("/health/heartbeat/:name", (req, res) => {
+  const { name } = req.params;
+  const limit = parseInt(req.query.limit as string) || 20;
+  const history = getHeartbeatHistory(name, limit);
+  res.json(success({ agent: name, history, total: history.length }));
 });
 
 export default router;
