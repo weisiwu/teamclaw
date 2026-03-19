@@ -4,6 +4,12 @@ import { ScreenshotModel } from '../models/screenshot.js';
 import { VersionSummaryModel } from '../models/versionSummary.js';
 import { saveScreenshot, deleteScreenshotFile } from '../services/fileStorage.js';
 import { generateChangelogFromCommits } from '../services/changelogGenerator.js';
+import { getGitLog, getTags, createTag, getBranches, getCurrentBranch, createBranch, tagExists } from '../services/gitService.js';
+import { runBuild, getBuildConfig } from '../services/buildService.js';
+import { listArtifacts, deleteArtifacts, getArtifactInfo, getArtifactStream, importArtifactsFromDir, getArtifactsTotalSize } from '../services/artifactStore.js';
+import { rollbackToTag, rollbackToBranch, rollbackToCommit, getRollbackPreview, getRollbackTargets } from '../services/rollbackService.js';
+import path from 'path';
+import os from 'os';
 
 const router = Router();
 
@@ -351,6 +357,373 @@ router.post('/:id/publish', (req: Request, res: Response) => {
     newVersion: v.version,
     tagCreated: !!v.gitTag,
   }));
+});
+
+// ========== Build Routes ==========
+
+// GET /api/v1/versions/:id/build-config — Get build configuration for a version
+router.get('/:id/build-config', (req: Request, res: Response) => {
+  const v = versions.get(req.params.id);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  // Project path: data/{versionId}/ or ~/.openclaw/projects/{versionId}/
+  const projectPath = (v as { projectPath?: string }).projectPath ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+
+  const config = getBuildConfig(projectPath);
+  res.json(success(config));
+});
+
+// POST /api/v1/versions/:id/build — Trigger a build for a version
+router.post('/:id/build', async (req: Request, res: Response) => {
+  const v = versions.get(req.params.id);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  const { buildCommand, projectPath: explicitPath } = req.body as {
+    buildCommand?: string;
+    projectPath?: string;
+  };
+
+  // Default project path
+  const projectPath = explicitPath ||
+    (v as { projectPath?: string }).projectPath ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+
+  v.buildStatus = 'building';
+  v.updatedAt = new Date().toISOString();
+  versions.set(v.id, v);
+
+  try {
+    const result = await runBuild(projectPath, { buildCommand });
+
+    v.buildStatus = result.success ? 'success' : 'failed';
+    v.updatedAt = new Date().toISOString();
+
+    // Import artifacts into store
+    let artifactCount = 0;
+    if (result.success && result.artifacts.length > 0) {
+      for (const artifact of result.artifacts) {
+        const srcPath = path.join(projectPath, artifact.path);
+        await importArtifactsFromDir(v.id, v.version, path.dirname(srcPath));
+        artifactCount++;
+      }
+      v.artifactUrl = `/artifacts/${v.id}/${v.version}`;
+    }
+
+    versions.set(v.id, v);
+
+    res.json(success({
+      success: result.success,
+      duration: result.duration,
+      command: result.command,
+      exitCode: result.exitCode,
+      artifactCount,
+      artifactsUrl: v.artifactUrl,
+      outputExcerpt: result.output.slice(-2000),
+      errorOutput: result.errorOutput.slice(-2000),
+    }));
+  } catch (err: unknown) {
+    v.buildStatus = 'failed';
+    v.updatedAt = new Date().toISOString();
+    versions.set(v.id, v);
+
+    res.status(500).json(error(500, `Build failed: ${err instanceof Error ? err.message : String(err)}`));
+  }
+});
+
+// GET /api/v1/versions/:id/artifacts — List build artifacts
+router.get('/:id/artifacts', (req: Request, res: Response) => {
+  const v = versions.get(req.params.id);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  const artifacts = listArtifacts(v.id, v.version);
+  const totalSize = getArtifactsTotalSize(v.id, v.version);
+
+  res.json(success({
+    data: artifacts,
+    total: artifacts.length,
+    totalSize,
+    downloadRoot: `/artifacts/${v.id}/${v.version}`,
+  }));
+});
+
+// GET /api/v1/versions/:id/artifacts/:artifactPath — Download a specific artifact
+router.get('/:id/artifacts/*', (req: Request, res: Response) => {
+  const v = versions.get(req.params.id);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  const artifactPath = (req.params as Record<string, string>)[0] || '';
+  const info = getArtifactInfo(v.id, v.version, artifactPath);
+
+  if (!info || !info.exists) {
+    res.status(404).json(error(404, 'Artifact not found'));
+    return;
+  }
+
+  const artifactStream = getArtifactStream(v.id, v.version, artifactPath);
+  if (!artifactStream) {
+    res.status(404).json(error(404, 'Unable to read artifact'));
+    return;
+  }
+
+  res.setHeader('Content-Disposition', `attachment; filename="${info.name}"`);
+  res.setHeader('Content-Length', info.size);
+  res.setHeader('Content-Type', 'application/octet-stream');
+  artifactStream.stream.pipe(res);
+});
+
+// DELETE /api/v1/versions/:id/artifacts — Delete all artifacts for a version
+router.delete('/:id/artifacts', (req: Request, res: Response) => {
+  const v = versions.get(req.params.id);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  const deleted = deleteArtifacts(v.id, v.version);
+  v.artifactUrl = undefined;
+  v.buildStatus = 'pending';
+  v.updatedAt = new Date().toISOString();
+  versions.set(v.id, v);
+
+  res.json(success({ deleted }));
+});
+
+// ========== Git Log Routes ==========
+
+// GET /api/v1/versions/:id/git-log — Get git commit history
+router.get('/:id/git-log', (req: Request, res: Response) => {
+  const v = versions.get(req.params.id);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  const maxCount = parseInt(req.query.maxCount as string) || 50;
+  const branch = req.query.branch as string | undefined;
+
+  // Determine project path
+  const projectPath = (v as { projectPath?: string }).projectPath ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+
+  const commits = getGitLog(projectPath, { maxCount, branch: branch || v.gitTag });
+  const currentBranch = getCurrentBranch(projectPath);
+  const tags = getTags(projectPath);
+
+  res.json(success({
+    commits,
+    currentBranch,
+    tags: tags.slice(0, 20),
+    total: commits.length,
+  }));
+});
+
+// GET /api/v1/versions/:id/git-tags — Get git tags
+router.get('/:id/git-tags', (req: Request, res: Response) => {
+  const v = versions.get(req.params.id);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  const projectPath = (v as { projectPath?: string }).projectPath ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+
+  const tags = getTags(projectPath);
+  res.json(success({ data: tags, total: tags.length }));
+});
+
+// POST /api/v1/versions/:id/git-tags — Create a git tag for a version
+router.post('/:id/git-tags', (req: Request, res: Response) => {
+  const v = versions.get(req.params.id);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  const { tagName, message } = req.body as { tagName?: string; message?: string };
+  const name = tagName || makeTagName(v.version, settings.tagPrefix, settings.customPrefix);
+
+  const projectPath = (v as { projectPath?: string }).projectPath ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+
+  const created = createTag(projectPath, name, message);
+
+  if (created) {
+    v.gitTag = name;
+    v.gitTagCreatedAt = new Date().toISOString();
+    v.updatedAt = new Date().toISOString();
+    versions.set(v.id, v);
+  }
+
+  res.json(success({ created, tag: name, tagExists: tagExists(projectPath, name) }));
+});
+
+// ========== Rollback Routes ==========
+
+// GET /api/v1/versions/:id/rollback-targets — Get available rollback targets
+router.get('/:id/rollback-targets', (req: Request, res: Response) => {
+  const v = versions.get(req.params.id);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  const projectPath = (v as { projectPath?: string }).projectPath ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+
+  const targets = getRollbackTargets(projectPath);
+  res.json(success(targets));
+});
+
+// GET /api/v1/versions/:id/rollback-preview — Preview what a rollback would do
+router.get('/:id/rollback-preview', (req: Request, res: Response) => {
+  const v = versions.get(req.params.id);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  const targetRef = req.query.ref as string;
+  if (!targetRef) {
+    res.status(400).json(error(400, 'ref query parameter required'));
+    return;
+  }
+
+  const projectPath = (v as { projectPath?: string }).projectPath ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+
+  const preview = getRollbackPreview(projectPath, targetRef);
+  res.json(success(preview));
+});
+
+// POST /api/v1/versions/:id/rollback — Rollback to a tag, branch, or commit
+router.post('/:id/rollback', (req: Request, res: Response) => {
+  const v = versions.get(req.params.id);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  const { target, type, createBranch: shouldCreateBranch } = req.body as {
+    target: string;
+    type?: 'tag' | 'branch' | 'commit';
+    createBranch?: boolean;
+  };
+
+  if (!target) {
+    res.status(400).json(error(400, 'target is required'));
+    return;
+  }
+
+  const projectPath = (v as { projectPath?: string }).projectPath ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+
+  let result;
+  if (type === 'branch') {
+    result = rollbackToBranch(projectPath, target, { createBackupBranch: true });
+  } else if (type === 'commit') {
+    result = rollbackToCommit(projectPath, target, { createBranch: shouldCreateBranch, branchName: shouldCreateBranch ? `rollback/${v.version}-${Date.now()}` : undefined });
+  } else {
+    // Default to tag
+    result = rollbackToTag(projectPath, target, { createBranch: shouldCreateBranch, branchName: shouldCreateBranch ? `rollback/${v.version}` : undefined });
+  }
+
+  res.json(success(result));
+});
+
+// ========== Branch Routes (top-level) ==========
+
+// GET /api/v1/branches — List branches for a project version
+router.get('/branches', (req: Request, res: Response) => {
+  const versionId = req.query.versionId as string;
+  if (!versionId) {
+    res.status(400).json(error(400, 'versionId query parameter required'));
+    return;
+  }
+
+  const v = versions.get(versionId);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  const projectPath = (v as { projectPath?: string }).projectPath ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+
+  const branches = getBranches(projectPath);
+  const currentBranch = getCurrentBranch(projectPath);
+
+  res.json(success({
+    data: branches,
+    total: branches.length,
+    currentBranch,
+  }));
+});
+
+// POST /api/v1/branches — Create a new branch
+router.post('/branches', (req: Request, res: Response) => {
+  const { versionId, branchName, baseRef } = req.body as {
+    versionId: string;
+    branchName: string;
+    baseRef?: string;
+  };
+
+  if (!versionId || !branchName) {
+    res.status(400).json(error(400, 'versionId and branchName are required'));
+    return;
+  }
+
+  const v = versions.get(versionId);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  const projectPath = (v as { projectPath?: string }).projectPath ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+
+  const created = createBranch(projectPath, branchName, baseRef);
+  if (created) {
+    res.status(201).json(success({ created: true, branchName, baseRef: baseRef || 'HEAD' }));
+  } else {
+    res.status(500).json(error(500, `Failed to create branch ${branchName}`));
+  }
+});
+
+// PUT /api/v1/branches/primary — Set primary/default branch
+router.put('/branches/primary', (req: Request, res: Response) => {
+  const { versionId, branchName } = req.body as { versionId: string; branchName: string };
+
+  if (!versionId || !branchName) {
+    res.status(400).json(error(400, 'versionId and branchName are required'));
+    return;
+  }
+
+  const v = versions.get(versionId);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  // Update the version's default branch
+  (v as { defaultBranch?: string }).defaultBranch = branchName;
+  v.updatedAt = new Date().toISOString();
+  versions.set(v.id, v);
+
+  res.json(success({ updated: true, defaultBranch: branchName }));
 });
 
 // ========== Screenshot Routes ==========

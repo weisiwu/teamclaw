@@ -8,6 +8,7 @@ import versionRouter from './routes/version.js';
 import agentRouter from './routes/agent.js';
 import messageRouter from './routes/message.js';
 import taskRouter from './routes/task.js';
+import { getArtifactsRootDir } from './services/artifactStore.js';
 import './services/taskInit.js'; // 初始化任务机制钩子
 
 const app = express();
@@ -15,6 +16,16 @@ const PORT = process.env.PORT || 9700;
 
 app.use(cors());
 app.use(express.json());
+
+// Static artifact downloads
+app.use('/artifacts', express.static(getArtifactsRootDir(), {
+  maxAge: '1d',
+  etag: true,
+  lastModified: true,
+  setHeaders: (res) => {
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+  },
+}));
 
 // Routes
 app.use('/api/v1', healthRouter);
