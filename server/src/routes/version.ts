@@ -205,6 +205,8 @@ router.get('/', (req: Request, res: Response) => {
       created_at: row.created_at,
       build_status: row.build_status,
       tag_created: row.tag_created === 1,
+      gitTag: (row.git_tag as string) || undefined,
+      gitTagCreatedAt: (row.git_tag_created_at as string) || undefined,
       hasScreenshot: ScreenshotModel.findByVersionId(row.id as string).length > 0,
       hasSummary: !!summaryRecord,
     };
@@ -240,6 +242,8 @@ router.get('/:id', (req: Request, res: Response) => {
     build_status: row.build_status,
     tag_created: row.tag_created === 1,
     tagged: row.tag_created === 1,
+    gitTag: row.git_tag || undefined,
+    gitTagCreatedAt: row.git_tag_created_at || undefined,
     protected: tagRow ? tagRow.protected === 1 : false,
     hasScreenshot: ScreenshotModel.findByVersionId(req.params.id).length > 0,
     hasSummary: !!summaryRecord,
@@ -281,27 +285,37 @@ router.post('/', (req: Request, res: Response) => {
     VALUES (?, ?, ?, ?, ?, ?, 'pending', 0)
   `).run(id, version, vBranch, description || '', 'system', now);
 
-  // Auto create git tag
+  // Auto create git tag — only for official release versions (no pre-release suffix like -alpha, -beta)
   let tagCreated = false;
-  const tagName = `v${version}`;
+  let gitTagName: string | undefined;
+  const semverReleaseRegex = /^\d+\.\d+\.\d+$/;
   const effectiveProjectPath = projectPath || path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', id);
-  try {
-    tagCreated = createTag(effectiveProjectPath, tagName, `Release ${version} - ${title}`);
-    if (tagCreated) {
-      db.prepare('UPDATE versions SET tag_created = 1 WHERE id = ?').run(id);
-      // Create tag record in DB via tagService
-      createTagRecord({
-        name: tagName,
-        versionId: id,
-        versionName: version,
-        message: `Release ${version} - ${title}`,
-        createdBy: 'system',
-        commitHash: undefined,
-        annotation: `Release ${version} - ${title}`,
-      });
+
+  if (semverReleaseRegex.test(version)) {
+    gitTagName = `v${version}`;
+    try {
+      tagCreated = createTag(effectiveProjectPath, gitTagName, `Release ${version} - ${title}`);
+      if (tagCreated) {
+        const tagTime = new Date().toISOString();
+        db.prepare(
+          'UPDATE versions SET tag_created = 1, git_tag = ?, git_tag_created_at = ? WHERE id = ?'
+        ).run(gitTagName, tagTime, id);
+        // Create tag record in DB via tagService
+        createTagRecord({
+          name: gitTagName,
+          versionId: id,
+          versionName: version,
+          message: `Release ${version} - ${title}`,
+          createdBy: 'system',
+          commitHash: undefined,
+          annotation: `Release ${version} - ${title}`,
+        });
+      }
+    } catch (err) {
+      console.warn('[version] Failed to create git tag:', err);
     }
-  } catch (err) {
-    console.warn('[version] Failed to create git tag:', err);
+  } else {
+    console.log(`[version] Skipping auto-tag for pre-release version: ${version}`);
   }
 
   // Auto-generate version summary on creation
@@ -335,6 +349,8 @@ router.post('/', (req: Request, res: Response) => {
     commitCount: 0,
     changedFiles: [],
     tagCreated,
+    gitTag: tagCreated ? gitTagName : undefined,
+    gitTagCreatedAt: tagCreated ? new Date().toISOString() : undefined,
   }));
 });
 
@@ -779,6 +795,48 @@ router.post('/:id/git-tags', (req: Request, res: Response) => {
   }
 
   res.json(success({ created, tag: name, tagExists: tagExists(projectPath, name) }));
+});
+
+// POST /api/v1/versions/:id/create-tag — Manually trigger tag creation for a version
+router.post('/:id/create-tag', (req: Request, res: Response) => {
+  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  const existingTag = row.git_tag as string | undefined;
+  if (existingTag) {
+    res.status(409).json(error(409, `Version already has a tag: ${existingTag}`));
+    return;
+  }
+
+  const versionName = row.version as string;
+  const projectPath = (row.projectPath as string) ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
+
+  // Use tagService's autoCreateTagForVersion for consistent tagging
+  const tagRecord = autoCreateTagForVersion(req.params.id, versionName, {
+    projectPath,
+    message: `Release ${versionName}`,
+    createdBy: 'user',
+  });
+
+  if (!tagRecord) {
+    res.status(400).json(error(400, 'Tag creation returned null — check if autoTag is enabled in settings'));
+    return;
+  }
+
+  // Update version record with git_tag info
+  db.prepare(
+    'UPDATE versions SET tag_created = 1, git_tag = ?, git_tag_created_at = ? WHERE id = ?'
+  ).run(tagRecord.name, tagRecord.createdAt, req.params.id);
+
+  res.status(201).json(success({
+    versionId: req.params.id,
+    tagName: tagRecord.name,
+    tagRecord,
+  }));
 });
 
 // In-memory rollback history store (same pattern as tag/tokens modules)

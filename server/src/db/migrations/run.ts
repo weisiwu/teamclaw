@@ -89,5 +89,17 @@ export function runMigrations() {
     CREATE INDEX IF NOT EXISTS idx_version_summaries_version ON version_summaries(version_id);
   `);
 
+  // Add git_tag columns if they don't exist (iter-79)
+  try {
+    db.prepare("ALTER TABLE versions ADD COLUMN git_tag TEXT").run();
+  } catch (e: unknown) {
+    // Column may already exist in newer dbs, ignore
+  }
+  try {
+    db.prepare("ALTER TABLE versions ADD COLUMN git_tag_created_at TEXT").run();
+  } catch (e: unknown) {
+    // Column may already exist in newer dbs, ignore
+  }
+
   console.log('[migrations] Database migrations completed');
 }
