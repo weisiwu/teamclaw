@@ -190,7 +190,65 @@ router.get('/:id/git-history', (req: Request, res: Response) => {
   }
 });
 
-// 7. DELETE /api/v1/projects/:id — 删除项目
+// 7. POST /api/v1/projects/:id/refresh — 手动触发项目刷新（增量更新）
+router.post('/:id/refresh', async (req: Request, res: Response) => {
+  const project = projects.get(req.params.id);
+  if (!project) {
+    res.status(404).json(error(404, 'Project not found'));
+    return;
+  }
+
+  try {
+    const { refreshProject } = await import('./services/projectRefresh.js');
+    const result = await refreshProject(project);
+    res.json(success({ refresh: result }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Refresh failed';
+    res.status(500).json(error(500, message));
+  }
+});
+
+// 8. GET /api/v1/projects/:id/feature-map — 获取功能定位文件
+router.get('/:id/feature-map', async (req: Request, res: Response) => {
+  const project = projects.get(req.params.id);
+  if (!project) {
+    res.status(404).json(error(404, 'Project not found'));
+    return;
+  }
+
+  try {
+    const { getFeatureMap } = await import('../services/featureMap.js');
+    const featureMap = await getFeatureMap(req.params.id);
+    if (!featureMap) {
+      res.status(404).json(error(404, 'Feature map not generated yet'));
+      return;
+    }
+    res.json(success({ featureMap }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to get feature map';
+    res.status(500).json(error(500, message));
+  }
+});
+
+// 9. GET /api/v1/projects/:id/docs — 获取转换后的文档列表
+router.get('/:id/docs', async (req: Request, res: Response) => {
+  const project = projects.get(req.params.id);
+  if (!project) {
+    res.status(404).json(error(404, 'Project not found'));
+    return;
+  }
+
+  try {
+    const { getConvertedDocs } = await import('../services/docConverter.js');
+    const docs = await getConvertedDocs(req.params.id);
+    res.json(success({ docs, total: docs.length }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to get docs';
+    res.status(500).json(error(500, message));
+  }
+});
+
+// 10. DELETE /api/v1/projects/:id — 删除项目
 router.delete('/:id', (req: Request, res: Response) => {
   const project = projects.get(req.params.id);
   if (!project) {

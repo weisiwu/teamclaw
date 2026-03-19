@@ -96,3 +96,71 @@ export async function fetchImportStatus(taskId: string): Promise<{ task: ImportT
 export async function deleteProject(id: string): Promise<{ deleted: string }> {
   return json(await fetch(`${BASE}/projects/${id}`, { method: 'DELETE' }));
 }
+
+// GET /projects/:id/feature-map — 功能定位文件
+export async function fetchFeatureMap(id: string): Promise<{ featureMap: FeatureMap }> {
+  return json(await fetch(`${BASE}/projects/${id}/feature-map`));
+}
+
+export interface FeatureMap {
+  totalFeatures: number;
+  features: FeatureItem[];
+}
+
+export interface FeatureItem {
+  feature: string;
+  description: string;
+  module: string;
+  files: string[];
+}
+
+// GET /projects/:id/docs — 转换后的文档列表
+export async function fetchConvertedDocs(id: string): Promise<{ docs: ConvertedDoc[] }> {
+  return json(await fetch(`${BASE}/projects/${id}/docs`));
+}
+
+export interface ConvertedDoc {
+  originalPath: string;
+  convertedPath: string;
+  format: string;
+  title: string;
+  size: number;
+}
+
+// POST /projects/:id/refresh — 刷新项目
+export async function refreshProject(id: string): Promise<{ refresh: RefreshResult }> {
+  return json(await fetch(`${BASE}/projects/${id}/refresh`, { method: 'POST' }));
+}
+
+export interface RefreshResult {
+  projectId: string;
+  refreshedAt: string;
+  steps: { name: string; status: 'done' | 'skipped' | 'error'; error?: string }[];
+  newFeatures: number;
+  newDocs: number;
+  newCommits: number;
+}
+
+// GET /projects/:id/vector-search — 语义搜索
+export async function vectorSearch(id: string, query: string, topK = 5): Promise<{ query: string; results: VectorResult[] }> {
+  return json(await fetch(`${BASE}/projects/${id}/vector-search?q=${encodeURIComponent(query)}&topK=${topK}`));
+}
+
+export interface VectorResult {
+  id: string;
+  document: string;
+  distance: number;
+  metadata: Record<string, unknown>;
+}
+
+// GET /projects/:id/git-history — Git历史分析
+export async function fetchGitHistory(id: string): Promise<{ analysis: GitCommit[] }> {
+  return json(await fetch(`${BASE}/projects/${id}/git-history`));
+}
+
+export interface GitCommit {
+  hash: string;
+  message: string;
+  author: string;
+  date: string;
+}
