@@ -111,6 +111,20 @@ function uploadDoc(filename: string, buffer: Buffer): DocItem {
   };
 }
 
+// 删除文档
+function deleteDoc(docId: string): boolean {
+  const doc = getDoc(docId);
+  if (!doc) return false;
+  try {
+    if (fs.existsSync(doc.path)) {
+      fs.unlinkSync(doc.path);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export const docService = {
   getDocsRootDir,
   getDocList,
@@ -118,4 +132,5 @@ export const docService = {
   getDocContent,
   getDocFilePath,
   uploadDoc,
+  deleteDoc,
 };

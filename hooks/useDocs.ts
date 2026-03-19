@@ -10,7 +10,7 @@ export function useDocs(search?: string) {
   const fetch = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getDocs(search);
+      const data = await getDocs({ search, page: 1, pageSize: 100 });
       setDocs(data.list);
       setTotal(data.total);
       setError(null);
