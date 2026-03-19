@@ -1323,82 +1323,135 @@ export function useUpdateVersionSettings() {
 // ========== 消息截图 API 函数 ==========
 
 export async function getVersionScreenshots(versionId: string): Promise<ScreenshotListResponse> {
-  await delay(200);
-  const filtered = mockVersionScreenshots.filter((s) => s.versionId === versionId);
-  return {
-    data: filtered,
-    total: filtered.length,
-  };
+  try {
+    const res = await fetch(`${API_BASE}/versions/${versionId}/screenshots`);
+    const json = await res.json();
+    if (json.code === 200 || json.code === 0) {
+      return json.data;
+    }
+    throw new Error(json.message || '获取截图列表失败');
+  } catch (err) {
+    console.warn('[Screenshot API] Using fallback:', err);
+    const filtered = mockVersionScreenshots.filter((s) => s.versionId === versionId);
+    return { data: filtered, total: filtered.length };
+  }
 }
 
 export async function linkScreenshot(
   versionId: string,
   request: LinkScreenshotRequest
 ): Promise<VersionMessageScreenshot> {
-  await delay(300);
-
-  const newScreenshot: VersionMessageScreenshot = {
-    id: `ss-${Date.now()}`,
-    versionId,
-    messageId: request.messageId,
-    messageContent: request.messageContent,
-    senderName: request.senderName,
-    senderAvatar: request.senderAvatar,
-    screenshotUrl: request.screenshotUrl,
-    thumbnailUrl: request.thumbnailUrl,
-    createdAt: new Date().toISOString(),
-  };
-
-  mockVersionScreenshots.unshift(newScreenshot);
-  return newScreenshot;
+  try {
+    const res = await fetch(`${API_BASE}/versions/${versionId}/screenshots`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    const json = await res.json();
+    if (json.code === 200 || json.code === 0) {
+      return json.data;
+    }
+    throw new Error(json.message || '上传截图失败');
+  } catch (err) {
+    console.warn('[Screenshot API] Using fallback:', err);
+    const newScreenshot: VersionMessageScreenshot = {
+      id: `ss-${Date.now()}`,
+      versionId,
+      messageId: request.messageId,
+      messageContent: request.messageContent,
+      senderName: request.senderName,
+      senderAvatar: request.senderAvatar,
+      screenshotUrl: request.screenshotUrl,
+      thumbnailUrl: request.thumbnailUrl,
+      createdAt: new Date().toISOString(),
+    };
+    mockVersionScreenshots.unshift(newScreenshot);
+    return newScreenshot;
+  }
 }
 
 export async function unlinkScreenshot(screenshotId: string): Promise<boolean> {
-  await delay(200);
-  const index = mockVersionScreenshots.findIndex((s) => s.id === screenshotId);
-  if (index === -1) return false;
-  mockVersionScreenshots.splice(index, 1);
-  return true;
+  try {
+    // Find the screenshot first to get versionId
+    const screenshot = mockVersionScreenshots.find((s) => s.id === screenshotId);
+    if (!screenshot) return false;
+
+    const res = await fetch(`${API_BASE}/versions/${screenshot.versionId}/screenshots/${screenshotId}`, {
+      method: 'DELETE',
+    });
+    const json = await res.json();
+    if (json.code === 200 || json.code === 0) {
+      const index = mockVersionScreenshots.findIndex((s) => s.id === screenshotId);
+      if (index !== -1) mockVersionScreenshots.splice(index, 1);
+      return true;
+    }
+    throw new Error(json.message || '删除截图失败');
+  } catch (err) {
+    console.warn('[Screenshot API] Delete failed, using fallback:', err);
+    const index = mockVersionScreenshots.findIndex((s) => s.id === screenshotId);
+    if (index === -1) return false;
+    mockVersionScreenshots.splice(index, 1);
+    return true;
+  }
 }
 
 // ========== 变更摘要 API 函数 ==========
 
 export async function getVersionChangelog(versionId: string): Promise<ChangelogResponse | null> {
-  await delay(200);
-  const changelog = mockChangelogs.find((c) => c.versionId === versionId);
-  if (!changelog) return null;
-  return { data: changelog };
+  try {
+    const res = await fetch(`${API_BASE}/versions/${versionId}/summary`);
+    if (res.status === 404) return null;
+    const json = await res.json();
+    if (json.code === 200 || json.code === 0) {
+      return { data: json.data };
+    }
+    throw new Error(json.message || '获取变更摘要失败');
+  } catch (err) {
+    console.warn('[Changelog API] Using fallback:', err);
+    const changelog = mockChangelogs.find((c) => c.versionId === versionId);
+    if (!changelog) return null;
+    return { data: changelog };
+  }
 }
 
 export async function generateChangelog(
   request: GenerateChangelogRequest
 ): Promise<ChangelogResponse> {
-  await delay(500); // 模拟生成时间
+  try {
+    const res = await fetch(`${API_BASE}/versions/${request.versionId}/summary/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    const json = await res.json();
+    if (json.code === 200 || json.code === 0) {
+      return { data: json.data };
+    }
+    throw new Error(json.message || '生成变更摘要失败');
+  } catch (err) {
+    console.warn('[Changelog API] Generate failed, using fallback:', err);
+    const version = mockVersions.find((v) => v.id === request.versionId);
+    if (!version) {
+      throw new Error("Version not found");
+    }
 
-  // 从版本信息生成变更摘要
-  const version = mockVersions.find((v) => v.id === request.versionId);
-  if (!version) {
-    throw new Error("Version not found");
-  }
+    const mockChanges: ChangelogChange[] = [
+      { type: "feature", description: "新增功能模块", files: version.changedFiles.slice(0, 2) },
+      { type: "improvement", description: "优化用户体验", files: [] },
+      { type: "fix", description: "修复已知问题", files: version.changedFiles.slice(2) },
+    ];
 
-  // 模拟生成的变更
-  const mockChanges: ChangelogChange[] = [
-    { type: "feature", description: "新增功能模块", files: version.changedFiles.slice(0, 2) },
-    { type: "improvement", description: "优化用户体验", files: [] },
-    { type: "fix", description: "修复已知问题", files: version.changedFiles.slice(2) },
-  ];
+    const newChangelog: VersionChangelog = {
+      id: `cl-${Date.now()}`,
+      versionId: request.versionId,
+      title: request.title || `${version.version} 变更日志`,
+      content: `${version.title} - ${version.description}`,
+      changes: mockChanges,
+      generatedAt: new Date().toISOString(),
+      generatedBy: "system",
+    };
 
-  const newChangelog: VersionChangelog = {
-    id: `cl-${Date.now()}`,
-    versionId: request.versionId,
-    title: request.title || `${version.version} 变更日志`,
-    content: `${version.title} - ${version.description}`,
-    changes: mockChanges,
-    generatedAt: new Date().toISOString(),
-    generatedBy: "system",
-  };
-
-  // 保存到 mock 数据中
+    // 保存到 mock 数据中
   const existingIndex = mockChangelogs.findIndex((c) => c.versionId === request.versionId);
   if (existingIndex >= 0) {
     mockChangelogs[existingIndex] = newChangelog;
@@ -1407,6 +1460,37 @@ export async function generateChangelog(
   }
 
   return { data: newChangelog };
+  }
+}
+
+// ========== 版本摘要保存函数 ==========
+
+export async function saveVersionSummary(
+  versionId: string,
+  data: {
+    content?: string;
+    features?: string[];
+    changes?: string[];
+    fixes?: string[];
+    breaking?: string[];
+    createdBy?: string;
+  }
+): Promise<VersionSummary | null> {
+  try {
+    const res = await fetch(`${API_BASE}/versions/${versionId}/summary`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const json = await res.json();
+    if (json.code === 200 || json.code === 0) {
+      return json.data;
+    }
+    throw new Error(json.message || '保存变更摘要失败');
+  } catch (err) {
+    console.warn('[Summary API] Save failed:', err);
+    return null;
+  }
 }
 
 // ========== 消息截图 Hooks ==========

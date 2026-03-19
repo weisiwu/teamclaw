@@ -1,5 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { success, error } from '../utils/response.js';
+import { ScreenshotModel } from '../models/screenshot.js';
+import { VersionSummaryModel } from '../models/versionSummary.js';
+import { saveScreenshot, deleteScreenshotFile } from '../services/fileStorage.js';
 
 const router = Router();
 
@@ -347,6 +350,200 @@ router.post('/:id/publish', (req: Request, res: Response) => {
     newVersion: v.version,
     tagCreated: !!v.gitTag,
   }));
+});
+
+// ========== Screenshot Routes ==========
+
+// GET /api/v1/versions/:id/screenshots - List screenshots for a version
+router.get('/:id/screenshots', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const screenshots = ScreenshotModel.findByVersionId(id);
+  res.json(success({ data: screenshots, total: screenshots.length }));
+});
+
+// POST /api/v1/versions/:id/screenshots - Upload/link a screenshot
+router.post('/:id/screenshots', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { imageData, messageId, messageContent, senderName, senderAvatar, screenshotUrl, branchName } = req.body as {
+      imageData?: string;
+      messageId?: string;
+      messageContent?: string;
+      senderName?: string;
+      senderAvatar?: string;
+      screenshotUrl?: string;
+      branchName?: string;
+    };
+
+    let savedUrl = screenshotUrl || '';
+
+    // If imageData is provided (Base64), save to file
+    if (imageData) {
+      const result = await saveScreenshot(id, imageData);
+      savedUrl = result.url;
+    }
+
+    const screenshot = ScreenshotModel.create({
+      versionId: id,
+      messageId,
+      messageContent,
+      senderName,
+      senderAvatar,
+      screenshotUrl: savedUrl,
+      thumbnailUrl: savedUrl,
+      branchName,
+    });
+
+    res.status(201).json(success(screenshot));
+  } catch (err) {
+    console.error('Screenshot upload error:', err);
+    res.status(500).json(error(500, '截图上传失败'));
+  }
+});
+
+// DELETE /api/v1/versions/:id/screenshots/:screenshotId - Delete a screenshot
+router.delete('/:id/screenshots/:screenshotId', async (req: Request, res: Response) => {
+  try {
+    const { screenshotId } = req.params;
+    const screenshot = ScreenshotModel.findById(screenshotId);
+
+    if (!screenshot) {
+      res.status(404).json(error(404, '截图不存在'));
+      return;
+    }
+
+    // Delete file if it's a local file
+    if (screenshot.screenshotUrl.startsWith('/screenshots/')) {
+      await deleteScreenshotFile(screenshot.versionId, screenshot.screenshotUrl);
+    }
+
+    ScreenshotModel.delete(screenshotId);
+    res.json(success({ deleted: true }));
+  } catch (err) {
+    console.error('Screenshot delete error:', err);
+    res.status(500).json(error(500, '截图删除失败'));
+  }
+});
+
+// ========== Changelog/Summary Routes ==========
+
+// GET /api/v1/versions/:id/summary - Get changelog summary for a version
+router.get('/:id/summary', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const summary = VersionSummaryModel.findByVersionId(id);
+
+  if (!summary) {
+    res.status(404).json(error(404, '变更摘要不存在'));
+    return;
+  }
+
+  res.json(success(summary));
+});
+
+// POST /api/v1/versions/:id/summary - Create or update changelog summary
+router.post('/:id/summary', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { content, features, changes, fixes, breaking, createdBy } = req.body as {
+      content?: string;
+      features?: string[];
+      changes?: string[];
+      fixes?: string[];
+      breaking?: string[];
+      createdBy?: string;
+    };
+
+    const existing = VersionSummaryModel.findByVersionId(id);
+    let summary;
+
+    if (existing) {
+      summary = VersionSummaryModel.update(id, { content, features, changes, fixes, breaking });
+    } else {
+      summary = VersionSummaryModel.create({
+        versionId: id,
+        content: content || '',
+        features: features || [],
+        changes: changes || [],
+        fixes: fixes || [],
+        breaking: breaking || [],
+        createdBy: createdBy || 'system',
+      });
+    }
+
+    res.json(success(summary));
+  } catch (err) {
+    console.error('Summary save error:', err);
+    res.status(500).json(error(500, '变更摘要保存失败'));
+  }
+});
+
+// PUT /api/v1/versions/:id/summary - Update changelog summary
+router.put('/:id/summary', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { content, features, changes, fixes, breaking } = req.body as {
+      content?: string;
+      features?: string[];
+      changes?: string[];
+      fixes?: string[];
+      breaking?: string[];
+    };
+
+    const existing = VersionSummaryModel.findByVersionId(id);
+    if (!existing) {
+      res.status(404).json(error(404, '变更摘要不存在'));
+      return;
+    }
+
+    const summary = VersionSummaryModel.update(id, { content, features, changes, fixes, breaking });
+    res.json(success(summary));
+  } catch (err) {
+    console.error('Summary update error:', err);
+    res.status(500).json(error(500, '变更摘要更新失败'));
+  }
+});
+
+// DELETE /api/v1/versions/:id/summary - Delete changelog summary
+router.delete('/:id/summary', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const deleted = VersionSummaryModel.delete(id);
+  res.json(success({ deleted }));
+});
+
+// POST /api/v1/versions/:id/summary/generate - Generate changelog from commits (mock AI)
+router.post('/:id/summary/generate', (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  // Mock AI-generated changelog based on version
+  const mockChanges = [
+    '优化代码结构和类型定义',
+    '新增功能模块和 API 端点',
+    '修复已知的边界条件问题',
+    '提升构建和部署流程',
+  ];
+
+  const mockFeatures = [
+    '支持版本关联截图上传',
+    '变更摘要自动生成',
+    '多环境构建支持',
+  ];
+
+  const mockFixes = [
+    '修复版本列表分页问题',
+    '修复构建状态显示延迟',
+  ];
+
+  const summary = VersionSummaryModel.upsert({
+    versionId: id,
+    content: `版本 ${id} 包含多项功能增强和问题修复。主要更新：${mockFeatures.join('、')}。`,
+    features: mockFeatures,
+    changes: mockChanges,
+    fixes: mockFixes,
+    breaking: [],
+    createdBy: 'AI',
+  });
+
+  res.json(success(summary));
 });
 
 export default router;
