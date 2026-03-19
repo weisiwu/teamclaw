@@ -14,6 +14,7 @@ import { RollbackDialog } from "@/components/versions/RollbackDialog";
 import { RollbackHistoryPanel } from "@/components/versions/RollbackHistoryPanel";
 import { UpgradeConfigDialog } from "@/components/versions/UpgradeConfigDialog";
 import { VersionChangeLogPanel } from "@/components/versions/VersionChangeLogPanel";
+import { VersionSummaryPanel } from "@/components/versions/VersionSummaryPanel";
 
 const API_BASE = "/api/v1";
 
@@ -26,7 +27,7 @@ export default function VersionDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRegeneratingTag, setIsRegeneratingTag] = useState(false);
   const [tagMessage, setTagMessage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"details" | "bumpHistory" | "artifacts" | "rollback" | "changelog">("details");
+  const [activeTab, setActiveTab] = useState<"details" | "bumpHistory" | "artifacts" | "rollback" | "changelog" | "versionSummary">("details");
   const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false);
   const [upgradeConfigOpen, setUpgradeConfigOpen] = useState(false);
   const [isUpgrading, setIsUpgrading] = useState(false);
@@ -187,6 +188,17 @@ export default function VersionDetailPage() {
             <FileText className="w-4 h-4" />
             变更记录
           </button>
+          <button
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+              activeTab === "versionSummary"
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-500 hover:bg-gray-100"
+            }`}
+            onClick={() => setActiveTab("versionSummary")}
+          >
+            <FileText className="w-4 h-4" />
+            版本摘要
+          </button>
         </div>
       </div>
 
@@ -240,6 +252,17 @@ export default function VersionDetailPage() {
           <VersionChangeLogPanel
             versionId={id}
             versionCreatedAt={version.createdAt}
+          />
+        </div>
+      ) : activeTab === "versionSummary" ? (
+        <div className="bg-white rounded-xl border p-5">
+          <h2 className="text-sm font-medium text-gray-500 mb-4 flex items-center gap-2">
+            <FileText className="w-4 h-4" />
+            版本摘要
+          </h2>
+          <VersionSummaryPanel
+            versionId={id}
+            versionName={version.version}
           />
         </div>
       ) : (

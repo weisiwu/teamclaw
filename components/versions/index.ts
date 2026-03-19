@@ -54,3 +54,8 @@ export { CopyToast } from "./CopyToast";
  * Branch Management exports
  */
 export { BranchManager } from "./BranchManager";
+
+/**
+ * Version Summary exports
+ */
+export { VersionSummaryPanel } from "./VersionSummaryPanel";

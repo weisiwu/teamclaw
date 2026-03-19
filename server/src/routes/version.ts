@@ -505,7 +505,7 @@ router.put('/settings', (req: Request, res: Response) => {
 });
 
 // POST /api/v1/versions/:id/publish — 发布版本（触发 auto-bump）
-router.post('/:id/publish', (req: Request, res: Response) => {
+router.post('/:id/publish', async (req: Request, res: Response) => {
   const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
@@ -537,6 +537,26 @@ router.post('/:id/publish', (req: Request, res: Response) => {
   db.prepare(
     'UPDATE versions SET version = ?, build_status = ?, tag_created = ? WHERE id = ?'
   ).run(newVersion, 'success', tagCreated ? 1 : 0, req.params.id);
+
+  // Auto-generate version summary on publish
+  try {
+    const commitLog = (row.commit_log as string) || `Version ${newVersion} published`;
+    const currentBranch = (row.branch as string) || 'main';
+    const generated = await generateChangelogFromCommits(req.params.id, commitLog, currentBranch);
+    VersionSummaryModel.upsert({
+      versionId: req.params.id,
+      title: generated.title,
+      content: generated.content,
+      features: generated.features,
+      fixes: generated.fixes,
+      changes: generated.improvements,
+      breaking: generated.breaking,
+      createdBy: 'system',
+    });
+    db.prepare('UPDATE versions SET summary = ? WHERE id = ?').run(generated.content, req.params.id);
+  } catch (err) {
+    console.warn('[publish] Auto summary generation failed:', err);
+  }
 
   res.json(success({
     version: { id: req.params.id, version: newVersion, status: 'published', buildStatus: 'success' },
@@ -894,7 +914,7 @@ router.get('/:id/rollback-preview', (req: Request, res: Response) => {
 });
 
 // POST /api/v1/versions/:id/rollback — Rollback to a tag, branch, or commit
-router.post('/:id/rollback', (req: Request, res: Response) => {
+router.post('/:id/rollback', async (req: Request, res: Response) => {
   const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
@@ -941,6 +961,26 @@ router.post('/:id/rollback', (req: Request, res: Response) => {
     performedBy: 'developer',
     performedAt: new Date().toISOString(),
   });
+
+  // Auto-generate version summary on rollback
+  try {
+    const rollbackMsg = `Rollback to ${target} (${type || 'tag'})`;
+    const currentBranch = (row.branch as string) || 'main';
+    const generated = await generateChangelogFromCommits(req.params.id, rollbackMsg, currentBranch);
+    VersionSummaryModel.upsert({
+      versionId: req.params.id,
+      title: `版本回退: ${row.version}`,
+      content: generated.content || `已回退到 ${target}`,
+      features: [],
+      fixes: [],
+      changes: [`回退到 ${target}`],
+      breaking: [],
+      createdBy: 'system',
+    });
+    db.prepare('UPDATE versions SET summary = ? WHERE id = ?').run(`已回退到 ${target}`, req.params.id);
+  } catch (err) {
+    console.warn('[rollback] Auto summary generation failed:', err);
+  }
 
   res.json(success(result));
 });
