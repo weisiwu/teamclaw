@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useArtifacts } from "@/lib/api/artifacts";
 import { Button } from "@/components/ui/button";
-import { Loader2, Download, Package, FileText, Image, Code, Archive } from "lucide-react";
+import { Loader2, Download, Package, FileText, Image, Code, Archive, Play, RefreshCw } from "lucide-react";
+import { useTriggerBuild, useRebuildVersion } from "@/lib/api/versions";
 
 interface ArtifactsPanelProps {
   versionId: string;
@@ -25,6 +26,12 @@ export function ArtifactsPanel({ versionId, versionName }: ArtifactsPanelProps) 
   const [isCreatingPackage, setIsCreatingPackage] = useState(false);
   const [packageMessage, setPackageMessage] = useState<string | null>(null);
   const [buildId, setBuildId] = useState<string | null>(null);
+  const [buildMessage, setBuildMessage] = useState<string | null>(null);
+
+  const triggerBuild = useTriggerBuild();
+  const rebuildVersion = useRebuildVersion();
+
+  const isBuilding = triggerBuild.isPending || rebuildVersion.isPending;
 
   // Get latest build ID for this version
   useEffect(() => {
@@ -52,6 +59,31 @@ export function ArtifactsPanel({ versionId, versionName }: ArtifactsPanelProps) 
       document.body.removeChild(link);
     } finally {
       setTimeout(() => setDownloading(null), 1000);
+    }
+  };
+
+  const handleTriggerBuild = async () => {
+    setBuildMessage(null);
+    try {
+      const result = await triggerBuild.mutateAsync(versionId);
+      if (result.success) {
+        setBuildId(result.buildId);
+        setBuildMessage("构建已开始...");
+        refetch();
+      }
+    } catch (e) {
+      setBuildMessage(`构建失败: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const handleRebuild = async () => {
+    setBuildMessage(null);
+    try {
+      await rebuildVersion.mutateAsync(versionId);
+      setBuildMessage("重新构建已开始...");
+      refetch();
+    } catch (e) {
+      setBuildMessage(`重新构建失败: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -127,8 +159,55 @@ export function ArtifactsPanel({ versionId, versionName }: ArtifactsPanelProps) 
 
   return (
     <div className="space-y-4">
+      {/* Build trigger buttons */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="text-sm text-gray-500">构建操作：</span>
+        {buildId || hasArtifacts ? (
+          <Button
+            variant="default"
+            size="sm"
+            className="gap-1.5"
+            onClick={handleRebuild}
+            disabled={isBuilding}
+          >
+            {isBuilding ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4" />
+            )}
+            重新构建
+          </Button>
+        ) : (
+          <Button
+            variant="default"
+            size="sm"
+            className="gap-1.5"
+            onClick={handleTriggerBuild}
+            disabled={isBuilding}
+          >
+            {isBuilding ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Play className="w-4 h-4" />
+            )}
+            触发构建
+          </Button>
+        )}
+        {buildMessage && (
+          <span className={`text-sm ${buildMessage.includes("失败") ? "text-red-500" : "text-green-600"}`}>
+            {buildMessage}
+          </span>
+        )}
+        {isBuilding && (
+          <span className="text-sm text-blue-600 flex items-center gap-1">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            构建中...
+          </span>
+        )}
+      </div>
+
       {/* Package download buttons */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <span className="text-sm text-gray-500">快速下载：</span>
         <Button
           variant="outline"
