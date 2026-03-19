@@ -15,6 +15,8 @@ import {
   BuildRecord,
 } from '../models/buildRecord.js';
 import { runBuild } from '../services/buildService.js';
+import { rollbackToCommit, rollbackToTag } from '../services/rollbackService.js';
+import { getCurrentBranch } from '../services/gitService.js';
 import path from 'path';
 import os from 'os';
 
@@ -220,6 +222,63 @@ router.get('/:id/output', (req: Request, res: Response) => {
 router.get('/stats/:versionId', (req: Request, res: Response) => {
   const stats = getBuildRecordStats(req.params.versionId);
   res.json(success(stats));
+});
+
+// POST /api/v1/builds/:id/rollback — Rollback project to the state at a specific build
+router.post('/:id/rollback', (req: Request, res: Response) => {
+  const record = getBuildRecord(req.params.id);
+  if (!record) {
+    return res.status(404).json(error(404, 'Build record not found'));
+  }
+
+  const { target, targetType = 'commit', createBranch = false } = req.body as {
+    target?: string;
+    targetType?: 'tag' | 'branch' | 'commit';
+    createBranch?: boolean;
+  };
+
+  const projectPath = getVersionProjectPath(record.versionId, record.projectPath);
+
+  // If no target specified, use the tag associated with this build's version
+  let effectiveTarget = target;
+  let effectiveType = targetType;
+
+  if (!effectiveTarget) {
+    // Try to use git tag for this version as rollback target
+    const tagName = `v${record.versionNumber}`;
+    effectiveTarget = tagName;
+    effectiveType = 'tag';
+  }
+
+  let result;
+  const previousRef = getCurrentBranch(projectPath) || 'HEAD';
+
+  if (effectiveType === 'tag') {
+    result = rollbackToTag(projectPath, effectiveTarget, {
+      createBranch,
+      branchName: createBranch ? `rollback/build-${record.buildNumber}-${Date.now()}` : undefined,
+    });
+  } else {
+    result = rollbackToCommit(projectPath, effectiveTarget, {
+      createBranch,
+      branchName: createBranch ? `rollback/build-${record.buildNumber}-${Date.now()}` : undefined,
+    });
+  }
+
+  // Update build record with rollback metadata
+  updateBuildRecord(record.id, {
+    rollbackCount: (record.rollbackCount || 0) + 1,
+    lastRollbackAt: new Date().toISOString(),
+    lastRollbackCommit: effectiveTarget,
+    rollbackFromCommit: previousRef,
+  });
+
+  res.json(success({
+    ...result,
+    buildId: record.id,
+    buildNumber: record.buildNumber,
+    rollbackCount: (record.rollbackCount || 0) + 1,
+  }));
 });
 
 export default router;

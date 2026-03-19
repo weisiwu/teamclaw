@@ -30,6 +30,10 @@ export interface BuildRecord {
   triggerType: 'manual' | 'auto' | 'rebuild';
   buildNumber: number;
   parentBuildId?: string;
+  rollbackCount?: number;
+  lastRollbackAt?: string;
+  lastRollbackCommit?: string;
+  rollbackFromCommit?: string;
 }
 
 export interface BuildStats {
@@ -138,6 +142,30 @@ export async function rebuildBuildAPI(buildId: string, triggeredBy = 'user'): Pr
   throw new Error(json.message || 'Failed to rebuild');
 }
 
+// Rollback project to the state at a specific build
+export async function rollbackBuildAPI(
+  buildId: string,
+  options?: { target?: string; targetType?: 'tag' | 'branch' | 'commit'; createBranch?: boolean }
+): Promise<{
+  success: boolean;
+  previousRef: string;
+  targetRef: string;
+  targetType: string;
+  message: string;
+  buildId: string;
+  buildNumber: number;
+  rollbackCount: number;
+}> {
+  const res = await fetch(`${API_BASE}/builds/${buildId}/rollback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options || {}),
+  });
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) return json.data;
+  throw new Error(json.message || 'Failed to rollback build');
+}
+
 // ========== React Query Hooks ==========
 
 export function useBuilds(versionId: string, limit = 20) {
@@ -205,5 +233,12 @@ export function useRebuildBuild() {
   return useMutation({
     mutationFn: ({ buildId, triggeredBy }: { buildId: string; triggeredBy?: string }) =>
       rebuildBuildAPI(buildId, triggeredBy),
+  });
+}
+
+export function useRollbackBuild() {
+  return useMutation({
+    mutationFn: (vars: { buildId: string; target?: string; targetType?: 'tag' | 'branch' | 'commit'; createBranch?: boolean }) =>
+      rollbackBuildAPI(vars.buildId, vars),
   });
 }

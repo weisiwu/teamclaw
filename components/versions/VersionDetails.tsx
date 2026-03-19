@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT } from "@/lib/api/types";
 import { useBuildArtifacts, useVersionScreenshots, useVersionChangelog, useRefreshVersionSummary, useVersionArtifacts } from "@/lib/api/versions";
-import { useLatestBuild, useRebuildBuild } from "@/lib/api/builds";
+import { useLatestBuild, useRebuildBuild, useRollbackBuild } from "@/lib/api/builds";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScreenshotGallery, ChangelogPanel, VersionTimeline } from "@/components/versions";
@@ -59,7 +59,9 @@ export function VersionDetails(props: VersionDetailsProps) {
   // 构建相关 hooks
   const { data: latestBuild } = useLatestBuild(version?.id || "");
   const rebuildBuild = useRebuildBuild();
+  const rollbackBuild = useRollbackBuild();
   const [rebuilding, setRebuilding] = useState(false);
+  const [rollingBack, setRollingBack] = useState(false);
 
   // Express 服务器产物列表（真实构建产物）
   const { data: serverArtifacts = [] } = useVersionArtifacts(version?.id || "", latestBuild?.buildNumber);
@@ -79,6 +81,25 @@ export function VersionDetails(props: VersionDetailsProps) {
       console.error('Rebuild failed:', err);
     } finally {
       setRebuilding(false);
+    }
+  };
+
+  const handleRollback = async () => {
+    if (!latestBuild?.id || !version) return;
+    if (!window.confirm(`确定要回退到版本 "${version.title}" 的构建状态吗？当前未提交的更改将会丢失。`)) return;
+    setRollingBack(true);
+    try {
+      await rollbackBuild.mutateAsync({
+        buildId: latestBuild.id,
+        targetType: 'tag',
+        createBranch: true,
+      });
+      alert('回退成功');
+    } catch (err) {
+      console.error('Rollback failed:', err);
+      alert('回退失败: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setRollingBack(false);
     }
   };
 
@@ -135,15 +156,26 @@ export function VersionDetails(props: VersionDetailsProps) {
           </div>
           <div className="flex items-center gap-2">
             {latestBuild && latestBuild.status === 'success' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRebuild}
-                disabled={rebuilding || rebuildBuild.isPending}
-              >
-                <RefreshCw className={`w-4 h-4 mr-1 ${rebuilding || rebuildBuild.isPending ? 'animate-spin' : ''}`} />
-                重新打包
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRebuild}
+                  disabled={rebuilding || rebuildBuild.isPending}
+                >
+                  <RefreshCw className={`w-4 h-4 mr-1 ${rebuilding || rebuildBuild.isPending ? 'animate-spin' : ''}`} />
+                  重新打包
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRollback}
+                  disabled={rollingBack || rollbackBuild.isPending}
+                >
+                  <History className={`w-4 h-4 mr-1 ${rollingBack || rollbackBuild.isPending ? 'animate-spin' : ''}`} />
+                  回退到此版本
+                </Button>
+              </>
             )}
             {serverArtifacts.length > 0 && (
               <Button

@@ -40,6 +40,12 @@ export interface BuildRecord {
   triggerType: BuildTriggerType; // how this build was triggered
   buildNumber: number;           // sequential build number for this version (1, 2, 3...)
   parentBuildId?: string;       // if rebuild, reference to original build
+
+  // Rollback
+  rollbackCount: number;         // how many times this build has been rolled back to
+  lastRollbackAt?: string;       // ISO timestamp of last rollback
+  lastRollbackCommit?: string;   // the commit we rolled back to
+  rollbackFromCommit?: string;   // the commit we rolled back from (before rollback)
 }
 
 const buildRecords = new Map<string, BuildRecord>();
@@ -105,6 +111,7 @@ export function createBuildRecord(data: Omit<BuildRecord, 'id' | 'buildNumber' |
     buildNumber,
     queuedAt: new Date().toISOString(),
     status: 'pending',
+    rollbackCount: 0,
   };
 
   buildRecords.set(id, record);
