@@ -1,6 +1,8 @@
 /**
- * VersionSummary Model — In-memory + JSON file persistence
+ * VersionSummary Model — SQLite persistence (migrated from in-memory)
  */
+
+import { getDb } from '../db/sqlite.js';
 
 export interface VersionChange {
   type: 'feature' | 'fix' | 'improvement' | 'breaking' | 'docs' | 'refactor' | 'other';
@@ -23,64 +25,60 @@ export interface VersionSummary {
   branchName?: string;
 }
 
-const summaries = new Map<string, VersionSummary>();
-const indexByVersion = new Map<string, string>(); // versionId -> summaryId
-
-function persist() {
-  try {
-    const fs = require('fs');
-    const path = require('path');
-    const dataDir = path.join(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(dataDir, 'summaries.json'),
-      JSON.stringify(Array.from(summaries.values()))
-    );
-  } catch {
-    // Ignore
-  }
+function rowToSummary(row: Record<string, unknown>): VersionSummary {
+  return {
+    id: row.id as string,
+    versionId: row.version_id as string,
+    title: (row.title as string) || '',
+    content: (row.content as string) || '',
+    features: row.features ? JSON.parse(row.features as string) : [],
+    fixes: row.fixes ? JSON.parse(row.fixes as string) : [],
+    changes: row.changes ? JSON.parse(row.changes as string) : [],
+    breaking: row.breaking ? JSON.parse(row.breaking as string) : [],
+    changes_detail: row.changes_detail ? JSON.parse(row.changes_detail as string) : [],
+    generatedAt: row.generated_at as string,
+    generatedBy: row.generated_by as string,
+    branchName: row.branch_name as string | undefined,
+  };
 }
-
-function load() {
-  try {
-    const fs = require('fs');
-    const path = require('path');
-    const file = path.join(process.cwd(), 'data', 'summaries.json');
-    if (fs.existsSync(file)) {
-      const data: VersionSummary[] = JSON.parse(fs.readFileSync(file, 'utf-8'));
-      data.forEach(s => {
-        summaries.set(s.id, s);
-        indexByVersion.set(s.versionId, s.id);
-      });
-    }
-  } catch {
-    // Start fresh
-  }
-}
-
-load();
 
 export const VersionSummaryModel = {
   create(data: Omit<VersionSummary, 'id' | 'generatedAt'>): VersionSummary {
+    const db = getDb();
     const id = `sum_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    const summary: VersionSummary = {
-      ...data,
+    const generatedAt = new Date().toISOString();
+
+    db.prepare(`
+      INSERT INTO version_summaries (id, version_id, title, content, features, fixes, changes, breaking, changes_detail, generated_at, generated_by, branch_name)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
       id,
-      generatedAt: new Date().toISOString(),
-    };
-    summaries.set(id, summary);
-    indexByVersion.set(data.versionId, id);
-    persist();
-    return summary;
+      data.versionId,
+      data.title,
+      data.content,
+      JSON.stringify(data.features),
+      JSON.stringify(data.fixes),
+      JSON.stringify(data.changes),
+      JSON.stringify(data.breaking),
+      JSON.stringify(data.changes_detail),
+      generatedAt,
+      data.generatedBy,
+      data.branchName || null
+    );
+
+    return { id, ...data, generatedAt, generatedBy: data.generatedBy };
   },
 
   findById(id: string): VersionSummary | undefined {
-    return summaries.get(id);
+    const db = getDb();
+    const row = db.prepare('SELECT * FROM version_summaries WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    return row ? rowToSummary(row) : undefined;
   },
 
   findByVersionId(versionId: string): VersionSummary | undefined {
-    const id = indexByVersion.get(versionId);
-    return id ? summaries.get(id) : undefined;
+    const db = getDb();
+    const row = db.prepare('SELECT * FROM version_summaries WHERE version_id = ?').get(versionId) as Record<string, unknown> | undefined;
+    return row ? rowToSummary(row) : undefined;
   },
 
   update(versionId: string, data: {
@@ -90,13 +88,13 @@ export const VersionSummaryModel = {
     changes?: string[];
     breaking?: string[];
   }): VersionSummary | undefined {
+    const db = getDb();
     const existing = this.findByVersionId(versionId);
     if (!existing) return undefined;
 
     const updated: VersionSummary = {
       ...existing,
       ...data,
-      // Rebuild changes_detail from categorized items
       changes_detail: [
         ...(data.features || existing.features).map(d => ({ type: 'feature' as const, description: d })),
         ...(data.fixes || existing.fixes).map(d => ({ type: 'fix' as const, description: d })),
@@ -107,9 +105,23 @@ export const VersionSummaryModel = {
       generatedBy: 'manual',
     };
 
-    summaries.set(existing.id, updated);
-    indexByVersion.set(versionId, existing.id);
-    persist();
+    db.prepare(`
+      UPDATE version_summaries
+      SET title=?, content=?, features=?, fixes=?, changes=?, breaking=?, changes_detail=?, generated_at=?, generated_by=?
+      WHERE version_id=?
+    `).run(
+      updated.title,
+      updated.content,
+      JSON.stringify(updated.features),
+      JSON.stringify(updated.fixes),
+      JSON.stringify(updated.changes),
+      JSON.stringify(updated.breaking),
+      JSON.stringify(updated.changes_detail),
+      updated.generatedAt,
+      updated.generatedBy,
+      versionId
+    );
+
     return updated;
   },
 
@@ -152,11 +164,8 @@ export const VersionSummaryModel = {
   },
 
   delete(versionId: string): boolean {
-    const id = indexByVersion.get(versionId);
-    if (!id) return false;
-    summaries.delete(id);
-    indexByVersion.delete(versionId);
-    persist();
-    return true;
+    const db = getDb();
+    const info = db.prepare('DELETE FROM version_summaries WHERE version_id = ?').run(versionId);
+    return info.changes > 0;
   },
 };

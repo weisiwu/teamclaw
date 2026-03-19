@@ -71,6 +71,22 @@ export function runMigrations() {
     );
     CREATE INDEX IF NOT EXISTS idx_bump_history_version ON bump_history(version_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_bump_history_trigger ON bump_history(trigger_type, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS version_summaries (
+      id TEXT PRIMARY KEY,
+      version_id TEXT UNIQUE NOT NULL,
+      title TEXT,
+      content TEXT,
+      features TEXT,
+      fixes TEXT,
+      changes TEXT,
+      breaking TEXT,
+      changes_detail TEXT,
+      generated_at TEXT DEFAULT (datetime('now')),
+      generated_by TEXT,
+      branch_name TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_version_summaries_version ON version_summaries(version_id);
   `);
 
   console.log('[migrations] Database migrations completed');

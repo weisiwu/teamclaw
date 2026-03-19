@@ -143,6 +143,14 @@ export default function VersionsPage() {
                       </div>
                     )}
 
+                    {/* Version summary preview */}
+                    {v.summary && (
+                      <div className="mt-2 p-2 bg-gray-50 rounded-md">
+                        <div className="text-xs text-gray-500 mb-1">摘要 · {v.summaryGeneratedAt ? new Date(v.summaryGeneratedAt).toLocaleDateString("zh-CN") : "自动生成"}</div>
+                        <p className="text-xs text-gray-600 line-clamp-2">{v.summary}</p>
+                      </div>
+                    )}
+
                     {/* Footer */}
                     <div className="flex items-center justify-between text-xs text-gray-400 pt-3 border-t">
                       <span>{v.commitCount} 次提交</span>

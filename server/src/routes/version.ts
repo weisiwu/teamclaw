@@ -191,19 +191,24 @@ router.get('/', (req: Request, res: Response) => {
   const offset = (page - 1) * pageSize;
   const rows = db.prepare(sql).all({ ...params, limit: pageSize, offset }) as Array<Record<string, unknown>>;
 
-  const data = rows.map(row => ({
-    id: row.id,
-    version: row.version,
-    branch: row.branch,
-    summary: row.summary,
-    commit_hash: row.commit_hash,
-    created_by: row.created_by,
-    created_at: row.created_at,
-    build_status: row.build_status,
-    tag_created: row.tag_created === 1,
-    hasScreenshot: ScreenshotModel.findByVersionId(row.id as string).length > 0,
-    hasSummary: !!VersionSummaryModel.findByVersionId(row.id as string),
-  }));
+  const data = rows.map(row => {
+    const summaryRecord = VersionSummaryModel.findByVersionId(row.id as string);
+    return {
+      id: row.id,
+      version: row.version,
+      branch: row.branch,
+      summary: row.summary || summaryRecord?.content || undefined,
+      summaryGeneratedAt: summaryRecord?.generatedAt || undefined,
+      summaryGeneratedBy: summaryRecord?.generatedBy || undefined,
+      commit_hash: row.commit_hash,
+      created_by: row.created_by,
+      created_at: row.created_at,
+      build_status: row.build_status,
+      tag_created: row.tag_created === 1,
+      hasScreenshot: ScreenshotModel.findByVersionId(row.id as string).length > 0,
+      hasSummary: !!summaryRecord,
+    };
+  });
 
   res.json(success({
     data,
@@ -297,6 +302,22 @@ router.post('/', (req: Request, res: Response) => {
     }
   } catch (err) {
     console.warn('[version] Failed to create git tag:', err);
+  }
+
+  // Auto-generate version summary on creation
+  try {
+    VersionSummaryModel.upsert({
+      versionId: id,
+      title: title,
+      content: description || `Version ${version} created`,
+      features: [],
+      fixes: [],
+      changes: [],
+      breaking: [],
+      createdBy: 'system',
+    });
+  } catch (err) {
+    console.warn('[version] Auto summary generation failed:', err);
   }
 
   res.status(201).json(success({
@@ -584,6 +605,25 @@ router.post('/:id/build', async (req: Request, res: Response) => {
         bumpedVersionStr = bumpResult.newVersion;
       } catch (err) {
         console.warn('[build] executeAutoBump failed:', err);
+      }
+    }
+
+    // Auto-generate version summary on build success
+    if (result.success) {
+      try {
+        const title = (row.title as string) || `v${row.version}`;
+        VersionSummaryModel.upsert({
+          versionId: req.params.id,
+          title,
+          content: `Build successful for v${row.version}`,
+          features: [],
+          fixes: [],
+          changes: [],
+          breaking: [],
+          createdBy: 'system',
+        });
+      } catch (err) {
+        console.warn('[build] Auto summary generation failed:', err);
       }
     }
 
