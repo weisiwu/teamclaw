@@ -35,7 +35,7 @@ router.get('/docs', async (req, res) => {
     docs = applyFilters(docs, filter);
     const total = docs.length;
     const paged = docs.slice((pageNum - 1) * size, pageNum * size);
-    saveSearchHistory(userId as string, q as string);
+    saveSearchHistory(userId as string, q as string, 'semantic', filter, total);
     return res.json(success({
       list: paged.map(d => ({
         type: 'doc',
@@ -57,7 +57,7 @@ router.get('/docs', async (req, res) => {
   docs = applyFilters(docs, filter);
   const total = docs.length;
   const paged = docs.slice((pageNum - 1) * size, pageNum * size);
-  if (q && typeof q === 'string') saveSearchHistory(userId as string, q);
+  if (q && typeof q === 'string') saveSearchHistory(userId as string, q, 'keyword', filter, total);
   res.json(success({
     list: paged.map(d => ({
       type: 'doc',
@@ -115,7 +115,8 @@ router.get('/suggestions', (req, res) => {
 // 搜索历史 GET /api/v1/search/history?userId=xxx&limit=10
 router.get('/history', (req, res) => {
   const { userId = 'default', limit = '10' } = req.query;
-  const history = getSearchHistory(userId as string, parseInt(limit as string));
+  const { getSearchHistoryRecords } = require('../services/searchEnhancer.js');
+  const history = getSearchHistoryRecords(userId as string, parseInt(limit as string));
   res.json(success({ history }));
 });
 

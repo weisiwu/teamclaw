@@ -193,30 +193,120 @@ export function getSearchSuggestions(query: string, limit: number = 5): string[]
   return suggestions;
 }
 
-// Save search query to user history
-export function saveSearchHistory(userId: string, query: string): void {
-  if (!query || query.trim().length < 2) return;
+// Search history persistence (SQLite + memory cache)
 
-  const key = `history_${userId}`;
-  let history = searchHistoryMap.get(key) || [];
-
-  // Remove duplicate if exists
-  history = history.filter(h => h !== query);
-  // Add to front
-  history.unshift(query);
-  // Keep max 20
-  if (history.length > 20) history = history.slice(0, 20);
-
-  searchHistoryMap.set(key, history);
+function getDb() {
+  try {
+    const { getDb } = require('../db/sqlite.js');
+    return getDb();
+  } catch {
+    return null;
+  }
 }
 
-// Get search history for user
-export function getSearchHistory(userId: string, limit: number = 10): string[] {
+// Ensure search_history table exists
+function ensureSearchHistoryTable(): void {
+  try {
+    const db = getDb();
+    if (!db) return;
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS search_history (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        query TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'keyword',
+        filters TEXT,
+        result_count INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_search_history_user ON search_history(user_id, created_at DESC);
+    `);
+  } catch { /* ignore */ }
+}
+ensureSearchHistoryTable();
+
+// Save search query to user history (SQLite + memory cache)
+export function saveSearchHistory(userId: string, query: string, type: 'keyword' | 'semantic' = 'keyword', filters: SearchFilter = {}, resultCount = 0): void {
+  if (!query || query.trim().length < 2) return;
+
+  // Memory cache
   const key = `history_${userId}`;
-  return (searchHistoryMap.get(key) || []).slice(0, limit);
+  let history = searchHistoryMap.get(key) || [];
+  history = history.filter(h => h !== query);
+  history.unshift(query);
+  if (history.length > 20) history = history.slice(0, 20);
+  searchHistoryMap.set(key, history);
+
+  // SQLite persistence
+  try {
+    const db = getDb();
+    if (!db) return;
+    const id = `hist_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    db.prepare(`
+      INSERT INTO search_history (id, user_id, query, type, filters, result_count, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(id, userId, query, type, JSON.stringify(filters), resultCount, new Date().toISOString());
+
+    // Keep max 50 entries per user in DB
+    db.prepare(`
+      DELETE FROM search_history WHERE user_id = ? AND id NOT IN (
+        SELECT id FROM search_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 50
+      )
+    `).run(userId, userId);
+  } catch { /* ignore */ }
+}
+
+// Get search history for user (SQLite primary, memory fallback)
+export function getSearchHistory(userId: string, limit: number = 10): Array<{ id: string; query: string; type: string; resultCount: number; createdAt: string }> {
+  // Try memory first
+  const key = `history_${userId}`;
+  const memHistory = searchHistoryMap.get(key) || [];
+
+  // Try SQLite
+  try {
+    const db = getDb();
+    if (db) {
+      const rows = db.prepare(`
+        SELECT id, query, type, result_count as resultCount, created_at as createdAt
+        FROM search_history
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+      `).all(userId, limit) as any[];
+      return rows;
+    }
+  } catch { /* ignore */ }
+
+  // Fallback: convert memory history to structured format
+  return memHistory.slice(0, limit).map((q, i) => ({
+    id: `mem_${i}`,
+    query: q,
+    type: 'keyword',
+    resultCount: 0,
+    createdAt: new Date().toISOString(),
+  }));
 }
 
 // Clear search history for user
 export function clearSearchHistory(userId: string): void {
   searchHistoryMap.delete(`history_${userId}`);
+  try {
+    const db = getDb();
+    db?.prepare('DELETE FROM search_history WHERE user_id = ?').run(userId);
+  } catch { /* ignore */ }
+}
+
+// Get search history records from DB
+export function getSearchHistoryRecords(userId: string, limit: number = 10): any[] {
+  try {
+    const db = getDb();
+    if (!db) return [];
+    return db.prepare(`
+      SELECT id, query, type, filters, result_count as resultCount, created_at as createdAt
+      FROM search_history
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).all(userId, limit);
+  } catch { return []; }
 }

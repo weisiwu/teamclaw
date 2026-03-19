@@ -198,21 +198,56 @@ router.get('/stats/overview', (req, res) => {
   }));
 });
 
-// ========== 文档在线预览 ==========
+// ========== 文档在线预览 (增强版) ==========
 
 // 在线预览文档 GET /api/v1/docs/:docId/preview
-router.get('/:docId/preview', (req, res) => {
-  const { getFilePreview } = require('../services/docConverter');
-  const filePath = docService.getDocFilePath(req.params.docId);
-  if (!filePath) {
-    return res.status(404).json(error('DOC_NOT_FOUND', '文档不存在'));
+router.get('/:docId/preview', async (req, res) => {
+  const { generatePreview } = await import('../services/docPreviewService.js');
+  const { page, maxLines } = req.query;
+
+  const result = await generatePreview(req.params.docId, {
+    page: page ? parseInt(page as string) : undefined,
+    maxLines: maxLines ? parseInt(maxLines as string) : undefined,
+  });
+
+  if (!result.canPreview) {
+    return res.status(415).json(error('UNSUPPORTED_TYPE', result.message || '该文件类型不支持在线预览'));
   }
-  const html = getFilePreview(filePath);
-  if (!html) {
-    return res.status(415).json(error('UNSUPPORTED_TYPE', '该文件类型不支持在线预览'));
+
+  if (result.type === 'html' || result.type === 'code') {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(result.content);
   }
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(html);
+
+  if (result.type === 'image') {
+    return res.json(success(result));
+  }
+
+  // PDF: return preview metadata, frontend uses react-pdf
+  return res.json(success(result));
+});
+
+// PDF分页预览数据 GET /api/v1/docs/:docId/preview/pdf?page=1
+router.get('/:docId/preview/pdf', async (req, res) => {
+  const { generatePreview } = await import('../services/docPreviewService.js');
+  const page = parseInt((req.query.page as string) || '1');
+
+  const result = await generatePreview(req.params.docId, { page });
+
+  if (!result.canPreview || result.type !== 'pdf') {
+    return res.status(415).json(error('UNSUPPORTED_TYPE', result.message || 'PDF预览不可用'));
+  }
+
+  // Return PDF metadata and download URL
+  return res.json(success({
+    type: 'pdf',
+    url: `/api/v1/docs/${req.params.docId}/download`,
+    pages: result.pages,
+    currentPage: page,
+    size: result.size,
+    filename: result.filename,
+    canPreview: result.canPreview,
+  }));
 });
 
 export default router;
