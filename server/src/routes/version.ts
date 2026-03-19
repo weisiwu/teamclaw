@@ -8,6 +8,9 @@ import { getGitLog, getTags, createTag, getBranches, getCurrentBranch, createBra
 import { runBuild, getBuildConfig } from '../services/buildService.js';
 import { listArtifacts, deleteArtifacts, getArtifactInfo, getArtifactStream, importArtifactsFromDir, getArtifactsTotalSize } from '../services/artifactStore.js';
 import { rollbackToTag, rollbackToBranch, rollbackToCommit, getRollbackPreview, getRollbackTargets } from '../services/rollbackService.js';
+import { compareTwoVersions, quickCompare } from '../services/versionCompare.js';
+import { performBump, formatBumpSummary } from '../services/versionBump.js';
+import { isValidSemver, bumpVersion } from '../services/semver.js';
 import path from 'path';
 import os from 'os';
 
@@ -916,3 +919,143 @@ router.post('/:id/summary/generate', async (req: Request, res: Response) => {
 });
 
 export default router;
+
+// ========== Version Compare Routes ==========
+
+// GET /api/v1/versions/compare — Compare two versions
+router.get('/compare', async (req: Request, res: Response) => {
+  const { from, to, fromId, toId } = req.query as {
+    from?: string;
+    to?: string;
+    fromId?: string;
+    toId?: string;
+  };
+
+  if (!from || !to) {
+    res.status(400).json(error(400, 'from and to query parameters are required'));
+    return;
+  }
+
+  try {
+    const result = await compareTwoVersions(
+      fromId || from,
+      toId || to,
+      from,
+      to
+    );
+    res.json(success(result));
+  } catch (err) {
+    console.error('Version compare error:', err);
+    res.status(500).json(error(500, `版本对比失败: ${err instanceof Error ? err.message : String(err)}`));
+  }
+});
+
+// GET /api/v1/versions/compare/quick — Quick diff summary
+router.get('/compare/quick', async (req: Request, res: Response) => {
+  const { from, to, fromId, toId } = req.query as {
+    from?: string;
+    to?: string;
+    fromId?: string;
+    toId?: string;
+  };
+
+  if (!from || !to) {
+    res.status(400).json(error(400, 'from and to query parameters are required'));
+    return;
+  }
+
+  try {
+    const result = await quickCompare(fromId || from, toId || to, from, to);
+    res.json(success(result));
+  } catch (err) {
+    res.status(500).json(error(500, `快速对比失败: ${err instanceof Error ? err.message : String(err)}`));
+  }
+});
+
+// POST /api/v1/versions/:id/bump-with-task — Bump version based on task type
+router.post('/:id/bump-with-task', (req: Request, res: Response) => {
+  const v = versions.get(req.params.id);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  const { taskType, taskId, taskTitle } = req.body as {
+    taskType: string;
+    taskId: string;
+    taskTitle?: string;
+  };
+
+  if (!taskType || !taskId) {
+    res.status(400).json(error(400, 'taskType and taskId are required'));
+    return;
+  }
+
+  if (!isValidSemver(v.version)) {
+    res.status(400).json(error(400, `Invalid semver: ${v.version}`));
+    return;
+  }
+
+  const result = performBump(v.version, { taskType, taskId, taskTitle });
+
+  if (!result) {
+    res.status(500).json(error(500, 'Bump failed'));
+    return;
+  }
+
+  // Apply the bump to the version
+  v.version = result.newVersion;
+  v.updatedAt = new Date().toISOString();
+
+  if (settings.autoTag && settings.tagOnStatus.includes('published')) {
+    v.gitTag = makeTagName(result.newVersion, settings.tagPrefix, settings.customPrefix);
+    v.gitTagCreatedAt = new Date().toISOString();
+  }
+
+  versions.set(v.id, v);
+
+  res.json(success({
+    version: v,
+    bump: result,
+    summary: formatBumpSummary(result),
+  }));
+});
+
+// GET /api/v1/versions/:id/bump-preview — Preview what a bump would produce
+router.get('/:id/bump-preview', (req: Request, res: Response) => {
+  const v = versions.get(req.params.id);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  const { taskType } = req.query as { taskType?: string };
+
+  if (!isValidSemver(v.version)) {
+    res.status(400).json(error(400, `Invalid semver: ${v.version}`));
+    return;
+  }
+
+  // Default bump types to preview
+  const bumpTypes = ['patch', 'minor', 'major'] as const;
+
+  const previews = bumpTypes.map(type => {
+    const newVersion = bumpVersion(v.version, type);
+    const context = taskType ? { taskType, taskId: 'preview', taskTitle: '预览' } : null;
+    const changelog = context ? performBump(v.version, context) : null;
+
+    return {
+      bumpType: type,
+      currentVersion: v.version,
+      newVersion: newVersion || v.version,
+      isDefault: taskType ? changelog?.bumpType === type : type === 'patch',
+      changelog: changelog && changelog.bumpType === type ? changelog.changelog : null,
+    };
+  });
+
+  res.json(success({
+    currentVersion: v.version,
+    taskType: taskType || null,
+    previews,
+  }));
+});

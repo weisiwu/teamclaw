@@ -2468,3 +2468,169 @@ export function useRollbackHistory(versionId?: string) {
     staleTime: 60 * 1000,
   });
 }
+
+// ========== Version Compare API ==========
+
+export interface VersionCompareResult {
+  fromVersion: string;
+  toVersion: string;
+  commits: {
+    onlyFrom: Array<{ hash: string; message: string; author: string; date: string }>;
+    onlyTo: Array<{ hash: string; message: string; author: string; date: string }>;
+    shared: Array<{ hash: string; message: string; author: string; date: string }>;
+    totalFrom: number;
+    totalTo: number;
+  };
+  files: {
+    added: string[];
+    removed: string[];
+    modified: string[];
+    totalFrom: number;
+    totalTo: number;
+  };
+  changelogs: {
+    from: VersionSummary | null;
+    to: VersionSummary | null;
+  };
+  summary: {
+    newerIsAhead: boolean;
+    commitDelta: number;
+    fileDelta: number;
+    hasBreakingChanges: boolean;
+    recommendation: string;
+  };
+}
+
+export interface CompareQuickResult {
+  hasDiff: boolean;
+  summary: string;
+}
+
+// API_BASE is '/api/v1' — full path constructed per-call
+
+export async function compareVersions(
+  from: string,
+  to: string,
+  fromId?: string,
+  toId?: string
+): Promise<VersionCompareResult> {
+  const params = new URLSearchParams({ from, to });
+  if (fromId) params.set('fromId', fromId);
+  if (toId) params.set('toId', toId);
+  const res = await fetch(`/api/v1/versions/compare?${params}`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || '版本对比失败');
+  return json.data;
+}
+
+export async function quickCompareVersions(
+  from: string,
+  to: string,
+  fromId?: string,
+  toId?: string
+): Promise<CompareQuickResult> {
+  const params = new URLSearchParams({ from, to });
+  if (fromId) params.set('fromId', fromId);
+  if (toId) params.set('toId', toId);
+  const res = await fetch(`/api/v1/versions/compare/quick?${params}`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || '快速对比失败');
+  return json.data;
+}
+
+export function useCompareVersions(from: string, to: string, fromId?: string, toId?: string) {
+  return useQuery({
+    queryKey: ['versionCompare', from, to, fromId, toId],
+    queryFn: () => compareVersions(from, to, fromId, toId),
+    enabled: Boolean(from && to),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+// ========== Task-based Bump API ==========
+
+export interface BumpWithTaskRequest {
+  taskType: string;
+  taskId: string;
+  taskTitle?: string;
+}
+
+export interface BumpWithTaskResult {
+  version: Version;
+  bump: {
+    previousVersion: string;
+    newVersion: string;
+    bumpType: 'major' | 'minor' | 'patch';
+    taskType: string;
+    autoBump: boolean;
+    changelog: {
+      features: string[];
+      fixes: string[];
+      improvements: string[];
+      breaking: string[];
+      docs: string[];
+    };
+  };
+  summary: string;
+}
+
+export async function bumpVersionWithTask(
+  versionId: string,
+  request: BumpWithTaskRequest
+): Promise<BumpWithTaskResult> {
+  const res = await fetch(`/api/v1/versions/${versionId}/bump-with-task`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || '版本升级失败');
+  return json.data;
+}
+
+export function useBumpVersionWithTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ versionId, request }: { versionId: string; request: BumpWithTaskRequest }) =>
+      bumpVersionWithTask(versionId, request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['versions'] });
+    },
+  });
+}
+
+export interface BumpPreview {
+  bumpType: 'major' | 'minor' | 'patch';
+  currentVersion: string;
+  newVersion: string;
+  isDefault: boolean;
+  changelog: {
+    features: string[];
+    fixes: string[];
+    improvements: string[];
+    breaking: string[];
+    docs: string[];
+  } | null;
+}
+
+export async function getBumpPreview(versionId: string, taskType?: string): Promise<{
+  currentVersion: string;
+  taskType: string | null;
+  previews: BumpPreview[];
+}> {
+  const params = taskType ? new URLSearchParams({ taskType }) : '';
+  const url = `/api/v1/versions/${versionId}/bump-preview${params ? '?' + params : ''}`;
+  const res = await fetch(url);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || '预览失败');
+  return json.data;
+}
+
+export function useBumpPreview(versionId: string, taskType?: string) {
+  return useQuery({
+    queryKey: ['bumpPreview', versionId, taskType],
+    queryFn: () => getBumpPreview(versionId, taskType),
+    enabled: Boolean(versionId),
+    staleTime: 60 * 1000,
+  });
+}
