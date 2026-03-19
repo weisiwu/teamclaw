@@ -192,3 +192,52 @@ export async function updateMessageStatus(
     body: JSON.stringify({ status }),
   });
 }
+
+// ========== 新增 API ==========
+
+/**
+ * 获取消息统计
+ */
+export async function getMessageStats() {
+  return apiRequest(`${API_BASE}/messages/stats`);
+}
+
+/**
+ * 获取 DLQ 列表
+ */
+export async function getDLQEntries(params?: { page?: number; pageSize?: number; channel?: string }) {
+  const searchParams = new URLSearchParams();
+  if (params?.page) searchParams.set('page', String(params.page));
+  if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
+  if (params?.channel) searchParams.set('channel', params.channel);
+  const qs = searchParams.toString();
+  return apiRequest(`${API_BASE}/messages/dlq${qs ? '?' + qs : ''}`);
+}
+
+/**
+ * 获取 DLQ 统计
+ */
+export async function getDLQStats() {
+  return apiRequest(`${API_BASE}/messages/dlq/stats`);
+}
+
+/**
+ * 从 DLQ 重新入队
+ */
+export async function requeueFromDLQ(messageId: string) {
+  return apiRequest(`${API_BASE}/messages/dlq/${messageId}/requeue`, { method: 'POST' });
+}
+
+/**
+ * 从 DLQ 丢弃
+ */
+export async function discardFromDLQ(messageId: string) {
+  return apiRequest(`${API_BASE}/messages/dlq/${messageId}`, { method: 'DELETE' });
+}
+
+/**
+ * 获取重试统计
+ */
+export async function getRetryStats() {
+  return apiRequest(`${API_BASE}/messages/retry/stats`);
+}

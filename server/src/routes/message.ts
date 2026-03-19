@@ -1,14 +1,23 @@
 /**
  * Message Routes
  * 消息机制模块 - REST API 路由
- * 
- * 6 个端点：
- * POST   /api/v1/messages           - 接收外部消息
- * GET    /api/v1/messages/queue     - 获取当前消息队列
- * GET    /api/v1/messages/queue/:queueId - 获取队列详情
+ *
+ * 端点：
+ * POST   /api/v1/messages                        - 接收外部消息
+ * GET    /api/v1/messages/queue                 - 获取当前消息队列
+ * GET    /api/v1/messages/queue/:queueId        - 获取队列详情
  * POST   /api/v1/messages/queue/:messageId/preempt - 手动触发抢占
- * GET    /api/v1/messages/history    - 获取消息历史
- * POST   /api/v1/messages/file      - 上传文件消息
+ * GET    /api/v1/messages/history               - 获取消息历史
+ * POST   /api/v1/messages/file                 - 上传文件消息
+ * PATCH  /api/v1/messages/:messageId/status    - 更新消息状态
+ * GET    /api/v1/messages/stats                - 消息统计（新增）
+ * GET    /api/v1/messages/dlq                  - DLQ 列表（新增）
+ * GET    /api/v1/messages/dlq/stats             - DLQ 统计（新增）
+ * GET    /api/v1/messages/dlq/:messageId        - DLQ 单条消息（新增）
+ * POST   /api/v1/messages/dlq/:messageId/requeue - 从 DLQ 重新入队（新增）
+ * DELETE /api/v1/messages/dlq/:messageId        - 从 DLQ 丢弃消息（新增）
+ * GET    /api/v1/messages/retry/stats           - 重试服务统计（新增）
+ * GET    /api/v1/messages/retry/:messageId      - 消息重试状态（新增）
  */
 
 import { Router } from 'express';
@@ -16,6 +25,9 @@ import { success, error } from '../utils/response.js';
 import { messageQueueService } from '../services/messageQueue.js';
 import { enrichMessagePriority } from '../services/priorityCalculator.js';
 import { manualPreempt, buildPreemptionNotification } from '../services/preemptionService.js';
+import { messageStatsService } from '../services/messageStats.js';
+import { messageDLQService } from '../services/messageDLQ.js';
+import { messageRetryService } from '../services/messageRetry.js';
 import {
   Message,
   ReceiveMessageRequest,
@@ -35,11 +47,9 @@ router.post('/', async (req, res) => {
       return res.status(400).json(error(400, '缺少必要字段: content, channel, userId'));
     }
 
-    // 计算优先级
     const role = body.role || 'employee';
     const { urgency, priority, roleWeight } = enrichMessagePriority(role, body.content);
 
-    // 构建消息
     const messageData = {
       channel: body.channel,
       userId: body.userId,
@@ -54,19 +64,20 @@ router.post('/', async (req, res) => {
       fileInfo: body.fileInfo,
     };
 
-    // 入队
     const result = messageQueueService.enqueue(messageData);
 
-    // 如果触发了抢占，生成通知
+    // 统计
+    messageStatsService.onEnqueued(result.message);
+    if (result.preempted) messageStatsService.onPreempted();
+    if (result.message.mergedFrom?.length) messageStatsService.onMerged();
+
     let notification: string | null = null;
     if (result.preempted && result.preemptedMessageId) {
       const preemptedMsg = messageQueueService.getMessage(result.preemptedMessageId);
       if (preemptedMsg) {
         notification = buildPreemptionNotification(
-          preemptedMsg.userName,
-          preemptedMsg.content.slice(0, 20),
-          result.message.userName,
-          result.message.content.slice(0, 20)
+          preemptedMsg.userName, preemptedMsg.content.slice(0, 20),
+          result.message.userName, result.message.content.slice(0, 20)
         );
       }
     }
@@ -119,11 +130,9 @@ router.post('/queue/:messageId/preempt', (req, res) => {
   try {
     const { messageId } = req.params;
     const result = manualPreempt(messageId);
-
     if (!result.success) {
       return res.status(400).json(error(400, result.error || '抢占失败'));
     }
-
     res.json(success({
       preemptedMessageId: result.preemptedId,
       currentProcessing: messageQueueService.getQueueStatus().currentProcessing,
@@ -147,7 +156,6 @@ router.get('/history', (req, res) => {
       endTime: req.query.endTime ? String(req.query.endTime) : undefined,
       channel: req.query.channel ? (String(req.query.channel) as Message['channel']) : undefined,
     };
-
     const result = messageQueueService.getMessageHistory(params);
     res.json(success(result));
   } catch (err) {
@@ -169,32 +177,25 @@ router.post('/file', (req, res) => {
       fileName: string;
       fileSize: number;
       mimeType: string;
-      content?: string;  // 提取的文本内容
+      content?: string;
     };
 
     if (!body.fileName || !body.mimeType) {
       return res.status(400).json(error(400, '缺少必要字段: fileName, mimeType'));
     }
 
-    // 文件类型处理
     const supportedTypes = [
-      'application/pdf',
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // docx
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation', // pptx
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
-      'text/markdown',
-      'text/plain',
+      'application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/markdown', 'text/plain',
     ];
 
     if (!supportedTypes.includes(body.mimeType)) {
       return res.status(400).json(error(400, `不支持的文件类型: ${body.mimeType}`));
     }
 
-    // 作为普通文本消息处理
     const content = body.content || `[文件] ${body.fileName}`;
     const { urgency, priority, roleWeight } = enrichMessagePriority(body.role || 'employee', content);
 
@@ -249,10 +250,152 @@ router.patch('/:messageId/status', (req, res) => {
       return res.status(404).json(error(404, '消息不存在'));
     }
 
+    if (status === 'completed') {
+      const msg = messageQueueService.getMessage(messageId);
+      if (msg) messageStatsService.onCompleted(msg);
+    }
+
     res.json(success({ messageId, status }));
   } catch (err) {
     console.error('[messages] PATCH /:messageId/status error:', err);
     res.status(500).json(error(500, '状态更新失败'));
+  }
+});
+
+// ============================================
+// GET /api/v1/messages/stats - 消息统计
+// ============================================
+router.get('/stats', (req, res) => {
+  try {
+    const queueStatus = messageQueueService.getQueueStatus();
+    const stats = messageStatsService.getStats(queueStatus.total, queueStatus.currentProcessing);
+    res.json(success(stats));
+  } catch (err) {
+    console.error('[messages] GET /stats error:', err);
+    res.status(500).json(error(500, '获取消息统计失败'));
+  }
+});
+
+// ============================================
+// GET /api/v1/messages/dlq - DLQ 列表
+// ============================================
+router.get('/dlq', (req, res) => {
+  try {
+    const params = {
+      page: req.query.page ? parseInt(String(req.query.page)) : 1,
+      pageSize: req.query.pageSize ? parseInt(String(req.query.pageSize)) : 20,
+      channel: req.query.channel ? String(req.query.channel) as Message['channel'] : undefined,
+    };
+    const result = messageDLQService.getDLQEntries(params);
+    res.json(success(result));
+  } catch (err) {
+    console.error('[messages] GET /dlq error:', err);
+    res.status(500).json(error(500, '获取 DLQ 失败'));
+  }
+});
+
+// ============================================
+// GET /api/v1/messages/dlq/stats - DLQ 统计
+// ============================================
+router.get('/dlq/stats', (req, res) => {
+  try {
+    const stats = messageDLQService.getStats();
+    res.json(success(stats));
+  } catch (err) {
+    console.error('[messages] GET /dlq/stats error:', err);
+    res.status(500).json(error(500, '获取 DLQ 统计失败'));
+  }
+});
+
+// ============================================
+// GET /api/v1/messages/dlq/:messageId - DLQ 单条消息
+// ============================================
+router.get('/dlq/:messageId', (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const entry = messageDLQService.getEntry(messageId);
+    if (!entry) {
+      return res.status(404).json(error(404, 'DLQ 中不存在该消息'));
+    }
+    res.json(success(entry));
+  } catch (err) {
+    console.error('[messages] GET /dlq/:messageId error:', err);
+    res.status(500).json(error(500, '获取 DLQ 消息详情失败'));
+  }
+});
+
+// ============================================
+// POST /api/v1/messages/dlq/:messageId/requeue - 从 DLQ 重新入队
+// ============================================
+router.post('/dlq/:messageId/requeue', (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const msg = messageDLQService.requeue(messageId);
+    if (!msg) {
+      return res.status(404).json(error(404, 'DLQ 中不存在该消息'));
+    }
+    const result = messageQueueService.enqueue({
+      channel: msg.channel,
+      userId: msg.userId,
+      userName: msg.userName,
+      role: msg.role,
+      roleWeight: msg.roleWeight,
+      content: msg.content,
+      type: msg.type,
+      urgency: msg.urgency,
+      timestamp: new Date().toISOString(),
+      fileInfo: msg.fileInfo,
+    });
+    messageStatsService.onEnqueued(result.message);
+    res.json(success({
+      messageId: result.message.messageId,
+      status: result.message.status,
+      requeued: true,
+    }));
+  } catch (err) {
+    console.error('[messages] POST /dlq/:messageId/requeue error:', err);
+    res.status(500).json(error(500, 'DLQ 重新入队失败'));
+  }
+});
+
+// ============================================
+// DELETE /api/v1/messages/dlq/:messageId - 从 DLQ 丢弃消息
+// ============================================
+router.delete('/dlq/:messageId', (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const discarded = messageDLQService.discard(messageId);
+    res.json(success({ discarded }));
+  } catch (err) {
+    console.error('[messages] DELETE /dlq/:messageId error:', err);
+    res.status(500).json(error(500, 'DLQ 丢弃失败'));
+  }
+});
+
+// ============================================
+// GET /api/v1/messages/retry/stats - 重试服务统计
+// ============================================
+router.get('/retry/stats', (req, res) => {
+  try {
+    const stats = messageRetryService.getStats();
+    res.json(success(stats));
+  } catch (err) {
+    console.error('[messages] GET /retry/stats error:', err);
+    res.status(500).json(error(500, '获取重试统计失败'));
+  }
+});
+
+// ============================================
+// GET /api/v1/messages/retry/:messageId - 消息重试状态
+// ============================================
+router.get('/retry/:messageId', (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const status = messageRetryService.getRetryStatus(messageId);
+    res.json(success({ messageId, retryStatus: status }));
+  } catch (err) {
+    console.error('[messages] GET /retry/:messageId error:', err);
+    res.status(500).json(error(500, '获取重试状态失败'));
   }
 });
 

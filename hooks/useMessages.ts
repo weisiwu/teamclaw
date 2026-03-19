@@ -80,3 +80,111 @@ export function useSendMessage() {
     },
   });
 }
+
+// ============================================================
+// 消息统计（新增）
+// ============================================================
+export interface MessageStats {
+  counters: {
+    totalEnqueued: number;
+    totalCompleted: number;
+    totalFailed: number;
+    totalMerged: number;
+    totalPreempted: number;
+    totalDLQ: number;
+  };
+  byRole: Record<string, { enqueued: number; completed: number; failed: number }>;
+  byChannel: Record<string, number>;
+  queueDepth: number;
+  currentProcessing: string | null;
+  timeWindows: {
+    '1h': { enqueued: number; completed: number; failed: number; avgPriority: number; preemptCount: number };
+    '24h': { enqueued: number; completed: number; failed: number; avgPriority: number; preemptCount: number };
+    '7d': { enqueued: number; completed: number; failed: number; avgPriority: number; preemptCount: number };
+  };
+  topUsers: { userId: string; userName: string; count: number }[];
+  updatedAt: string;
+}
+
+export function useMessageStats() {
+  return useQuery<MessageStats>({
+    queryKey: [...messageKeys.all, "stats"] as const,
+    queryFn: () => fetch('/api/v1/messages/stats').then(r => r.json()).then(d => d.data),
+    staleTime: 5000,
+    refetchInterval: 5000,
+  });
+}
+
+// ============================================================
+// 消息 DLQ（新增）
+// ============================================================
+export interface DLQEntry {
+  message: Message;
+  failedAt: string;
+  failReason: string;
+  retryCount: number;
+  originalQueueId?: string;
+}
+
+export interface DLQStats {
+  total: number;
+  oldestEntry: string | null;
+  newestEntry: string | null;
+  byChannel: Record<string, number>;
+}
+
+export function useDLQStats() {
+  return useQuery<DLQStats>({
+    queryKey: [...messageKeys.all, "dlq", "stats"] as const,
+    queryFn: () => fetch('/api/v1/messages/dlq/stats').then(r => r.json()).then(d => d.data),
+    staleTime: 10000,
+  });
+}
+
+export function useDLQEntries(params?: { page?: number; pageSize?: number; channel?: string }) {
+  const searchParams = new URLSearchParams();
+  if (params?.page) searchParams.set('page', String(params.page));
+  if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
+  if (params?.channel) searchParams.set('channel', params.channel);
+  const qs = searchParams.toString();
+
+  return useQuery({
+    queryKey: [...messageKeys.all, "dlq", "entries", params] as const,
+    queryFn: () => fetch(`/api/v1/messages/dlq${qs ? '?' + qs : ''}`).then(r => r.json()).then(d => d.data),
+    staleTime: 10000,
+  });
+}
+
+export function useRequeueFromDLQ() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (messageId: string) =>
+      fetch(`/api/v1/messages/dlq/${messageId}/requeue`, { method: 'POST' }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...messageKeys.all, "dlq"] });
+      queryClient.invalidateQueries({ queryKey: messageKeys.queue() });
+    },
+  });
+}
+
+export function useDiscardFromDLQ() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (messageId: string) =>
+      fetch(`/api/v1/messages/dlq/${messageId}`, { method: 'DELETE' }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...messageKeys.all, "dlq"] });
+    },
+  });
+}
+
+// ============================================================
+// 消息重试（新增）
+// ============================================================
+export function useRetryStats() {
+  return useQuery({
+    queryKey: [...messageKeys.all, "retry", "stats"] as const,
+    queryFn: () => fetch('/api/v1/messages/retry/stats').then(r => r.json()).then(d => d.data),
+    staleTime: 10000,
+  });
+}
