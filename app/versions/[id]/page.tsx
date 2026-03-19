@@ -3,15 +3,16 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT, VERSION_STATUS_LABELS, VERSION_STATUS_BADGE_VARIANT } from "@/lib/api/types";
-import { getVersion } from "@/lib/api/versions";
+import { getVersion, bumpVersion } from "@/lib/api/versions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Tag, Calendar, Clock, GitBranch, FileText, Star, RefreshCw, History, Download, RotateCcw } from "lucide-react";
+import { Loader2, ArrowLeft, Tag, Calendar, Clock, GitBranch, FileText, Star, RefreshCw, History, Download, RotateCcw, Zap, Settings } from "lucide-react";
 import Link from "next/link";
 import { BumpHistoryPanel } from "@/components/versions/BumpHistoryPanel";
 import { ArtifactsPanel } from "@/components/versions/ArtifactsPanel";
 import { RollbackDialog } from "@/components/versions/RollbackDialog";
 import { RollbackHistoryPanel } from "@/components/versions/RollbackHistoryPanel";
+import { UpgradeConfigDialog } from "@/components/versions/UpgradeConfigDialog";
 
 const API_BASE = "/api/v1";
 
@@ -26,6 +27,9 @@ export default function VersionDetailPage() {
   const [tagMessage, setTagMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"details" | "bumpHistory" | "artifacts" | "rollback">("details");
   const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false);
+  const [upgradeConfigOpen, setUpgradeConfigOpen] = useState(false);
+  const [isUpgrading, setIsUpgrading] = useState(false);
+  const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -59,6 +63,22 @@ export default function VersionDetailPage() {
       setTagMessage("请求失败");
     } finally {
       setIsRegeneratingTag(false);
+    }
+  };
+
+  const handleManualUpgrade = async (bumpType?: "major" | "minor" | "patch") => {
+    setIsUpgrading(true);
+    setUpgradeMessage(null);
+    try {
+      const result = await bumpVersion(id, bumpType || "patch");
+      setUpgradeMessage(`${result.previousVersion} → ${result.newVersion} (${result.bumpType})`);
+      // Refresh version data
+      const refreshed = await getVersion(id);
+      setVersion(refreshed);
+    } catch (err) {
+      setUpgradeMessage(`升级失败: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsUpgrading(false);
     }
   };
 
@@ -209,6 +229,57 @@ export default function VersionDetailPage() {
           </div>
         )}
 
+        {/* Auto Upgrade Section */}
+        <div className="bg-white rounded-xl border p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-medium text-gray-500 flex items-center gap-2">
+                <Zap className="w-4 h-4" />
+                自动升级
+              </h2>
+              <p className="text-xs text-gray-400 mt-1">
+                任务完成后自动 bump 版本号，或手动触发升级
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setUpgradeConfigOpen(true)}
+              >
+                <Settings className="w-4 h-4" />
+                升级配置
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => handleManualUpgrade("patch")}
+                disabled={isUpgrading}
+              >
+                {isUpgrading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Zap className="w-4 h-4" />
+                )}
+                手动升级 (Patch)
+              </Button>
+            </div>
+          </div>
+          {upgradeMessage && (
+            <div className={`text-sm mt-2 px-3 py-2 rounded-lg ${upgradeMessage.includes("失败") ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}>
+              {upgradeMessage}
+            </div>
+          )}
+          {/* Quick bump type selector */}
+          <div className="flex gap-2 mt-3">
+            <Button size="sm" variant="outline" onClick={() => handleManualUpgrade("major")} disabled={isUpgrading}>Major</Button>
+            <Button size="sm" variant="outline" onClick={() => handleManualUpgrade("minor")} disabled={isUpgrading}>Minor</Button>
+            <Button size="sm" variant="outline" onClick={() => handleManualUpgrade("patch")} disabled={isUpgrading}>Patch</Button>
+          </div>
+        </div>
+
         {/* Git Tag */}
         {version.gitTag && (
           <div className="bg-white rounded-xl border p-5">
@@ -328,6 +399,22 @@ export default function VersionDetailPage() {
           // Refresh version data after rollback
           getVersion(id).then(setVersion).catch(console.error);
         }}
+      />
+
+      <UpgradeConfigDialog
+        isOpen={upgradeConfigOpen}
+        onClose={() => setUpgradeConfigOpen(false)}
+        versionId={id}
+        versionName={version.version}
+        onSave={async (config) => {
+          console.log('Upgrade config saved:', config);
+          setUpgradeConfigOpen(false);
+        }}
+        onPreview={() => {
+          // Preview is handled by the dialog itself
+        }}
+        isSaving={false}
+        isLoading={false}
       />
     </div>
   );

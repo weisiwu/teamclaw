@@ -162,6 +162,32 @@ router.patch('/:taskId', async (req, res) => {
       // 状态变更后处理副作用
       if (body.status === 'done') {
         await taskFlow.onSubtaskCompleted(taskId);
+
+        // 自动触发版本升级（task_done）
+        if (task.versionId) {
+          try {
+            const { executeAutoBump, getVersionSettings } = await import('../services/autoBump.js');
+            const { getDb } = await import('../db/sqlite.js');
+            const db = getDb();
+            const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(task.versionId) as Record<string, unknown> | undefined;
+            if (row) {
+              const settings = getVersionSettings();
+              if (settings.autoBump) {
+                await executeAutoBump({
+                  versionId: task.versionId,
+                  currentVersion: row.version as string,
+                  triggerType: 'task_done',
+                  taskId: task.taskId,
+                  taskTitle: task.title,
+                  taskType: task.tags?.[0] || 'feature',
+                  projectPath: row.projectPath as string | undefined,
+                });
+              }
+            }
+          } catch (err) {
+            console.warn('[TaskRoutes] auto-bump on task done failed:', err);
+          }
+        }
       } else if (body.status === 'cancelled') {
         await taskFlow.cascadeCancel(taskId);
       }
