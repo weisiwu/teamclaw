@@ -6,7 +6,7 @@
 
 import { useState } from "react";
 import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT } from "@/lib/api/types";
-import { useBuildArtifacts, useVersionScreenshots, useVersionChangelog } from "@/lib/api/versions";
+import { useBuildArtifacts, useVersionScreenshots, useVersionChangelog, useRefreshVersionSummary } from "@/lib/api/versions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScreenshotGallery, ChangelogPanel, VersionTimeline } from "@/components/versions";
@@ -37,11 +37,12 @@ interface VersionDetailsProps {
   onLinkScreenshot?: () => void;
   /** 取消关联截图回调 */
   onUnlinkScreenshot?: (screenshotId: string) => void;
-  /** 生成变更摘要回调 */
+  /** 生成变更摘要回调（已废弃，使用内部刷新逻辑） */
   onGenerateChangelog?: () => void;
 }
 
-export function VersionDetails({ version, open, onOpenChange, onBuildComplete, onLinkScreenshot, onUnlinkScreenshot, onGenerateChangelog }: VersionDetailsProps) {
+export function VersionDetails(props: VersionDetailsProps) {
+  const { version, open, onOpenChange, onBuildComplete, onLinkScreenshot, onUnlinkScreenshot } = props;
   const [activeTab, setActiveTab] = useState<"info" | "logs" | "artifacts" | "screenshots" | "changelog" | "timeline">("info");
   const [buildDialogOpen, setBuildDialogOpen] = useState(false);
 
@@ -51,9 +52,18 @@ export function VersionDetails({ version, open, onOpenChange, onBuildComplete, o
   // 截图和变更摘要数据
   const { data: screenshotsData, isLoading: isLoadingScreenshots } = useVersionScreenshots(version?.id || "");
   const { data: changelogData } = useVersionChangelog(version?.id || "");
+  const refreshSummaryMutation = useRefreshVersionSummary();
 
   const screenshots = screenshotsData?.data || [];
   const changelog = changelogData?.data || null;
+
+  const handleRefreshSummary = () => {
+    if (!version?.id) return;
+    refreshSummaryMutation.mutate({
+      versionId: version.id,
+      commitLog: version.changedFiles?.join('\n'),
+    });
+  };
 
   if (!version || !open) return null;
 
@@ -288,8 +298,11 @@ export function VersionDetails({ version, open, onOpenChange, onBuildComplete, o
             <ChangelogPanel
               changelog={changelog}
               loading={false}
-              generating={false}
-              onGenerate={onGenerateChangelog || (() => {})}
+              generating={refreshSummaryMutation.isPending}
+              onGenerate={handleRefreshSummary}
+              versionSummary={version.summary}
+              summaryGeneratedAt={version.summaryGeneratedAt}
+              summaryGeneratedBy={version.summaryGeneratedBy}
             />
           )}
 

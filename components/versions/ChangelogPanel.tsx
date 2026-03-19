@@ -10,6 +10,10 @@ interface ChangelogPanelProps {
   onGenerate: () => void;
   loading?: boolean;
   generating?: boolean;
+  /** 版本摘要内容（直接存储在 Version 模型中） */
+  versionSummary?: string;
+  summaryGeneratedAt?: string;
+  summaryGeneratedBy?: string;
 }
 
 const changeTypeLabels: Record<ChangelogChange["type"], { label: string; variant: "default" | "success" | "warning" | "error" | "info" }> = {
@@ -22,7 +26,7 @@ const changeTypeLabels: Record<ChangelogChange["type"], { label: string; variant
   other: { label: "其他", variant: "default" },
 };
 
-export function ChangelogPanel({ changelog, onGenerate, loading, generating }: ChangelogPanelProps) {
+export function ChangelogPanel({ changelog, onGenerate, loading, generating, versionSummary, summaryGeneratedAt, summaryGeneratedBy }: ChangelogPanelProps) {
   if (loading) {
     return (
       <div className="space-y-4">
@@ -33,6 +37,39 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating }: C
           <div className="h-4 w-3/4 bg-muted animate-pulse rounded" />
           <div className="h-4 w-1/2 bg-muted animate-pulse rounded" />
           <div className="h-20 bg-muted animate-pulse rounded" />
+        </div>
+      </div>
+    );
+  }
+
+  // 如果有 version.summary 内容但没有完整 changelog，展示摘要文本
+  if (!changelog && versionSummary) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-medium">版本摘要</div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onGenerate}
+            disabled={generating}
+          >
+            {generating ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            {generating ? "刷新中..." : "刷新摘要"}
+          </Button>
+        </div>
+        <div className="p-4 rounded-lg border bg-card space-y-3">
+          <p className="text-sm whitespace-pre-wrap">{versionSummary}</p>
+          {(summaryGeneratedAt || summaryGeneratedBy) && (
+            <div className="flex items-center gap-4 text-xs text-muted-foreground border-t pt-2 mt-3">
+              {summaryGeneratedAt && <span>生成时间: {new Date(summaryGeneratedAt).toLocaleString("zh-CN")}</span>}
+              {summaryGeneratedBy && <span>生成方式: {summaryGeneratedBy === 'AI' ? '🤖 AI' : summaryGeneratedBy === 'manual' ? '✏️ 手动' : '🔧 系统'}</span>}
+            </div>
+          )}
         </div>
       </div>
     );

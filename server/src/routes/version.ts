@@ -39,6 +39,9 @@ export interface Version {
   changedFiles: string[];
   hasScreenshot?: boolean;
   hasSummary?: boolean;
+  summary?: string;       // 版本摘要内容（自动生成或手动编辑）
+  summaryGeneratedAt?: string; // 摘要生成时间
+  summaryGeneratedBy?: string; // 'AI' | 'manual' | 'system'
 }
 
 export interface VersionSettings {
@@ -192,10 +195,14 @@ router.get('/:id', (req: Request, res: Response) => {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
+  const summaryRecord = VersionSummaryModel.findByVersionId(v.id);
   res.json(success({
     ...v,
     hasScreenshot: ScreenshotModel.findByVersionId(v.id).length > 0,
-    hasSummary: !!VersionSummaryModel.findByVersionId(v.id),
+    hasSummary: !!summaryRecord,
+    summary: summaryRecord?.content || v.summary || undefined,
+    summaryGeneratedAt: summaryRecord?.generatedAt || v.summaryGeneratedAt || undefined,
+    summaryGeneratedBy: summaryRecord?.generatedBy || v.summaryGeneratedBy || undefined,
   }));
 });
 
@@ -1004,6 +1011,15 @@ router.put('/:id/summary', (req: Request, res: Response) => {
     }
 
     const summary = VersionSummaryModel.update(id, { content, features, changes, fixes, breaking });
+    // Also sync to Version model
+    const v = versions.get(id);
+    if (v && content !== undefined) {
+      v.summary = content;
+      v.summaryGeneratedAt = new Date().toISOString();
+      v.summaryGeneratedBy = 'manual';
+      v.hasSummary = true;
+      versions.set(id, v);
+    }
     res.json(success(summary));
   } catch (err) {
     console.error('Summary update error:', err);
@@ -1042,10 +1058,67 @@ router.post('/:id/summary/generate', async (req: Request, res: Response) => {
       createdBy: 'AI',
     });
 
+    // Also save summary content to Version model for inline access
+    const v = versions.get(id);
+    if (v) {
+      v.summary = generated.content;
+      v.summaryGeneratedAt = new Date().toISOString();
+      v.summaryGeneratedBy = 'AI';
+      v.hasSummary = true;
+      versions.set(id, v);
+    }
+
     res.json(success(summary));
   } catch (err) {
     console.error('Changelog generation error:', err);
     res.status(500).json(error(500, '变更摘要生成失败'));
+  }
+});
+
+// POST /api/v1/versions/:id/summary/refresh - Re-generate and save summary to Version model
+router.post('/:id/summary/refresh', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const v = versions.get(id);
+    if (!v) {
+      res.status(404).json(error(404, 'Version not found'));
+      return;
+    }
+    const { commitLog, branchName } = req.body as { commitLog?: string; branchName?: string };
+
+    const generated = await generateChangelogFromCommits(
+      id,
+      commitLog || v.changedFiles?.join('\n') || '',
+      branchName
+    );
+
+    const summary = VersionSummaryModel.upsert({
+      versionId: id,
+      title: generated.title,
+      content: generated.content,
+      features: generated.features,
+      fixes: generated.fixes,
+      changes: generated.improvements,
+      breaking: generated.breaking,
+      createdBy: 'AI',
+    });
+
+    // Update Version model with latest summary
+    v.summary = generated.content;
+    v.summaryGeneratedAt = new Date().toISOString();
+    v.summaryGeneratedBy = 'AI';
+    v.hasSummary = true;
+    versions.set(id, v);
+
+    res.json(success({
+      ...summary,
+      versionSummary: v.summary,
+      versionSummaryGeneratedAt: v.summaryGeneratedAt,
+      versionSummaryGeneratedBy: v.summaryGeneratedBy,
+    }));
+  } catch (err) {
+    console.error('Summary refresh error:', err);
+    res.status(500).json(error(500, '摘要刷新失败'));
   }
 });
 

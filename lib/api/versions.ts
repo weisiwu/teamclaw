@@ -1493,6 +1493,47 @@ export async function saveVersionSummary(
   }
 }
 
+// ========== 版本摘要刷新 API ==========
+
+export async function refreshVersionSummary(
+  versionId: string,
+  commitLog?: string,
+  branchName?: string
+): Promise<{ versionSummary: string; generatedAt: string; generatedBy: string } | null> {
+  try {
+    const res = await fetch(`${API_BASE}/versions/${versionId}/summary/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commitLog, branchName }),
+    });
+    const json = await res.json();
+    if (json.code === 200 || json.code === 0) {
+      return {
+        versionSummary: json.data?.versionSummary || json.data?.content,
+        generatedAt: json.data?.versionSummaryGeneratedAt || json.data?.generatedAt,
+        generatedBy: json.data?.versionSummaryGeneratedBy || json.data?.generatedBy,
+      };
+    }
+    throw new Error(json.message || '刷新摘要失败');
+  } catch (err) {
+    console.warn('[Summary API] Refresh failed:', err);
+    return null;
+  }
+}
+
+export function useRefreshVersionSummary() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ versionId, commitLog, branchName }: { versionId: string; commitLog?: string; branchName?: string }) =>
+      refreshVersionSummary(versionId, commitLog, branchName),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["versionChangelog", variables.versionId] });
+      queryClient.invalidateQueries({ queryKey: ["versions", variables.versionId] });
+    },
+  });
+}
+
 // ========== 消息截图 Hooks ==========
 
 export function useVersionScreenshots(versionId: string) {

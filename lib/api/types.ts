@@ -401,6 +401,7 @@ export interface Version {
   // 版本摘要（自动生成，可编辑）
   summary?: string;
   summaryGeneratedAt?: string;
+  summaryGeneratedBy?: string; // 'AI' | 'manual' | 'system'
   // 快照列表
   snapshots?: VersionSnapshot[];
   // 变更追踪指标
