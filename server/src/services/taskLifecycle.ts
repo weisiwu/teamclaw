@@ -31,7 +31,9 @@ class TaskLifecycleService {
   private startHooks: TaskStartHook[] = [];
 
   // 任务存储
-  private tasks: Map<string, Task> = new Map();
+  public tasks: Map<string, Task> = new Map();
+  // Alias for backwards compatibility with direct access
+  public get taskStore() { return this.tasks; }
 
   private constructor() {}
 
@@ -96,6 +98,22 @@ class TaskLifecycleService {
     // 执行钩子
     await this.executeHooks(task, oldStatus, newStatus);
 
+    // 触发通知事件（异步，不阻塞）
+    const eventType = newStatus === 'running' ? 'task_started'
+      : newStatus === 'done' ? 'task_completed'
+      : newStatus === 'failed' ? 'task_failed'
+      : newStatus === 'cancelled' ? 'task_cancelled'
+      : newStatus === 'suspended' ? 'task_suspended'
+      : null;
+    if (eventType) {
+      setTimeout(async () => {
+        try {
+          const { emitTaskEvent } = await import('./taskNotification.js');
+          emitTaskEvent(eventType, taskId, { oldStatus, newStatus, duration: task.startedAt ? Date.now() - new Date(task.startedAt).getTime() : null });
+        } catch { /* 非关键路径 */ }
+      }, 0);
+    }
+
     return task;
   }
 
@@ -116,6 +134,15 @@ class TaskLifecycleService {
     this.tasks.set(task.taskId, task);
     // 执行创建钩子
     this.executeCreateHooks(task);
+    // 初始化SLA + 触发事件（异步，通过动态import避免循环依赖）
+    setTimeout(async () => {
+      try {
+        const { initSLAForTask } = await import('./taskSLA.js');
+        const { emitTaskEvent } = await import('./taskNotification.js');
+        initSLAForTask(task.taskId);
+        emitTaskEvent('task_created', task.taskId, { priority: task.priority, assignedAgent: task.assignedAgent });
+      } catch { /* 非关键路径，失败不影响主流程 */ }
+    }, 0);
     return task;
   }
 
@@ -229,3 +256,4 @@ class TaskLifecycleService {
 }
 
 export const taskLifecycle = TaskLifecycleService.getInstance();
+export const taskStore = taskLifecycle.tasks; // Direct Map reference for services

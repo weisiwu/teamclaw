@@ -513,4 +513,225 @@ router.get('/cancel/audit', (req, res) => {
   }
 });
 
+// ============ 任务依赖图（iter-23 新增）============
+
+import { buildDAG, buildSubtaskTree, getRunnableTasks, detectDependencyConflicts } from '../services/taskDependencyGraph.js';
+import { emitTaskEvent, getEventHistory, getFailedDeliveries, listWebhookEndpoints, createWebhookEndpoint, deleteWebhookEndpoint, toggleWebhookEndpoint, listNotificationRules, createNotificationRule, deleteNotificationRule, toggleNotificationRule, TaskEventType } from '../services/taskNotification.js';
+import { getTaskSLA, getAllSLAs, getBreachedSLAs, getAtRiskSLAs, getSLAStats, setTaskDeadline, getSLADefinitions, updateSLADefinitions, SLAStatus } from '../services/taskSLA.js';
+
+// GET /api/v1/tasks/graph/:taskId - 获取任务DAG
+router.get('/graph/:taskId', (req, res) => {
+  try {
+    const dag = buildDAG(req.params.taskId);
+    res.json({ success: true, data: dag });
+  } catch (err) {
+    console.error('[TaskRoutes] graph error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// GET /api/v1/tasks/tree/:taskId - 获取子任务树
+router.get('/tree/:taskId', (req, res) => {
+  try {
+    const maxDepth = parseInt(req.query.maxDepth as string) || 5;
+    const tree = buildSubtaskTree(req.params.taskId, maxDepth);
+    if (!tree) return res.status(404).json({ success: false, error: 'Task not found' });
+    res.json({ success: true, data: tree });
+  } catch (err) {
+    console.error('[TaskRoutes] tree error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// GET /api/v1/tasks/runnable - 获取可运行任务
+router.get('/runnable', (_req, res) => {
+  try {
+    const runnable = getRunnableTasks();
+    res.json({ success: true, data: runnable });
+  } catch (err) {
+    console.error('[TaskRoutes] runnable error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// POST /api/v1/tasks/:taskId/check-dependencies - 检测依赖冲突
+router.post('/:taskId/check-dependencies', (req, res) => {
+  try {
+    const conflicts = detectDependencyConflicts(req.params.taskId);
+    res.json({ success: true, data: conflicts });
+  } catch (err) {
+    console.error('[TaskRoutes] check-deps error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// GET /api/v1/tasks/events - 获取事件历史
+router.get('/events/all', (req, res) => {
+  try {
+    const taskId = req.query.taskId as string;
+    const eventType = req.query.eventType as string;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const events = getEventHistory({ taskId, eventType: eventType as TaskEventType, limit });
+    res.json({ success: true, data: events });
+  } catch (err) {
+    console.error('[TaskRoutes] events error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// GET /api/v1/tasks/events/failed - 获取投递失败事件
+router.get('/events/failed', (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 20;
+    res.json({ success: true, data: getFailedDeliveries(limit) });
+  } catch (err) {
+    console.error('[TaskRoutes] failed events error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// GET /api/v1/tasks/webhooks - 列出webhook端点
+router.get('/webhooks', (_req, res) => {
+  res.json({ success: true, data: listWebhookEndpoints() });
+});
+
+// POST /api/v1/tasks/webhooks - 创建webhook端点
+router.post('/webhooks', (req, res) => {
+  try {
+    const { name, url, secret, events } = req.body;
+    if (!name || !url || !events) return res.status(400).json({ success: false, error: 'name, url, events required' });
+    const endpoint = createWebhookEndpoint({ name, url, secret, events });
+    res.status(201).json({ success: true, data: endpoint });
+  } catch (err) {
+    console.error('[TaskRoutes] create webhook error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// DELETE /api/v1/tasks/webhooks/:id - 删除webhook
+router.delete('/webhooks/:id', (req, res) => {
+  const ok = deleteWebhookEndpoint(req.params.id);
+  res.json({ success: ok });
+});
+
+// PATCH /api/v1/tasks/webhooks/:id - 启用/禁用webhook
+router.patch('/webhooks/:id', (req, res) => {
+  const { enabled } = req.body;
+  const ok = toggleWebhookEndpoint(req.params.id, enabled);
+  res.json({ success: ok });
+});
+
+// GET /api/v1/tasks/notifications/rules - 列出通知规则
+router.get('/notifications/rules', (_req, res) => {
+  res.json({ success: true, data: listNotificationRules() });
+});
+
+// POST /api/v1/tasks/notifications/rules - 创建通知规则
+router.post('/notifications/rules', (req, res) => {
+  try {
+    const { name, eventType, filter, channels, webhookEndpointId } = req.body;
+    const rule = createNotificationRule({ name, eventType, filter, channels, webhookEndpointId });
+    res.status(201).json({ success: true, data: rule });
+  } catch (err) {
+    console.error('[TaskRoutes] create rule error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// DELETE /api/v1/tasks/notifications/rules/:id
+router.delete('/notifications/rules/:id', (req, res) => {
+  res.json({ success: deleteNotificationRule(req.params.id) });
+});
+
+// PATCH /api/v1/tasks/notifications/rules/:id
+router.patch('/notifications/rules/:id', (req, res) => {
+  const { enabled } = req.body;
+  res.json({ success: toggleNotificationRule(req.params.id, enabled) });
+});
+
+// POST /api/v1/tasks/:taskId/emit - 手动触发任务事件（测试用）
+router.post('/:taskId/emit', async (req, res) => {
+  try {
+    const { eventType, payload } = req.body;
+    await emitTaskEvent(eventType, req.params.taskId, payload ?? {});
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[TaskRoutes] emit error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// GET /api/v1/tasks/sla/:taskId - 获取任务SLA
+router.get('/sla/:taskId', (req, res) => {
+  try {
+    const sla = getTaskSLA(req.params.taskId);
+    if (!sla) return res.status(404).json({ success: false, error: 'No SLA found' });
+    res.json({ success: true, data: sla });
+  } catch (err) {
+    console.error('[TaskRoutes] sla error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// GET /api/v1/tasks/sla - 获取所有SLA状态
+router.get('/sla', (req, res) => {
+  try {
+    const status = req.query.status as string;
+    res.json({ success: true, data: getAllSLAs(status as SLAStatus) });
+  } catch (err) {
+    console.error('[TaskRoutes] all sla error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// GET /api/v1/tasks/sla/breached - 违约SLA列表
+router.get('/sla/breached', (_req, res) => {
+  res.json({ success: true, data: getBreachedSLAs() });
+});
+
+// GET /api/v1/tasks/sla/at-risk - 风险SLA列表
+router.get('/sla/at-risk', (_req, res) => {
+  res.json({ success: true, data: getAtRiskSLAs() });
+});
+
+// GET /api/v1/tasks/sla/stats - SLA统计
+router.get('/sla/stats', (req, res) => {
+  try {
+    const hours = parseInt(req.query.hours as string) || 24 * 7;
+    res.json({ success: true, data: getSLAStats(hours) });
+  } catch (err) {
+    console.error('[TaskRoutes] sla stats error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// POST /api/v1/tasks/sla/:taskId/deadline - 手动设置截止时间
+router.post('/sla/:taskId/deadline', (req, res) => {
+  try {
+    const { deadline } = req.body;
+    if (!deadline) return res.status(400).json({ success: false, error: 'deadline required' });
+    const ok = setTaskDeadline(req.params.taskId, deadline);
+    res.json({ success: ok });
+  } catch (err) {
+    console.error('[TaskRoutes] set deadline error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// GET /api/v1/tasks/sla/definitions - 获取SLA定义
+router.get('/sla/definitions', (_req, res) => {
+  res.json({ success: true, data: getSLADefinitions() });
+});
+
+// PUT /api/v1/tasks/sla/definitions - 更新SLA定义
+router.put('/sla/definitions', (req, res) => {
+  try {
+    updateSLADefinitions(req.body);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[TaskRoutes] update sla defs error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
 export default router;
