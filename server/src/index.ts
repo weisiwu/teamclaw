@@ -11,6 +11,9 @@ import taskRouter from './routes/task.js';
 import abilityRouter from './routes/ability.js';
 import docRouter from './routes/doc.js';
 import searchRouter from './routes/search.js';
+import cronJobRouter from './routes/cronJob.js';
+import tokenStatsRouter from './routes/tokenStats.js';
+import dashboardRouter from './routes/dashboard.js';
 import { getArtifactsRootDir } from './services/artifactStore.js';
 import './services/taskInit.js'; // 初始化任务机制钩子
 
@@ -42,6 +45,9 @@ app.use('/api/v1/tasks', taskRouter);
 app.use('/api/v1/abilities', abilityRouter);
 app.use('/api/v1/docs', docRouter);
 app.use('/api/v1/search', searchRouter);
+app.use('/api/v1/cron-jobs', cronJobRouter);
+app.use('/api/v1/token-stats', tokenStatsRouter);
+app.use('/api/v1/dashboard', dashboardRouter);
 
 // Root
 app.get('/', (req, res) => {
