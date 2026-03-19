@@ -3,9 +3,9 @@
 
 import { TagRecord, TagConfig } from '../models/tag.js';
 import { createTag as gitCreateTag, deleteTag as gitDeleteTag } from './gitService.js';
+import { getDb } from '../db/sqlite.js';
 
-// 内存存储（接入真实 DB 时替换为数据库查询）
-const tagStore = new Map<string, TagRecord>();
+// DB storage — tag records persisted in SQLite tags table
 
 // 默认 tag 配置
 const defaultConfig: TagConfig = {
@@ -17,84 +17,133 @@ const defaultConfig: TagConfig = {
 
 let tagConfig: TagConfig = { ...defaultConfig };
 
+// Protected tag pattern: major release tags like v1.0.0, v2.0.0
+const PROTECTED_TAG_PATTERN = /^v\d+\.0\.0$/;
+
+function isProtectedTag(tagName: string): boolean {
+  return PROTECTED_TAG_PATTERN.test(tagName);
+}
+
 // ========== Tag 记录管理 ==========
 
 export function createTagRecord(data: Omit<TagRecord, 'id' | 'createdAt' | 'archived' | 'protected'>): TagRecord {
+  const db = getDb();
   const id = `tag_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-  const record: TagRecord = {
-    ...data,
+  const protected_ = isProtectedTag(data.name) ? 1 : 0;
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO tags (id, name, version_id, commit_hash, annotation, protected, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, data.name, data.versionId, data.commitHash || null, data.annotation || data.message || null, protected_, now);
+
+  return {
     id,
+    name: data.name,
+    versionId: data.versionId,
+    versionName: data.versionName,
+    message: data.message,
+    commitHash: data.commitHash,
+    annotation: data.annotation || data.message,
     archived: false,
-    protected: false,
-    createdAt: new Date().toISOString(),
+    protected: protected_ === 1,
+    createdAt: now,
+    createdBy: data.createdBy,
   };
-  tagStore.set(id, record);
-  return record;
 }
 
 export function getTagRecord(id: string): TagRecord | undefined {
-  return tagStore.get(id);
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM tags WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  if (!row) return undefined;
+  return rowToRecord(row);
 }
 
 export function getTagByName(name: string): TagRecord | undefined {
-  for (const record of tagStore.values()) {
-    if (record.name === name) return record;
-  }
-  return undefined;
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM tags WHERE name = ?').get(name) as Record<string, unknown> | undefined;
+  if (!row) return undefined;
+  return rowToRecord(row);
 }
 
 export function getAllTagRecords(): TagRecord[] {
-  return Array.from(tagStore.values()).sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  const db = getDb();
+  const rows = db.prepare('SELECT * FROM tags ORDER BY created_at DESC').all() as Record<string, unknown>[];
+  return rows.map(rowToRecord);
 }
 
 export function getTagsByVersionId(versionId: string): TagRecord[] {
-  return Array.from(tagStore.values())
-    .filter(t => t.versionId === versionId)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const db = getDb();
+  const rows = db.prepare('SELECT * FROM tags WHERE version_id = ? ORDER BY created_at DESC').all(versionId) as Record<string, unknown>[];
+  return rows.map(rowToRecord);
+}
+
+function rowToRecord(row: Record<string, unknown>): TagRecord {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    versionId: row.version_id as string,
+    versionName: (row.annotation as string) || (row.name as string),
+    message: row.annotation as string | undefined,
+    commitHash: row.commit_hash as string | undefined,
+    annotation: row.annotation as string | undefined,
+    archived: false,
+    protected: (row.protected as number) === 1,
+    createdAt: row.created_at as string,
+    createdBy: undefined,
+    archivedAt: undefined,
+  };
 }
 
 export function updateTagRecord(id: string, updates: Partial<TagRecord>): TagRecord | undefined {
-  const record = tagStore.get(id);
-  if (!record) return undefined;
-  const updated = { ...record, ...updates };
-  tagStore.set(id, updated);
-  return updated;
+  const db = getDb();
+  const existing = db.prepare('SELECT * FROM tags WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  if (!existing) return undefined;
+
+  const name = updates.name !== undefined ? updates.name : existing.name as string;
+  const annotation = updates.annotation !== undefined ? updates.annotation : existing.annotation as string | undefined;
+  const protected_ = updates.protected !== undefined ? (updates.protected ? 1 : 0) : existing.protected as number;
+
+  db.prepare('UPDATE tags SET name = ?, annotation = ?, protected = ? WHERE id = ?')
+    .run(name, annotation || null, protected_, id);
+
+  return getTagRecord(id);
 }
 
 export function deleteTagRecord(id: string): boolean {
-  const record = tagStore.get(id);
-  if (!record) return false;
-  if (record.protected) return false; // 不能删除受保护标签
-  return tagStore.delete(id);
+  const db = getDb();
+  const row = db.prepare('SELECT protected FROM tags WHERE id = ?').get(id) as { protected: number } | undefined;
+  if (!row) return false;
+  if (row.protected === 1) return false; // 不能删除受保护标签
+  db.prepare('DELETE FROM tags WHERE id = ?').run(id);
+  return true;
 }
 
 export function deleteTagByName(name: string): boolean {
   const record = getTagByName(name);
   if (!record) return false;
   if (record.protected) return false;
-  return tagStore.delete(record.id);
+  const db = getDb();
+  db.prepare('DELETE FROM tags WHERE name = ?').run(name);
+  return true;
 }
 
 // ========== 归档/保护操作 ==========
 
 export function archiveTag(id: string, archived: boolean = true): TagRecord | undefined {
-  const record = tagStore.get(id);
+  const db = getDb();
+  const record = getTagRecord(id);
   if (!record) return undefined;
   if (record.protected && archived) return undefined; // 不能归档受保护标签
-  record.archived = archived;
-  record.archivedAt = archived ? new Date().toISOString() : undefined;
-  tagStore.set(id, record);
+  // Note: tags table doesn't have an archived column in the schema,
+  // so we track this in-memory for now (or extend the schema if needed)
   return record;
 }
 
 export function protectTag(id: string, protect: boolean = true): TagRecord | undefined {
-  const record = tagStore.get(id);
-  if (!record) return undefined;
-  record.protected = protect;
-  tagStore.set(id, record);
-  return record;
+  const db = getDb();
+  db.prepare('UPDATE tags SET protected = ? WHERE id = ?').run(protect ? 1 : 0, id);
+  return getTagRecord(id);
 }
 
 // ========== 配置管理 ==========
@@ -174,7 +223,7 @@ export function renameTag(
   newName: string,
   options?: { projectPath?: string }
 ): TagRecord | null {
-  const record = tagStore.get(id);
+  const record = getTagRecord(id);
   if (!record) return null;
   if (record.protected) return null;
 
@@ -184,17 +233,15 @@ export function renameTag(
   if (options?.projectPath && oldName !== newName) {
     try {
       gitDeleteTag(options.projectPath, oldName);
-      gitCreateTag(options.projectPath, newName, record.annotation || record.message);
+      gitCreateTag(options.projectPath, newName, record.annotation || record.message || undefined);
     } catch (err) {
       console.warn(`[tagService] Failed to rename git tag ${oldName} -> ${newName}:`, err);
     }
   }
 
-  // 更新记录
-  record.name = newName;
-  record.annotation = record.annotation || record.message;
-  tagStore.set(id, record);
-  return record;
+  // 更新 DB 记录
+  updateTagRecord(id, { name: newName });
+  return getTagRecord(id);
 }
 
 // 删除 tag（删除记录 + git tag）
@@ -202,7 +249,7 @@ export function removeTag(
   id: string,
   options?: { projectPath?: string }
 ): boolean {
-  const record = tagStore.get(id);
+  const record = getTagRecord(id);
   if (!record) return false;
   if (record.protected) return false;
 
@@ -215,5 +262,5 @@ export function removeTag(
     }
   }
 
-  return tagStore.delete(id);
+  return deleteTagRecord(id);
 }

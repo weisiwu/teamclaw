@@ -1,0 +1,138 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ArrowLeft, Loader2, Check } from "lucide-react";
+import Link from "next/link";
+
+const API_BASE = "/api/v1";
+
+export default function NewTagPage() {
+  const router = useRouter();
+  const [form, setForm] = useState({
+    name: "",
+    commitHash: "",
+    message: "",
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/tags`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          commitHash: form.commitHash || undefined,
+          message: form.message || undefined,
+          versionId: "manual",
+          versionName: form.name,
+        }),
+      });
+      const json = await res.json();
+      if (json.code === 200 || json.code === 0 || json.code === 201) {
+        router.push("/tags");
+      } else {
+        setError(json.message || "创建失败");
+      }
+    } catch {
+      setError("请求失败，请重试");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="p-6 max-w-2xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-6">
+        <Link href="/tags">
+          <Button variant="ghost" size="sm" className="gap-1">
+            <ArrowLeft className="w-4 h-4" />
+            返回
+          </Button>
+        </Link>
+        <h1 className="text-2xl font-bold text-gray-900">创建 Tag</h1>
+      </div>
+
+      <form onSubmit={handleSubmit} className="bg-white rounded-xl border p-6 space-y-5">
+        {/* Tag name */}
+        <div>
+          <Label htmlFor="name">
+            Tag 名称 <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="name"
+            placeholder="例如: v1.0.0"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            className="mt-1 font-mono"
+            required
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            受保护 Tag 格式：v1.0.0、v2.0.0 等（匹配 ^v\d+\.0\.0$）
+          </p>
+        </div>
+
+        {/* Commit Hash */}
+        <div>
+          <Label htmlFor="commitHash">Commit Hash（可选）</Label>
+          <Input
+            id="commitHash"
+            placeholder="可选"
+            value={form.commitHash}
+            onChange={(e) => setForm({ ...form, commitHash: e.target.value })}
+            className="mt-1 font-mono"
+          />
+        </div>
+
+        {/* Message */}
+        <div>
+          <Label htmlFor="message">Message / Annotation（可选）</Label>
+          <textarea
+            id="message"
+            placeholder="Tag 描述信息（可选）"
+            value={form.message}
+            onChange={(e) => setForm({ ...form, message: e.target.value })}
+            rows={3}
+            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          />
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-2">
+          <Button type="button" variant="outline" onClick={() => router.push("/tags")}>
+            取消
+          </Button>
+          <Button type="submit" disabled={isSubmitting || !form.name.trim()}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                创建中...
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4 mr-2" />
+                创建 Tag
+              </>
+            )}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}

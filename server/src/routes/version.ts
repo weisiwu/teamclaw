@@ -12,10 +12,15 @@ import { compareTwoVersions, quickCompare } from '../services/versionCompare.js'
 import { performBump, formatBumpSummary } from '../services/versionBump.js';
 import { autoCreateTagForVersion, makeTagName as makeTagNameFromConfig, createTagRecord } from '../services/tagService.js';
 import { isValidSemver, bumpVersion } from '../services/semver.js';
+import { getDb } from '../db/sqlite.js';
+import { runMigrations } from '../db/migrations/run.js';
 import path from 'path';
 import os from 'os';
 
 const router = Router();
+
+// Run database migrations on module load
+runMigrations();
 
 // ========== Types ==========
 export type VersionBumpType = 'patch' | 'minor' | 'major';
@@ -55,7 +60,7 @@ export interface VersionSettings {
 }
 
 // ========== In-Memory Storage ==========
-const versions = new Map<string, Version>();
+const db = getDb();
 const settings: VersionSettings = {
   autoBump: true,
   bumpType: 'patch',
@@ -117,8 +122,6 @@ const sampleVersions: Version[] = [
     changedFiles: [],
   },
 ];
-sampleVersions.forEach(v => versions.set(v.id, v));
-
 // ========== Helper Functions ==========
 function autoBumpVersion(currentVersion: string, bumpType: VersionBumpType): string {
   const match = currentVersion.match(/^v?(\d+)\.(\d+)\.(\d+)$/);
@@ -159,24 +162,41 @@ router.get('/', (req: Request, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;
   const pageSize = parseInt(req.query.pageSize as string) || 10;
   const status = req.query.status as string;
+  const branch = req.query.branch as string;
 
-  let list = Array.from(versions.values()).sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  let sql = 'SELECT * FROM versions WHERE 1=1';
+  const params: Record<string, string> = {};
 
   if (status && status !== 'all') {
-    list = list.filter(v => v.status === status);
+    sql += ' AND status = @status';
+    params.status = status;
+  }
+  if (branch) {
+    sql += ' AND branch = @branch';
+    params.branch = branch;
   }
 
-  const total = list.length;
-  const start = (page - 1) * pageSize;
-  const paginatedList = list.slice(start, start + pageSize);
+  sql += ' ORDER BY created_at DESC';
 
-  // Enrich with hasScreenshot/hasSummary
-  const data = paginatedList.map(v => ({
-    ...v,
-    hasScreenshot: ScreenshotModel.findByVersionId(v.id).length > 0,
-    hasSummary: !!VersionSummaryModel.findByVersionId(v.id),
+  const totalRow = db.prepare(sql.replace('SELECT *', 'SELECT COUNT(*) as cnt')).get(params) as { cnt: number };
+  const total = totalRow.cnt;
+
+  sql += ' LIMIT @limit OFFSET @offset';
+  const offset = (page - 1) * pageSize;
+  const rows = db.prepare(sql).all({ ...params, limit: pageSize, offset }) as Array<Record<string, unknown>>;
+
+  const data = rows.map(row => ({
+    id: row.id,
+    version: row.version,
+    branch: row.branch,
+    summary: row.summary,
+    commit_hash: row.commit_hash,
+    created_by: row.created_by,
+    created_at: row.created_at,
+    build_status: row.build_status,
+    tag_created: row.tag_created === 1,
+    hasScreenshot: ScreenshotModel.findByVersionId(row.id as string).length > 0,
+    hasSummary: !!VersionSummaryModel.findByVersionId(row.id as string),
   }));
 
   res.json(success({
@@ -190,30 +210,44 @@ router.get('/', (req: Request, res: Response) => {
 
 // GET /api/v1/versions/:id — 详情
 router.get('/:id', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
-  const summaryRecord = VersionSummaryModel.findByVersionId(v.id);
+  const summaryRecord = VersionSummaryModel.findByVersionId(req.params.id);
+  // Check if there's a protected tag for this version
+  const tagRow = db.prepare('SELECT protected FROM tags WHERE version_id = ? LIMIT 1').get(req.params.id) as { protected: number } | undefined;
   res.json(success({
-    ...v,
-    hasScreenshot: ScreenshotModel.findByVersionId(v.id).length > 0,
+    id: row.id,
+    version: row.version,
+    branch: row.branch,
+    summary: row.summary,
+    commit_hash: row.commit_hash,
+    created_by: row.created_by,
+    created_at: row.created_at,
+    build_status: row.build_status,
+    tag_created: row.tag_created === 1,
+    tagged: row.tag_created === 1,
+    protected: tagRow ? tagRow.protected === 1 : false,
+    hasScreenshot: ScreenshotModel.findByVersionId(req.params.id).length > 0,
     hasSummary: !!summaryRecord,
-    summary: summaryRecord?.content || v.summary || undefined,
-    summaryGeneratedAt: summaryRecord?.generatedAt || v.summaryGeneratedAt || undefined,
-    summaryGeneratedBy: summaryRecord?.generatedBy || v.summaryGeneratedBy || undefined,
+    summary: summaryRecord?.content || row.summary || undefined,
+    summaryGeneratedAt: summaryRecord?.generatedAt || undefined,
+    summaryGeneratedBy: summaryRecord?.generatedBy || undefined,
   }));
 });
 
 // POST /api/v1/versions — 创建版本
 router.post('/', (req: Request, res: Response) => {
-  const { version, title, description, status, tags } = req.body as {
+  const { version, title, description, status, tags, branch, projectPath } = req.body as {
     version: string;
     title: string;
     description?: string;
     status?: string;
     tags?: string[];
+    branch?: string;
+    projectPath?: string;
   };
 
   if (!version || !title) {
@@ -221,31 +255,56 @@ router.post('/', (req: Request, res: Response) => {
     return;
   }
 
+  // Semver validation
+  if (!isValidSemver(version)) {
+    res.status(400).json({ code: 400, message: '无效的版本号格式，需要 semver 如 1.0.0' });
+    return;
+  }
+
   const id = `v_${Date.now()}`;
   const now = new Date().toISOString();
-  const newVersion: Version = {
+  const vBranch = branch || 'main';
+
+  db.prepare(`
+    INSERT INTO versions (id, version, branch, summary, created_by, created_at, build_status, tag_created)
+    VALUES (?, ?, ?, ?, ?, ?, 'pending', 0)
+  `).run(id, version, vBranch, description || '', 'system', now);
+
+  // Auto create git tag
+  let tagCreated = false;
+  const tagName = `v${version}`;
+  const effectiveProjectPath = projectPath || path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', id);
+  try {
+    tagCreated = createTag(effectiveProjectPath, tagName, `Release ${version} - ${title}`);
+    if (tagCreated) {
+      db.prepare('UPDATE versions SET tag_created = 1 WHERE id = ?').run(id);
+    }
+  } catch (err) {
+    console.warn('[version] Failed to create git tag:', err);
+  }
+
+  res.status(201).json(success({
     id,
     version,
     title,
     description: description || '',
     status: (status as Version['status']) || 'draft',
     tags: tags || [],
+    branch: vBranch,
     buildStatus: 'pending',
     createdAt: now,
     updatedAt: now,
     isMain: false,
     commitCount: 0,
     changedFiles: [],
-  };
-
-  versions.set(id, newVersion);
-  res.status(201).json(success(newVersion));
+    tagCreated,
+  }));
 });
 
 // PUT /api/v1/versions/:id — 更新版本（含自动 bump 逻辑）
 router.put('/:id', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
@@ -257,94 +316,106 @@ router.put('/:id', (req: Request, res: Response) => {
     tags?: string[];
   };
 
-  const previousStatus = v.status;
+  const previousStatus = (row.status as string) || 'draft';
   const newStatus = status || previousStatus;
   const isPublishing = previousStatus !== 'published' && newStatus === 'published';
 
   // Auto-bump: when publishing and autoBump is enabled
   if (isPublishing && settings.autoBump) {
-    const newVersionStr = autoBumpVersion(v.version, settings.bumpType);
-    v.version = newVersionStr;
+    const newVersionStr = autoBumpVersion(row.version as string, settings.bumpType);
 
     // Auto-tag
     if (settings.autoTag && settings.tagOnStatus.includes('published')) {
-      v.gitTag = makeTagName(newVersionStr, settings.tagPrefix, settings.customPrefix);
-      v.gitTagCreatedAt = new Date().toISOString();
-      // 创建 Tag 记录（持久化）+ 实际 git tag
-      autoCreateTagForVersion(v.id, newVersionStr, {
-        message: `Release ${newVersionStr} - ${v.title || ''}`,
-        projectPath: (v as { projectPath?: string }).projectPath,
-      });
+      const tagName = makeTagName(newVersionStr, settings.tagPrefix, settings.customPrefix);
+      const projectPath = (row.projectPath as string) ||
+        path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
+      try {
+        createTag(projectPath, tagName, `Release ${newVersionStr} - ${title || ''}`);
+        db.prepare('UPDATE versions SET tag_created = 1 WHERE id = ?').run(req.params.id);
+      } catch (err) {
+        console.warn('[version] Failed to create git tag on publish:', err);
+      }
     }
 
-    v.releasedAt = new Date().toISOString();
-    v.buildStatus = 'success';
+    db.prepare(
+      'UPDATE versions SET version = ?, summary = ?, build_status = ? WHERE id = ?'
+    ).run(newVersionStr, description || row.summary || '', 'success', req.params.id);
+  } else {
+    // Plain update
+    if (description !== undefined) {
+      db.prepare('UPDATE versions SET summary = ? WHERE id = ?').run(description, req.params.id);
+    }
   }
 
-  if (title !== undefined) v.title = title;
-  if (description !== undefined) v.description = description;
-  if (tags !== undefined) v.tags = tags;
-  if (status !== undefined) v.status = newStatus as Version['status'];
-  v.updatedAt = new Date().toISOString();
-
-  versions.set(v.id, v);
+  const updatedRow = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown>;
 
   res.json(success({
-    version: v,
+    version: {
+      id: updatedRow.id,
+      version: updatedRow.version,
+      title: title || req.params.id,
+      description: description || updatedRow.summary || '',
+      status: newStatus,
+      tags: tags || [],
+      branch: updatedRow.branch,
+      buildStatus: updatedRow.build_status,
+      createdAt: updatedRow.created_at,
+      updatedAt: new Date().toISOString(),
+    },
     autoBumped: isPublishing && settings.autoBump,
-    bumpedTo: isPublishing && settings.autoBump ? v.version : undefined,
+    bumpedTo: isPublishing && settings.autoBump ? updatedRow.version : undefined,
   }));
 });
 
 // DELETE /api/v1/versions/:id — 删除
 router.delete('/:id', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT id FROM versions WHERE id = ?').get(req.params.id);
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
-  versions.delete(req.params.id);
+  db.prepare('DELETE FROM versions WHERE id = ?').run(req.params.id);
   res.json(success({ deleted: true }));
 });
 
 // POST /api/v1/versions/:id/bump — 手动 bump（自动生成摘要）
 router.post('/:id/bump', async (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
 
   const { bumpType } = req.body as { bumpType?: VersionBumpType };
   const type = bumpType || settings.bumpType;
-  const previousVersion = v.version;
+  const previousVersion = row.version as string;
   const newVersion = autoBumpVersion(previousVersion, type);
 
-  v.version = newVersion;
-  v.updatedAt = new Date().toISOString();
+  db.prepare('UPDATE versions SET version = ? WHERE id = ?').run(newVersion, req.params.id);
 
   if (settings.autoTag && settings.tagOnStatus.includes('published')) {
-    v.gitTag = makeTagName(newVersion, settings.tagPrefix, settings.customPrefix);
-    v.gitTagCreatedAt = new Date().toISOString();
-    // 创建 Tag 记录（持久化）+ 实际 git tag
-    autoCreateTagForVersion(v.id, newVersion, {
-      message: `Release ${newVersion} - ${v.title || ''}`,
-      projectPath: (v as { projectPath?: string }).projectPath,
-    });
+    const tagName = makeTagName(newVersion, settings.tagPrefix, settings.customPrefix);
+    const projectPath = (row.projectPath as string) ||
+      path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
+    try {
+      createTag(projectPath, tagName, `Release ${newVersion}`);
+      db.prepare('UPDATE versions SET tag_created = 1 WHERE id = ?').run(req.params.id);
+    } catch (err) {
+      console.warn('[bump] Failed to create git tag:', err);
+    }
   }
-
-  versions.set(v.id, v);
 
   // Auto-generate summary after bump
   try {
-    const projectPath = (v as { projectPath?: string }).projectPath ||
-      path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
-    const commits = getGitLog(projectPath, { maxCount: 30, branch: v.gitTag });
+    const projectPath = (row.projectPath as string) ||
+      path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
+    const tagName = makeTagName(newVersion, settings.tagPrefix, settings.customPrefix);
+    const commits = getGitLog(projectPath, { maxCount: 30, branch: tagName });
     const commitText = commits.map(c => `${c.hash.slice(0, 7)} ${c.message}`).join('\n') || 'bump version';
     const currentBranch = getCurrentBranch(projectPath);
-    const generated = await generateChangelogFromCommits(v.id, commitText, currentBranch);
+    const generated = await generateChangelogFromCommits(req.params.id, commitText, currentBranch);
     VersionSummaryModel.upsert({
-      versionId: v.id,
+      versionId: req.params.id,
       title: generated.title,
       content: generated.content,
       features: generated.features,
@@ -361,7 +432,7 @@ router.post('/:id/bump', async (req: Request, res: Response) => {
     previousVersion,
     newVersion,
     bumpType: type,
-    gitTag: v.gitTag,
+    gitTag: makeTagName(newVersion, settings.tagPrefix, settings.customPrefix),
   }));
 });
 
@@ -382,37 +453,44 @@ router.put('/settings', (req: Request, res: Response) => {
 
 // POST /api/v1/versions/:id/publish — 发布版本（触发 auto-bump）
 router.post('/:id/publish', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
 
-  const previousVersion = v.version;
+  const previousVersion = row.version as string;
 
   // Auto-bump on publish
+  let newVersion = previousVersion;
+  let bumped = false;
   if (settings.autoBump) {
-    v.version = autoBumpVersion(v.version, settings.bumpType);
+    newVersion = autoBumpVersion(previousVersion, settings.bumpType);
+    bumped = true;
   }
 
-  v.status = 'published';
-  v.releasedAt = new Date().toISOString();
-  v.updatedAt = new Date().toISOString();
-  v.buildStatus = 'success';
-
-  // Auto-tag
+  let tagCreated = false;
   if (settings.autoTag && settings.tagOnStatus.includes('published')) {
-    v.gitTag = makeTagName(v.version, settings.tagPrefix, settings.customPrefix);
-    v.gitTagCreatedAt = new Date().toISOString();
+    const tagName = makeTagName(newVersion, settings.tagPrefix, settings.customPrefix);
+    const projectPath = (row.projectPath as string) ||
+      path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
+    try {
+      tagCreated = createTag(projectPath, tagName, `Release ${newVersion}`);
+    } catch (err) {
+      console.warn('[publish] Failed to create git tag:', err);
+    }
   }
 
-  versions.set(v.id, v);
+  db.prepare(
+    'UPDATE versions SET version = ?, build_status = ?, tag_created = ? WHERE id = ?'
+  ).run(newVersion, 'success', tagCreated ? 1 : 0, req.params.id);
+
   res.json(success({
-    version: v,
-    bumped: settings.autoBump,
-    previousVersion: settings.autoBump ? previousVersion : undefined,
-    newVersion: v.version,
-    tagCreated: !!v.gitTag,
+    version: { id: req.params.id, version: newVersion, status: 'published', buildStatus: 'success' },
+    bumped,
+    previousVersion: bumped ? previousVersion : undefined,
+    newVersion,
+    tagCreated,
   }));
 });
 
@@ -420,15 +498,15 @@ router.post('/:id/publish', (req: Request, res: Response) => {
 
 // GET /api/v1/versions/:id/build-config — Get build configuration for a version
 router.get('/:id/build-config', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
 
   // Project path: data/{versionId}/ or ~/.openclaw/projects/{versionId}/
-  const projectPath = (v as { projectPath?: string }).projectPath ||
-    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+  const projectPath = (row.projectPath as string) ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
 
   const config = getBuildConfig(projectPath);
   res.json(success(config));
@@ -436,8 +514,8 @@ router.get('/:id/build-config', (req: Request, res: Response) => {
 
 // POST /api/v1/versions/:id/build — Trigger a build for a version
 router.post('/:id/build', async (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
@@ -449,73 +527,67 @@ router.post('/:id/build', async (req: Request, res: Response) => {
 
   // Default project path
   const projectPath = explicitPath ||
-    (v as { projectPath?: string }).projectPath ||
-    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+    (row.projectPath as string) ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
 
-  v.buildStatus = 'building';
-  v.updatedAt = new Date().toISOString();
-  versions.set(v.id, v);
+  db.prepare('UPDATE versions SET build_status = ? WHERE id = ?').run('building', req.params.id);
 
   try {
     const result = await runBuild(projectPath, { buildCommand });
 
-    v.buildStatus = result.success ? 'success' : 'failed';
-    v.updatedAt = new Date().toISOString();
+    db.prepare('UPDATE versions SET build_status = ? WHERE id = ?').run(
+      result.success ? 'success' : 'failed', req.params.id
+    );
 
     // Import artifacts into store
     let artifactCount = 0;
+    let artifactUrl: string | undefined;
     if (result.success && result.artifacts.length > 0) {
       for (const artifact of result.artifacts) {
         const srcPath = path.join(projectPath, artifact.path);
-        await importArtifactsFromDir(v.id, v.version, path.dirname(srcPath));
+        await importArtifactsFromDir(req.params.id, row.version as string, path.dirname(srcPath));
         artifactCount++;
       }
-      v.artifactUrl = `/artifacts/${v.id}/${v.version}`;
+      artifactUrl = `/artifacts/${req.params.id}/${row.version}`;
     }
 
     // Auto-bump on build success: create a new bumped version + tag + tag record
     let autoBumped = false;
-    let bumpedVersion: Version | undefined;
+    let bumpedVersionId: string | undefined;
+    let bumpedVersionStr: string | undefined;
     if (result.success && settings.autoBump) {
-      const prevVersion = v.version;
-      const newVersionStr = autoBumpVersion(v.version, settings.bumpType);
+      const prevVersion = row.version as string;
+      const newVersionStr = autoBumpVersion(prevVersion, settings.bumpType);
       const tagName = makeTagName(newVersionStr, settings.tagPrefix, settings.customPrefix);
 
-      // Create new version record for the bumped version
+      // Create new version record in DB
       const newId = `v${Date.now()}`;
-      bumpedVersion = {
-        ...v,
-        id: newId,
-        version: newVersionStr,
-        title: `Build ${newVersionStr}`,
-        status: 'draft',
-        gitTag: tagName,
-        gitTagCreatedAt: new Date().toISOString(),
-        buildStatus: 'success',
-        artifactUrl: v.artifactUrl,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isMain: false,
-        commitCount: v.commitCount,
-        changedFiles: v.changedFiles,
-      };
-      versions.set(newId, bumpedVersion);
+      db.prepare(`
+        INSERT INTO versions (id, version, branch, summary, created_by, created_at, build_status, tag_created)
+        VALUES (?, ?, 'main', ?, 'system', datetime('now'), 'success', 1)
+      `).run(newId, newVersionStr, `Build ${newVersionStr}`);
 
-      // Create Tag record in tag store
+      try {
+        createTag(projectPath, tagName, `Auto-bump from build ${req.params.id} (${prevVersion} → ${newVersionStr})`);
+      } catch (err) {
+        console.warn('[build] Failed to create git tag:', err);
+      }
+
+      // Create Tag record via tagService
       createTagRecord({
         name: tagName,
         versionId: newId,
         versionName: newVersionStr,
-        message: `Auto-bump from build ${v.id} (${prevVersion} → ${newVersionStr})`,
+        message: `Auto-bump from build ${req.params.id} (${prevVersion} → ${newVersionStr})`,
         createdBy: 'system',
         commitHash: undefined,
         annotation: undefined,
       });
 
       autoBumped = true;
+      bumpedVersionId = newId;
+      bumpedVersionStr = newVersionStr;
     }
-
-    versions.set(v.id, v);
 
     res.json(success({
       success: result.success,
@@ -523,57 +595,54 @@ router.post('/:id/build', async (req: Request, res: Response) => {
       command: result.command,
       exitCode: result.exitCode,
       artifactCount,
-      artifactsUrl: v.artifactUrl,
+      artifactsUrl: artifactUrl,
       outputExcerpt: result.output.slice(-2000),
       errorOutput: result.errorOutput.slice(-2000),
       autoBumped,
-      bumpedVersion: bumpedVersion ? { id: bumpedVersion.id, version: bumpedVersion.version, gitTag: bumpedVersion.gitTag } : undefined,
+      bumpedVersion: bumpedVersionId ? { id: bumpedVersionId, version: bumpedVersionStr, gitTag: bumpedVersionStr ? makeTagName(bumpedVersionStr, settings.tagPrefix, settings.customPrefix) : undefined } : undefined,
     }));
   } catch (err: unknown) {
-    v.buildStatus = 'failed';
-    v.updatedAt = new Date().toISOString();
-    versions.set(v.id, v);
-
+    db.prepare('UPDATE versions SET build_status = ? WHERE id = ?').run('failed', req.params.id);
     res.status(500).json(error(500, `Build failed: ${err instanceof Error ? err.message : String(err)}`));
   }
 });
 
 // GET /api/v1/versions/:id/artifacts — List build artifacts
 router.get('/:id/artifacts', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT id, version FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
 
-  const artifacts = listArtifacts(v.id, v.version);
-  const totalSize = getArtifactsTotalSize(v.id, v.version);
+  const artifacts = listArtifacts(req.params.id, row.version as string);
+  const totalSize = getArtifactsTotalSize(req.params.id, row.version as string);
 
   res.json(success({
     data: artifacts,
     total: artifacts.length,
     totalSize,
-    downloadRoot: `/artifacts/${v.id}/${v.version}`,
+    downloadRoot: `/artifacts/${req.params.id}/${row.version}`,
   }));
 });
 
 // GET /api/v1/versions/:id/artifacts/:artifactPath — Download a specific artifact
 router.get('/:id/artifacts/*', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT id, version FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
 
   const artifactPath = (req.params as Record<string, string>)[0] || '';
-  const info = getArtifactInfo(v.id, v.version, artifactPath);
+  const info = getArtifactInfo(req.params.id, row.version as string, artifactPath);
 
   if (!info || !info.exists) {
     res.status(404).json(error(404, 'Artifact not found'));
     return;
   }
 
-  const artifactStream = getArtifactStream(v.id, v.version, artifactPath);
+  const artifactStream = getArtifactStream(req.params.id, row.version as string, artifactPath);
   if (!artifactStream) {
     res.status(404).json(error(404, 'Unable to read artifact'));
     return;
@@ -587,17 +656,14 @@ router.get('/:id/artifacts/*', (req: Request, res: Response) => {
 
 // DELETE /api/v1/versions/:id/artifacts — Delete all artifacts for a version
 router.delete('/:id/artifacts', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT id, version FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
 
-  const deleted = deleteArtifacts(v.id, v.version);
-  v.artifactUrl = undefined;
-  v.buildStatus = 'pending';
-  v.updatedAt = new Date().toISOString();
-  versions.set(v.id, v);
+  const deleted = deleteArtifacts(req.params.id, row.version as string);
+  db.prepare('UPDATE versions SET build_status = ? WHERE id = ?').run('pending', req.params.id);
 
   res.json(success({ deleted }));
 });
@@ -606,8 +672,8 @@ router.delete('/:id/artifacts', (req: Request, res: Response) => {
 
 // GET /api/v1/versions/:id/git-log — Get git commit history
 router.get('/:id/git-log', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
@@ -616,10 +682,11 @@ router.get('/:id/git-log', (req: Request, res: Response) => {
   const branch = req.query.branch as string | undefined;
 
   // Determine project path
-  const projectPath = (v as { projectPath?: string }).projectPath ||
-    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+  const projectPath = (row.projectPath as string) ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
 
-  const commits = getGitLog(projectPath, { maxCount, branch: branch || v.gitTag });
+  const tagName = `v${row.version}`;
+  const commits = getGitLog(projectPath, { maxCount, branch: branch || tagName });
   const currentBranch = getCurrentBranch(projectPath);
   const tags = getTags(projectPath);
 
@@ -633,14 +700,14 @@ router.get('/:id/git-log', (req: Request, res: Response) => {
 
 // GET /api/v1/versions/:id/git-tags — Get git tags
 router.get('/:id/git-tags', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
 
-  const projectPath = (v as { projectPath?: string }).projectPath ||
-    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+  const projectPath = (row.projectPath as string) ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
 
   const tags = getTags(projectPath);
   res.json(success({ data: tags, total: tags.length }));
@@ -648,27 +715,24 @@ router.get('/:id/git-tags', (req: Request, res: Response) => {
 
 // POST /api/v1/versions/:id/git-tags — Create a git tag for a version
 router.post('/:id/git-tags', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
 
   const { tagName, message } = req.body as { tagName?: string; message?: string };
-  const name = tagName || makeTagName(v.version, settings.tagPrefix, settings.customPrefix);
+  const name = tagName || makeTagName(row.version as string, settings.tagPrefix, settings.customPrefix);
 
-  const projectPath = (v as { projectPath?: string }).projectPath ||
-    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+  const projectPath = (row.projectPath as string) ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
 
   const created = createTag(projectPath, name, message);
 
   if (created) {
-    v.gitTag = name;
-    v.gitTagCreatedAt = new Date().toISOString();
-    v.updatedAt = new Date().toISOString();
-    versions.set(v.id, v);
+    db.prepare('UPDATE versions SET tag_created = 1 WHERE id = ?').run(req.params.id);
     // 同时在 Tag 生命周期系统中创建记录（+ 实际 git tag 已在上面创建）
-    autoCreateTagForVersion(v.id, v.version, {
+    autoCreateTagForVersion(req.params.id, row.version as string, {
       name,
       message,
       createdBy: 'user',
@@ -688,8 +752,8 @@ const rollbackHistory: RollbackRecord[] = [];
 // In-memory rollback history (same pattern as other modules)
 // GET /api/v1/versions/:id/rollback-history — Get rollback history for a version
 router.get('/:id/rollback-history', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT id FROM versions WHERE id = ?').get(req.params.id);
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
@@ -700,14 +764,14 @@ router.get('/:id/rollback-history', (req: Request, res: Response) => {
 
 // GET /api/v1/versions/:id/rollback-targets — Get available rollback targets
 router.get('/:id/rollback-targets', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
 
-  const projectPath = (v as { projectPath?: string }).projectPath ||
-    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+  const projectPath = (row.projectPath as string) ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
 
   const targets = getRollbackTargets(projectPath);
   res.json(success(targets));
@@ -715,8 +779,8 @@ router.get('/:id/rollback-targets', (req: Request, res: Response) => {
 
 // GET /api/v1/versions/:id/rollback-preview — Preview what a rollback would do
 router.get('/:id/rollback-preview', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
@@ -727,8 +791,8 @@ router.get('/:id/rollback-preview', (req: Request, res: Response) => {
     return;
   }
 
-  const projectPath = (v as { projectPath?: string }).projectPath ||
-    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+  const projectPath = (row.projectPath as string) ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
 
   const preview = getRollbackPreview(projectPath, targetRef);
   res.json(success(preview));
@@ -736,8 +800,8 @@ router.get('/:id/rollback-preview', (req: Request, res: Response) => {
 
 // POST /api/v1/versions/:id/rollback — Rollback to a tag, branch, or commit
 router.post('/:id/rollback', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
@@ -753,24 +817,24 @@ router.post('/:id/rollback', (req: Request, res: Response) => {
     return;
   }
 
-  const projectPath = (v as { projectPath?: string }).projectPath ||
-    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+  const projectPath = (row.projectPath as string) ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
 
   let result;
   if (type === 'branch') {
     result = rollbackToBranch(projectPath, target, { createBackupBranch: true });
   } else if (type === 'commit') {
-    result = rollbackToCommit(projectPath, target, { createBranch: shouldCreateBranch, branchName: shouldCreateBranch ? `rollback/${v.version}-${Date.now()}` : undefined });
+    result = rollbackToCommit(projectPath, target, { createBranch: shouldCreateBranch, branchName: shouldCreateBranch ? `rollback/${row.version}-${Date.now()}` : undefined });
   } else {
     // Default to tag
-    result = rollbackToTag(projectPath, target, { createBranch: shouldCreateBranch, branchName: shouldCreateBranch ? `rollback/${v.version}` : undefined });
+    result = rollbackToTag(projectPath, target, { createBranch: shouldCreateBranch, branchName: shouldCreateBranch ? `rollback/${row.version}` : undefined });
   }
 
   // Record in rollback history
   const record: RollbackRecord = {
     id: `rb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    versionId: v.id,
-    versionName: v.version,
+    versionId: req.params.id,
+    versionName: row.version as string,
     targetRef: target,
     targetType: type || 'tag',
     mode: type === 'branch' ? 'checkout' : 'revert',
@@ -798,14 +862,14 @@ router.get('/branches', (req: Request, res: Response) => {
     return;
   }
 
-  const v = versions.get(versionId);
-  if (!v) {
+  const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(versionId) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
 
-  const projectPath = (v as { projectPath?: string }).projectPath ||
-    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+  const projectPath = (row.projectPath as string) ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', versionId);
 
   const branches = getBranches(projectPath);
   const currentBranch = getCurrentBranch(projectPath);
@@ -830,14 +894,14 @@ router.post('/branches', (req: Request, res: Response) => {
     return;
   }
 
-  const v = versions.get(versionId);
-  if (!v) {
+  const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(versionId) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
 
-  const projectPath = (v as { projectPath?: string }).projectPath ||
-    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+  const projectPath = (row.projectPath as string) ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', versionId);
 
   const created = createBranch(projectPath, branchName, baseRef);
   if (created) {
@@ -856,16 +920,13 @@ router.put('/branches/primary', (req: Request, res: Response) => {
     return;
   }
 
-  const v = versions.get(versionId);
-  if (!v) {
+  const row = db.prepare('SELECT id FROM versions WHERE id = ?').get(versionId);
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
 
-  // Update the version's default branch
-  (v as { defaultBranch?: string }).defaultBranch = branchName;
-  v.updatedAt = new Date().toISOString();
-  versions.set(v.id, v);
+  db.prepare('UPDATE versions SET branch = ? WHERE id = ?').run(branchName, versionId);
 
   res.json(success({ updated: true, defaultBranch: branchName }));
 });
@@ -1014,14 +1075,9 @@ router.put('/:id/summary', (req: Request, res: Response) => {
     }
 
     const summary = VersionSummaryModel.update(id, { content, features, changes, fixes, breaking });
-    // Also sync to Version model
-    const v = versions.get(id);
-    if (v && content !== undefined) {
-      v.summary = content;
-      v.summaryGeneratedAt = new Date().toISOString();
-      v.summaryGeneratedBy = 'manual';
-      v.hasSummary = true;
-      versions.set(id, v);
+    // Also sync summary to versions DB table
+    if (content !== undefined) {
+      db.prepare('UPDATE versions SET summary = ? WHERE id = ?').run(content, id);
     }
     res.json(success(summary));
   } catch (err) {
@@ -1061,15 +1117,8 @@ router.post('/:id/summary/generate', async (req: Request, res: Response) => {
       createdBy: 'AI',
     });
 
-    // Also save summary content to Version model for inline access
-    const v = versions.get(id);
-    if (v) {
-      v.summary = generated.content;
-      v.summaryGeneratedAt = new Date().toISOString();
-      v.summaryGeneratedBy = 'AI';
-      v.hasSummary = true;
-      versions.set(id, v);
-    }
+    // Also sync summary to versions DB table
+    db.prepare('UPDATE versions SET summary = ? WHERE id = ?').run(generated.content, id);
 
     res.json(success(summary));
   } catch (err) {
@@ -1082,8 +1131,8 @@ router.post('/:id/summary/generate', async (req: Request, res: Response) => {
 router.post('/:id/summary/refresh', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const v = versions.get(id);
-    if (!v) {
+    const row = db.prepare('SELECT id, version FROM versions WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    if (!row) {
       res.status(404).json(error(404, 'Version not found'));
       return;
     }
@@ -1091,7 +1140,7 @@ router.post('/:id/summary/refresh', async (req: Request, res: Response) => {
 
     const generated = await generateChangelogFromCommits(
       id,
-      commitLog || v.changedFiles?.join('\n') || '',
+      commitLog || row.version as string || '',
       branchName
     );
 
@@ -1106,18 +1155,14 @@ router.post('/:id/summary/refresh', async (req: Request, res: Response) => {
       createdBy: 'AI',
     });
 
-    // Update Version model with latest summary
-    v.summary = generated.content;
-    v.summaryGeneratedAt = new Date().toISOString();
-    v.summaryGeneratedBy = 'AI';
-    v.hasSummary = true;
-    versions.set(id, v);
+    // Update versions DB table with latest summary
+    db.prepare('UPDATE versions SET summary = ? WHERE id = ?').run(generated.content, id);
 
     res.json(success({
       ...summary,
-      versionSummary: v.summary,
-      versionSummaryGeneratedAt: v.summaryGeneratedAt,
-      versionSummaryGeneratedBy: v.summaryGeneratedBy,
+      versionSummary: generated.content,
+      versionSummaryGeneratedAt: new Date().toISOString(),
+      versionSummaryGeneratedBy: 'AI',
     }));
   } catch (err) {
     console.error('Summary refresh error:', err);
@@ -1127,8 +1172,8 @@ router.post('/:id/summary/refresh', async (req: Request, res: Response) => {
 
 // GET /api/v1/versions/:id/summary/status — Check if summary exists
 router.get('/:id/summary/status', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT id FROM versions WHERE id = ?').get(req.params.id);
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
@@ -1156,8 +1201,8 @@ interface TimelineEvent {
 // GET /api/v1/versions/:id/timeline — 获取版本变更时间线
 router.get('/:id/timeline', (req: Request, res: Response) => {
   const { id: versionId } = req.params;
-  const version = versions.get(versionId);
-  if (!version) {
+  const row = db.prepare('SELECT id, version, created_at FROM versions WHERE id = ?').get(versionId) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
@@ -1174,8 +1219,8 @@ router.get('/:id/timeline', (req: Request, res: Response) => {
     id: `version-created-${versionId}`,
     type: 'version_created',
     title: '版本创建',
-    description: `版本 ${version.version} 已创建`,
-    timestamp: version.createdAt,
+    description: `版本 ${row.version} 已创建`,
+    timestamp: row.created_at as string,
   });
 
   // 截图关联 events
@@ -1209,7 +1254,7 @@ router.get('/:id/timeline', (req: Request, res: Response) => {
 
   res.json(success({
     versionId,
-    version: version.version,
+    version: row.version,
     events,
   }));
 });
@@ -1226,15 +1271,16 @@ router.post('/summary/batch-generate', async (req: Request, res: Response) => {
     const results: { versionId: string; success: boolean; error?: string }[] = [];
 
     for (const id of versionIds) {
-      const v = versions.get(id);
-      if (!v) {
+      const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+      if (!row) {
         results.push({ versionId: id, success: false, error: 'Version not found' });
         continue;
       }
       try {
-        const projectPath = (v as { projectPath?: string }).projectPath ||
-          path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
-        const commits = getGitLog(projectPath, { maxCount: 30, branch: v.gitTag });
+        const projectPath = (row.projectPath as string) ||
+          path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', id);
+        const tagName = `v${row.version}`;
+        const commits = getGitLog(projectPath, { maxCount: 30, branch: tagName });
         const commitText = commits.map(c => `${c.hash.slice(0, 7)} ${c.message}`).join('\n') || 'version update';
         const currentBranch = getCurrentBranch(projectPath);
         const generated = await generateChangelogFromCommits(id, commitText, currentBranch);
@@ -1317,8 +1363,8 @@ router.get('/compare/quick', async (req: Request, res: Response) => {
 
 // POST /api/v1/versions/:id/bump-with-task — Bump version based on task type
 router.post('/:id/bump-with-task', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
@@ -1334,12 +1380,12 @@ router.post('/:id/bump-with-task', (req: Request, res: Response) => {
     return;
   }
 
-  if (!isValidSemver(v.version)) {
-    res.status(400).json(error(400, `Invalid semver: ${v.version}`));
+  if (!isValidSemver(row.version as string)) {
+    res.status(400).json(error(400, `Invalid semver: ${row.version}`));
     return;
   }
 
-  const result = performBump(v.version, { taskType, taskId, taskTitle });
+  const result = performBump(row.version as string, { taskType, taskId, taskTitle });
 
   if (!result) {
     res.status(500).json(error(500, 'Bump failed'));
@@ -1347,18 +1393,22 @@ router.post('/:id/bump-with-task', (req: Request, res: Response) => {
   }
 
   // Apply the bump to the version
-  v.version = result.newVersion;
-  v.updatedAt = new Date().toISOString();
+  db.prepare('UPDATE versions SET version = ? WHERE id = ?').run(result.newVersion, req.params.id);
 
   if (settings.autoTag && settings.tagOnStatus.includes('published')) {
-    v.gitTag = makeTagName(result.newVersion, settings.tagPrefix, settings.customPrefix);
-    v.gitTagCreatedAt = new Date().toISOString();
+    const tagName = makeTagName(result.newVersion, settings.tagPrefix, settings.customPrefix);
+    const projectPath = (row.projectPath as string) ||
+      path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
+    try {
+      createTag(projectPath, tagName, `Release ${result.newVersion}`);
+      db.prepare('UPDATE versions SET tag_created = 1 WHERE id = ?').run(req.params.id);
+    } catch (err) {
+      console.warn('[bump-with-task] Failed to create git tag:', err);
+    }
   }
 
-  versions.set(v.id, v);
-
   res.json(success({
-    version: v,
+    version: { id: req.params.id, version: result.newVersion },
     bump: result,
     summary: formatBumpSummary(result),
   }));
@@ -1366,8 +1416,8 @@ router.post('/:id/bump-with-task', (req: Request, res: Response) => {
 
 // POST /api/v1/versions/:id/auto-bump — Manually trigger auto-bump (creates new bumped version)
 router.post('/:id/auto-bump', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
@@ -1375,34 +1425,21 @@ router.post('/:id/auto-bump', (req: Request, res: Response) => {
   const { bumpType } = req.body as { bumpType?: VersionBumpType };
   const type = bumpType || settings.bumpType;
 
-  if (!isValidSemver(v.version)) {
-    res.status(400).json(error(400, `Invalid semver: ${v.version}`));
+  if (!isValidSemver(row.version as string)) {
+    res.status(400).json(error(400, `Invalid semver: ${row.version}`));
     return;
   }
 
-  const prevVersion = v.version;
-  const newVersionStr = autoBumpVersion(v.version, type);
+  const prevVersion = row.version as string;
+  const newVersionStr = autoBumpVersion(prevVersion, type);
   const tagName = makeTagName(newVersionStr, settings.tagPrefix, settings.customPrefix);
 
-  // Create new version record
+  // Create new version record in DB
   const newId = `v${Date.now()}`;
-  const newVersionRecord: Version = {
-    ...v,
-    id: newId,
-    version: newVersionStr,
-    title: `${newVersionStr}`,
-    status: 'draft',
-    gitTag: tagName,
-    gitTagCreatedAt: new Date().toISOString(),
-    buildStatus: v.buildStatus,
-    artifactUrl: v.artifactUrl,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    isMain: false,
-    commitCount: v.commitCount,
-    changedFiles: v.changedFiles,
-  };
-  versions.set(newId, newVersionRecord);
+  db.prepare(`
+    INSERT INTO versions (id, version, branch, summary, created_by, created_at, build_status, tag_created)
+    VALUES (?, ?, ?, ?, 'system', datetime('now'), ?, 1)
+  `).run(newId, newVersionStr, row.branch as string || 'main', `Auto-bump ${newVersionStr}`, row.build_status as string || 'pending');
 
   // Create Tag record
   createTagRecord({
@@ -1417,7 +1454,7 @@ router.post('/:id/auto-bump', (req: Request, res: Response) => {
 
   res.json(success({
     previousVersion: prevVersion,
-    newVersion: newVersionRecord,
+    newVersion: { id: newId, version: newVersionStr, status: 'draft', buildStatus: row.build_status },
     bumpType: type,
     tagName,
     autoBumped: true,
@@ -1426,16 +1463,16 @@ router.post('/:id/auto-bump', (req: Request, res: Response) => {
 
 // GET /api/v1/versions/:id/bump-preview — Preview what a bump would produce
 router.get('/:id/bump-preview', (req: Request, res: Response) => {
-  const v = versions.get(req.params.id);
-  if (!v) {
+  const row = db.prepare('SELECT version FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
 
   const { taskType } = req.query as { taskType?: string };
 
-  if (!isValidSemver(v.version)) {
-    res.status(400).json(error(400, `Invalid semver: ${v.version}`));
+  if (!isValidSemver(row.version as string)) {
+    res.status(400).json(error(400, `Invalid semver: ${row.version}`));
     return;
   }
 
@@ -1443,21 +1480,21 @@ router.get('/:id/bump-preview', (req: Request, res: Response) => {
   const bumpTypes = ['patch', 'minor', 'major'] as const;
 
   const previews = bumpTypes.map(type => {
-    const newVersion = bumpVersion(v.version, type);
+    const newVersion = bumpVersion(row.version as string, type);
     const context = taskType ? { taskType, taskId: 'preview', taskTitle: '预览' } : null;
-    const changelog = context ? performBump(v.version, context) : null;
+    const changelog = context ? performBump(row.version as string, context) : null;
 
     return {
       bumpType: type,
-      currentVersion: v.version,
-      newVersion: newVersion || v.version,
+      currentVersion: row.version,
+      newVersion: newVersion || row.version,
       isDefault: taskType ? changelog?.bumpType === type : type === 'patch',
       changelog: changelog && changelog.bumpType === type ? changelog.changelog : null,
     };
   });
 
   res.json(success({
-    currentVersion: v.version,
+    currentVersion: row.version,
     taskType: taskType || null,
     previews,
   }));

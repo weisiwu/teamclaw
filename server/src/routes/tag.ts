@@ -3,6 +3,7 @@
 
 import { Router, Request, Response } from 'express';
 import { success, error } from '../utils/response.js';
+import { getTags as gitGetTags, createTag as gitCreateTag } from '../services/gitService.js';
 import {
   getAllTagRecords,
   getTagRecord,
@@ -25,26 +26,42 @@ import {
 
 const router = Router();
 
+// Default project path for git tag operations
+const DEFAULT_PROJECT_PATH = process.env.TEAMCLAW_PROJECT_PATH || '';
+
 // ========== Tag 记录 CRUD ==========
 
-// GET /api/v1/tags — 获取所有标签记录
+// GET /api/v1/tags — 获取所有标签记录（从 git + DB 合并）
 router.get('/', (req: Request, res: Response) => {
-  const { versionId, archived, protected: isProtected, page, pageSize } = req.query;
+  const { versionId, archived, protected: isProtected, page, pageSize, projectPath: reqProjectPath } = req.query;
 
-  let tags = getAllTagRecords();
-
-  // 按版本过滤
-  if (versionId && typeof versionId === 'string') {
-    tags = tags.filter(t => t.versionId === versionId);
+  // Get git tags from project path
+  const projectPath = (reqProjectPath as string) || DEFAULT_PROJECT_PATH;
+  let gitTags: Array<{ name: string; commit: string; date: string; message?: string }> = [];
+  if (projectPath) {
+    gitTags = gitGetTags(projectPath);
   }
 
-  // 按归档状态过滤
-  if (archived !== undefined) {
-    const isArchived = archived === 'true';
-    tags = tags.filter(t => t.archived === isArchived);
+  // Get DB tag records for protected marks
+  const dbTags = getAllTagRecords();
+  const protectedMap = new Map<string, boolean>();
+  for (const t of dbTags) {
+    protectedMap.set(t.name, t.protected);
   }
 
-  // 按保护状态过滤
+  // Merge: git tags + protected from DB
+  const mergedTags = gitTags.map(t => ({
+    name: t.name,
+    commit: t.commit,
+    date: t.date,
+    annotation: t.message,
+    hasRecord: protectedMap.has(t.name),
+    protected: protectedMap.get(t.name) || false,
+  }));
+
+  // Apply filters
+  let tags = mergedTags;
+
   if (isProtected !== undefined) {
     const isProt = isProtected === 'true';
     tags = tags.filter(t => t.protected === isProt);
@@ -67,25 +84,48 @@ router.get('/', (req: Request, res: Response) => {
   }));
 });
 
-// GET /api/v1/tags/:id — 获取单个标签
-router.get('/:id', (req: Request, res: Response) => {
-  const tag = getTagRecord(req.params.id);
-  if (!tag) {
+// GET /api/v1/tags/:tagName — 获取单个标签详情
+router.get('/:tagName', (req: Request, res: Response) => {
+  const { tagName } = req.params;
+  const { projectPath: reqProjectPath } = req.query;
+
+  const projectPath = (reqProjectPath as string) || DEFAULT_PROJECT_PATH;
+
+  // Get git tag info
+  let tagInfo: { name: string; commit: string; date: string; message?: string } | undefined;
+  if (projectPath) {
+    const allGitTags = gitGetTags(projectPath);
+    tagInfo = allGitTags.find(t => t.name === tagName);
+  }
+
+  // Check DB for protected and record info
+  const dbRecord = getTagByName(tagName);
+
+  if (!tagInfo && !dbRecord) {
     res.status(404).json(error(404, 'Tag not found'));
     return;
   }
-  res.json(success(tag));
+
+  res.json(success({
+    name: tagName,
+    commit: tagInfo?.commit || dbRecord?.commitHash || '',
+    date: tagInfo?.date || dbRecord?.createdAt || '',
+    annotation: tagInfo?.message || dbRecord?.annotation || '',
+    hasRecord: !!dbRecord,
+    protected: dbRecord?.protected || false,
+  }));
 });
 
-// POST /api/v1/tags — 手动创建标签记录
+// POST /api/v1/tags — 手动创建标签（创建 git tag + DB 记录）
 router.post('/', (req: Request, res: Response) => {
-  const { name, versionId, versionName, message, commitHash, createdBy } = req.body as {
+  const { name, versionId, versionName, message, commitHash, createdBy, projectPath: reqProjectPath } = req.body as {
     name?: string;
     versionId: string;
     versionName: string;
     message?: string;
     commitHash?: string;
     createdBy?: string;
+    projectPath?: string;
   };
 
   if (!versionId || !versionName) {
@@ -93,6 +133,7 @@ router.post('/', (req: Request, res: Response) => {
     return;
   }
 
+  const projectPath = reqProjectPath || DEFAULT_PROJECT_PATH;
   const tagName = name || makeTagName(versionName, getTagConfig().tagPrefix, getTagConfig().customPrefix);
 
   // 检查是否已存在
@@ -102,6 +143,17 @@ router.post('/', (req: Request, res: Response) => {
     return;
   }
 
+  // 创建 git tag
+  let gitTagCreated = false;
+  if (projectPath) {
+    try {
+      gitTagCreated = gitCreateTag(projectPath, tagName, message || `Release ${versionName}`);
+    } catch (err) {
+      console.warn('[tag] Failed to create git tag:', err);
+    }
+  }
+
+  // 创建 DB 记录
   const record = createTagRecord({
     name: tagName,
     versionId,
@@ -112,45 +164,103 @@ router.post('/', (req: Request, res: Response) => {
     annotation: message || `Version ${versionName}`,
   });
 
-  res.status(201).json(success(record));
+  res.status(201).json(success({ ...record, gitTagCreated }));
 });
 
-// DELETE /api/v1/tags/:id — 删除标签记录（同时删除 git tag）
-router.delete('/:id', (req: Request, res: Response) => {
-  const record = getTagRecord(req.params.id);
+// DELETE /api/v1/tags/:tagName — 删除标签（同时删除 git tag）
+router.delete('/:tagName', (req: Request, res: Response) => {
+  const { tagName } = req.params;
+  const { projectPath: reqProjectPath } = req.body as { projectPath?: string } || {};
+
+  const projectPath = reqProjectPath || DEFAULT_PROJECT_PATH;
+
+  const record = getTagByName(tagName);
+  if (!record) {
+    // 如果 DB 没有记录，仍尝试删除 git tag
+    if (projectPath) {
+      try {
+        const { deleteTag } = require('../services/gitService.js');
+        deleteTag(projectPath, tagName);
+      } catch (err) {
+        console.warn('[tag] Failed to delete git tag:', err);
+      }
+    }
+    res.status(404).json(error(404, 'Tag not found'));
+    return;
+  }
+
+  if (record.protected) {
+    res.status(403).json({ code: 403, message: '受保护的 tag 不可删除' });
+    return;
+  }
+
+  const deleted = removeTag(record.id, { projectPath });
+  res.json(success({ deleted }));
+});
+
+// PUT /api/v1/tags/:tagName — 重命名标签（同时更新 git tag + DB）
+router.put('/:tagName', (req: Request, res: Response) => {
+  const { tagName } = req.params;
+  const { name: newName, projectPath: reqProjectPath } = req.body as { name: string; projectPath?: string };
+
+  if (!newName) {
+    res.status(400).json(error(400, 'name is required'));
+    return;
+  }
+
+  const projectPath = reqProjectPath || DEFAULT_PROJECT_PATH;
+
+  const record = getTagByName(tagName);
   if (!record) {
     res.status(404).json(error(404, 'Tag not found'));
     return;
   }
 
   if (record.protected) {
-    res.status(403).json(error(403, 'Cannot delete protected tag'));
+    res.status(403).json({ code: 403, message: '受保护的 tag 不可重命名' });
     return;
   }
 
-  const { projectPath } = req.body as { projectPath?: string };
-  const deleted = removeTag(req.params.id, { projectPath });
-  res.json(success({ deleted }));
+  const existingNew = getTagByName(newName);
+  if (existingNew && existingNew.id !== record.id) {
+    res.status(409).json(error(409, `Tag ${newName} already exists`));
+    return;
+  }
+
+  const updated = renameTag(record.id, newName, { projectPath });
+  if (!updated) {
+    res.status(404).json(error(404, 'Tag rename failed'));
+    return;
+  }
+
+  res.json(success(updated));
 });
 
-// PUT /api/v1/tags/:id/rename — 重命名标签（同时更新 git tag）
-router.put('/:id/rename', (req: Request, res: Response) => {
-  const { name, projectPath } = req.body as { name: string; projectPath?: string };
+// PUT /api/v1/tags/:tagName/rename — 重命名标签（别名路由）
+router.put('/:tagName/rename', (req: Request, res: Response) => {
+  const { tagName } = req.params;
+  const { name: newName, projectPath: reqProjectPath } = req.body as { name: string; projectPath?: string };
 
-  if (!name) {
+  if (!newName) {
     res.status(400).json(error(400, 'name is required'));
     return;
   }
 
-  const existing = getTagByName(name);
-  if (existing && existing.id !== req.params.id) {
-    res.status(409).json(error(409, `Tag ${name} already exists`));
+  const projectPath = reqProjectPath || DEFAULT_PROJECT_PATH;
+  const record = getTagByName(tagName);
+  if (!record) {
+    res.status(404).json(error(404, 'Tag not found'));
     return;
   }
 
-  const updated = renameTag(req.params.id, name, { projectPath });
+  if (record.protected) {
+    res.status(403).json({ code: 403, message: '受保护的 tag 不可重命名' });
+    return;
+  }
+
+  const updated = renameTag(record.id, newName, { projectPath });
   if (!updated) {
-    res.status(404).json(error(404, 'Tag not found or protected'));
+    res.status(404).json(error(404, 'Tag rename failed'));
     return;
   }
 
