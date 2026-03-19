@@ -2166,7 +2166,30 @@ export async function batchDeleteTags(versionIds: string[]): Promise<{ success: 
 export function useAllTags() {
   return useQuery<TagLifecycleRecord[]>({
     queryKey: ["allTags"],
-    queryFn: () => getAllTags(),
+    queryFn: async () => {
+      try {
+        const res = await fetch('/api/v1/tags');
+        const json = await res.json();
+        if ((json.code === 200 || json.code === 0) && json.data?.data) {
+          return json.data.data.map((t: TagLifecycleRecord & { versionId?: string; version?: string }) => ({
+            id: t.name, // use name as id since API returns name not id
+            name: t.name,
+            versionId: t.versionId || '',
+            version: t.version || t.name,
+            archived: false,
+            protected: t.protected || false,
+            createdAt: t.date || t.createdAt || new Date().toISOString(),
+            commit: t.commit,
+            date: t.date,
+            annotation: t.annotation,
+            hasRecord: t.hasRecord,
+          }));
+        }
+        return getAllTags();
+      } catch {
+        return getAllTags();
+      }
+    },
   });
 }
 

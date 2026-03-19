@@ -779,6 +779,12 @@ export interface TagLifecycleRecord {
   protected: boolean;
   createdAt: string;
   archivedAt?: string;
+  // Git commit info (from API)
+  commit?: string;
+  date?: string;
+  annotation?: string;
+  hasRecord?: boolean;
+  source?: 'auto' | 'manual';
 }
 
 // Tag 归档请求
