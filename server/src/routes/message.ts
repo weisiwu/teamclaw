@@ -3,21 +3,36 @@
  * 消息机制模块 - REST API 路由
  *
  * 端点：
- * POST   /api/v1/messages                        - 接收外部消息
- * GET    /api/v1/messages/queue                 - 获取当前消息队列
- * GET    /api/v1/messages/queue/:queueId        - 获取队列详情
- * POST   /api/v1/messages/queue/:messageId/preempt - 手动触发抢占
- * GET    /api/v1/messages/history               - 获取消息历史
- * POST   /api/v1/messages/file                 - 上传文件消息
- * PATCH  /api/v1/messages/:messageId/status    - 更新消息状态
- * GET    /api/v1/messages/stats                - 消息统计（新增）
- * GET    /api/v1/messages/dlq                  - DLQ 列表（新增）
- * GET    /api/v1/messages/dlq/stats             - DLQ 统计（新增）
- * GET    /api/v1/messages/dlq/:messageId        - DLQ 单条消息（新增）
- * POST   /api/v1/messages/dlq/:messageId/requeue - 从 DLQ 重新入队（新增）
- * DELETE /api/v1/messages/dlq/:messageId        - 从 DLQ 丢弃消息（新增）
- * GET    /api/v1/messages/retry/stats           - 重试服务统计（新增）
- * GET    /api/v1/messages/retry/:messageId      - 消息重试状态（新增）
+ * POST     /api/v1/messages                          - 接收外部消息
+ * GET      /api/v1/messages/queue                   - 获取当前消息队列
+ * GET      /api/v1/messages/queue/:queueId          - 获取队列详情
+ * POST     /api/v1/messages/queue/:messageId/preempt - 手动触发抢占
+ * GET      /api/v1/messages/history                 - 获取消息历史
+ * POST     /api/v1/messages/file                     - 上传文件消息
+ * PATCH    /api/v1/messages/:messageId/status       - 更新消息状态
+ * GET      /api/v1/messages/stats                    - 消息统计
+ * GET      /api/v1/messages/dlq                      - DLQ 列表
+ * GET      /api/v1/messages/dlq/stats                - DLQ 统计
+ * GET      /api/v1/messages/dlq/:messageId           - DLQ 单条消息
+ * POST     /api/v1/messages/dlq/:messageId/requeue   - 从 DLQ 重新入队
+ * DELETE   /api/v1/messages/dlq/:messageId           - 从 DLQ 丢弃消息
+ * GET      /api/v1/messages/retry/stats              - 重试服务统计
+ * GET      /api/v1/messages/retry/:messageId        - 消息重试状态
+ * GET      /api/v1/messages/ratelimit/stats          - 限流统计（新增）
+ * GET      /api/v1/messages/ratelimit/check         - 限流检查（新增）
+ * PUT      /api/v1/messages/ratelimit/config        - 更新限流配置（新增）
+ * GET      /api/v1/messages/circuit/stats           - 断路器统计（新增）
+ * POST     /api/v1/messages/circuit/:channel/reset - 重置断路器（新增）
+ * GET      /api/v1/messages/unified/inbox           - 统一收件箱（新增）
+ * GET      /api/v1/messages/unified/sessions        - 跨渠道会话列表（新增）
+ * GET      /api/v1/messages/unified/sessions/:userGlobalId - 会话详情（新增）
+ * POST     /api/v1/messages/unified/read            - 标记已读（新增）
+ * GET      /api/v1/messages/router/rules            - 路由规则列表（新增）
+ * POST     /api/v1/messages/router/rules            - 添加路由规则（新增）
+ * PUT      /api/v1/messages/router/rules/:ruleId    - 更新路由规则（新增）
+ * DELETE   /api/v1/messages/router/rules/:ruleId    - 删除路由规则（新增）
+ * POST     /api/v1/messages/router/route            - 手动路由测试（新增）
+ * GET      /api/v1/messages/router/stats            - 路由统计（新增）
  */
 
 import { Router } from 'express';
@@ -28,6 +43,10 @@ import { manualPreempt, buildPreemptionNotification } from '../services/preempti
 import { messageStatsService } from '../services/messageStats.js';
 import { messageDLQService } from '../services/messageDLQ.js';
 import { messageRetryService } from '../services/messageRetry.js';
+import { messageRateLimiterService } from '../services/messageRateLimiter.js';
+import { messageCircuitBreakerService } from '../services/messageCircuitBreaker.js';
+import { messageChannelAggregatorService } from '../services/messageChannelAggregator.js';
+import { messageRouterService } from '../services/messageRouter.js';
 import {
   Message,
   ReceiveMessageRequest,
@@ -396,6 +415,245 @@ router.get('/retry/:messageId', (req, res) => {
   } catch (err) {
     console.error('[messages] GET /retry/:messageId error:', err);
     res.status(500).json(error(500, '获取重试状态失败'));
+  }
+});
+
+// ============================================
+// GET /api/v1/messages/ratelimit/stats - 限流统计
+// ============================================
+router.get('/ratelimit/stats', (req, res) => {
+  try {
+    const queueStatus = messageQueueService.getQueueStatus();
+    const stats = messageRateLimiterService.getStats(queueStatus.total);
+    res.json(success(stats));
+  } catch (err) {
+    console.error('[messages] GET /ratelimit/stats error:', err);
+    res.status(500).json(error(500, '获取限流统计失败'));
+  }
+});
+
+// ============================================
+// GET /api/v1/messages/ratelimit/check - 限流检查
+// ============================================
+router.get('/ratelimit/check', (req, res) => {
+  try {
+    const { userId, role, channel } = req.query;
+    if (!userId || !role || !channel) {
+      return res.status(400).json(error(400, '缺少参数: userId, role, channel'));
+    }
+    const queueStatus = messageQueueService.getQueueStatus();
+    const result = messageRateLimiterService.check(
+      String(userId), String(role), String(channel), queueStatus.total
+    );
+    res.json(success(result));
+  } catch (err) {
+    console.error('[messages] GET /ratelimit/check error:', err);
+    res.status(500).json(error(500, '限流检查失败'));
+  }
+});
+
+// ============================================
+// PUT /api/v1/messages/ratelimit/config - 更新限流配置
+// ============================================
+router.put('/ratelimit/config', (req, res) => {
+  try {
+    const { key, maxMessages, windowMs } = req.body;
+    if (!key) return res.status(400).json(error(400, '缺少 key 参数'));
+    messageRateLimiterService.updateConfig(key, { maxMessages, windowMs });
+    res.json(success({ key, updated: true }));
+  } catch (err) {
+    console.error('[messages] PUT /ratelimit/config error:', err);
+    res.status(500).json(error(500, '更新限流配置失败'));
+  }
+});
+
+// ============================================
+// GET /api/v1/messages/circuit/stats - 断路器统计
+// ============================================
+router.get('/circuit/stats', (req, res) => {
+  try {
+    const { channel } = req.query;
+    const stats = messageCircuitBreakerService.getStats(channel ? String(channel) : undefined);
+    res.json(success(stats));
+  } catch (err) {
+    console.error('[messages] GET /circuit/stats error:', err);
+    res.status(500).json(error(500, '获取断路器统计失败'));
+  }
+});
+
+// ============================================
+// POST /api/v1/messages/circuit/:channel/reset - 重置断路器
+// ============================================
+router.post('/circuit/:channel/reset', (req, res) => {
+  try {
+    const { channel } = req.params;
+    messageCircuitBreakerService.reset(channel);
+    res.json(success({ channel, reset: true }));
+  } catch (err) {
+    console.error('[messages] POST /circuit/:channel/reset error:', err);
+    res.status(500).json(error(500, '重置断路器失败'));
+  }
+});
+
+// ============================================
+// GET /api/v1/messages/unified/inbox - 统一收件箱
+// ============================================
+router.get('/unified/inbox', (req, res) => {
+  try {
+    const params = {
+      page: req.query.page ? parseInt(String(req.query.page)) : 1,
+      pageSize: req.query.pageSize ? parseInt(String(req.query.pageSize)) : 20,
+      channel: req.query.channel ? String(req.query.channel) as Message['channel'] : undefined,
+      role: req.query.role ? String(req.query.role) as Message['role'] : undefined,
+      unreadOnly: req.query.unreadOnly === 'true',
+    };
+    const result = messageChannelAggregatorService.getUnifiedInbox(params);
+    res.json(success(result));
+  } catch (err) {
+    console.error('[messages] GET /unified/inbox error:', err);
+    res.status(500).json(error(500, '获取统一收件箱失败'));
+  }
+});
+
+// ============================================
+// GET /api/v1/messages/unified/sessions - 跨渠道会话列表
+// ============================================
+router.get('/unified/sessions', (req, res) => {
+  try {
+    const params = {
+      page: req.query.page ? parseInt(String(req.query.page)) : 1,
+      pageSize: req.query.pageSize ? parseInt(String(req.query.pageSize)) : 20,
+      hasUnread: req.query.hasUnread === 'true' ? true : req.query.hasUnread === 'false' ? false : undefined,
+    };
+    const result = messageChannelAggregatorService.getUserSessions(params);
+    res.json(success(result));
+  } catch (err) {
+    console.error('[messages] GET /unified/sessions error:', err);
+    res.status(500).json(error(500, '获取跨渠道会话列表失败'));
+  }
+});
+
+// ============================================
+// GET /api/v1/messages/unified/sessions/:userGlobalId - 跨渠道会话详情
+// ============================================
+router.get('/unified/sessions/:userGlobalId', (req, res) => {
+  try {
+    const { userGlobalId } = req.params;
+    const messages = messageChannelAggregatorService.getSessionMessages(userGlobalId);
+    res.json(success({ userGlobalId, messages, total: messages.length }));
+  } catch (err) {
+    console.error('[messages] GET /unified/sessions/:userGlobalId error:', err);
+    res.status(500).json(error(500, '获取会话详情失败'));
+  }
+});
+
+// ============================================
+// POST /api/v1/messages/unified/read - 标记已读
+// ============================================
+router.post('/unified/read', (req, res) => {
+  try {
+    const { globalId, userGlobalId } = req.body;
+    let marked = 0;
+    if (globalId) {
+      marked += messageChannelAggregatorService.markRead(globalId) ? 1 : 0;
+    }
+    if (userGlobalId) {
+      marked += messageChannelAggregatorService.markAllRead(userGlobalId);
+    }
+    res.json(success({ marked }));
+  } catch (err) {
+    console.error('[messages] POST /unified/read error:', err);
+    res.status(500).json(error(500, '标记已读失败'));
+  }
+});
+
+// ============================================
+// GET /api/v1/messages/router/rules - 路由规则列表
+// ============================================
+router.get('/router/rules', (req, res) => {
+  try {
+    const rules = messageRouterService.getRules();
+    res.json(success({ rules, total: rules.length }));
+  } catch (err) {
+    console.error('[messages] GET /router/rules error:', err);
+    res.status(500).json(error(500, '获取路由规则失败'));
+  }
+});
+
+// ============================================
+// POST /api/v1/messages/router/rules - 添加路由规则
+// ============================================
+router.post('/router/rules', (req, res) => {
+  try {
+    const rule = req.body;
+    if (!rule.id || !rule.name) {
+      return res.status(400).json(error(400, '缺少必要字段: id, name'));
+    }
+    messageRouterService.upsertRule(rule);
+    res.status(201).json(success({ ruleId: rule.id, added: true }));
+  } catch (err) {
+    console.error('[messages] POST /router/rules error:', err);
+    res.status(500).json(error(500, '添加路由规则失败'));
+  }
+});
+
+// ============================================
+// PUT /api/v1/messages/router/rules/:ruleId - 更新路由规则
+// ============================================
+router.put('/router/rules/:ruleId', (req, res) => {
+  try {
+    const { ruleId } = req.params;
+    const rule = req.body;
+    rule.id = ruleId;
+    messageRouterService.upsertRule(rule);
+    res.json(success({ ruleId, updated: true }));
+  } catch (err) {
+    console.error('[messages] PUT /router/rules/:ruleId error:', err);
+    res.status(500).json(error(500, '更新路由规则失败'));
+  }
+});
+
+// ============================================
+// DELETE /api/v1/messages/router/rules/:ruleId - 删除路由规则
+// ============================================
+router.delete('/router/rules/:ruleId', (req, res) => {
+  try {
+    const { ruleId } = req.params;
+    const deleted = messageRouterService.deleteRule(ruleId);
+    res.json(success({ ruleId, deleted }));
+  } catch (err) {
+    console.error('[messages] DELETE /router/rules/:ruleId error:', err);
+    res.status(500).json(error(500, '删除路由规则失败'));
+  }
+});
+
+// ============================================
+// POST /api/v1/messages/router/route - 手动路由测试
+// ============================================
+router.post('/router/route', (req, res) => {
+  try {
+    const { channel, userId, role, content, priority } = req.body;
+    if (!channel || !userId || !role || !content) {
+      return res.status(400).json(error(400, '缺少必要字段'));
+    }
+    const result = messageRouterService.route({ channel, userId, role, content, priority: priority || 1 });
+    res.json(success(result));
+  } catch (err) {
+    console.error('[messages] POST /router/route error:', err);
+    res.status(500).json(error(500, '路由测试失败'));
+  }
+});
+
+// ============================================
+// GET /api/v1/messages/router/stats - 路由统计
+// ============================================
+router.get('/router/stats', (req, res) => {
+  try {
+    const stats = messageRouterService.getRouteStats();
+    res.json(success(stats));
+  } catch (err) {
+    console.error('[messages] GET /router/stats error:', err);
+    res.status(500).json(error(500, '获取路由统计失败'));
   }
 });
 

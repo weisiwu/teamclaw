@@ -241,3 +241,209 @@ export async function discardFromDLQ(messageId: string) {
 export async function getRetryStats() {
   return apiRequest(`${API_BASE}/messages/retry/stats`);
 }
+
+// ========== 消息流控 API ==========
+
+export interface RateLimitStats {
+  global: { current: number; limit: number; windowMs: number };
+  adaptive: { factor: number; effectiveLimit: number; queueSize: number } | null;
+  users: number;
+  roles: number;
+  channels: number;
+}
+
+export interface RateLimitResult {
+  allowed: boolean;
+  currentCount: number;
+  limit: number;
+  remaining: number;
+  resetAt: number;
+  retryAfterMs?: number;
+}
+
+/**
+ * 获取限流统计
+ */
+export async function getRateLimitStats(): Promise<{ data: RateLimitStats }> {
+  return apiRequest(`${API_BASE}/messages/ratelimit/stats`);
+}
+
+/**
+ * 限流检查
+ */
+export async function checkRateLimit(
+  userId: string, role: string, channel: string
+): Promise<{ data: RateLimitResult }> {
+  return apiRequest(`${API_BASE}/messages/ratelimit/check?userId=${userId}&role=${role}&channel=${channel}`);
+}
+
+// ========== 断路器 API ==========
+
+export interface CircuitBreakerStats {
+  name: string;
+  state: 'closed' | 'open' | 'half_open';
+  totalRequests: number;
+  totalFailures: number;
+  failureRate: number;
+  consecutiveFailures: number;
+  consecutiveSuccesses: number;
+  lastFailureTime: number | null;
+  lastStateChange: number;
+  nextAttempt: number | null;
+}
+
+/**
+ * 获取断路器统计
+ */
+export async function getCircuitBreakerStats(
+  channel?: string
+): Promise<{ data: Record<string, CircuitBreakerStats> }> {
+  const qs = channel ? `?channel=${channel}` : '';
+  return apiRequest(`${API_BASE}/messages/circuit/stats${qs}`);
+}
+
+/**
+ * 重置断路器
+ */
+export async function resetCircuitBreaker(channel: string): Promise<{ data: { channel: string; reset: boolean } }> {
+  return apiRequest(`${API_BASE}/messages/circuit/${channel}/reset`, { method: 'POST' });
+}
+
+// ========== 统一收件箱 API ==========
+
+export interface UnifiedMessage {
+  globalId: string;
+  userGlobalId: string;
+  sourceIds: Partial<Record<string, string>>;
+  content: string;
+  sender: { userId: string; userName: string; role: string };
+  timestamp: string;
+  channels: string[];
+  type: string;
+  unread: boolean;
+  priority: number;
+}
+
+export interface ChannelSession {
+  userGlobalId: string;
+  latestByChannel: Partial<Record<string, UnifiedMessage> >;
+  lastActivity: string;
+  totalUnread: number;
+}
+
+/**
+ * 获取统一收件箱
+ */
+export async function getUnifiedInbox(params?: {
+  page?: number; pageSize?: number; channel?: string; role?: string; unreadOnly?: boolean;
+}): Promise<{ data: { list: UnifiedMessage[]; total: number; page: number; pageSize: number; unreadTotal: number } }> {
+  const sp = new URLSearchParams();
+  if (params?.page) sp.set('page', String(params.page));
+  if (params?.pageSize) sp.set('pageSize', String(params.pageSize));
+  if (params?.channel) sp.set('channel', params.channel);
+  if (params?.role) sp.set('role', params.role);
+  if (params?.unreadOnly) sp.set('unreadOnly', 'true');
+  const qs = sp.toString();
+  return apiRequest(`${API_BASE}/messages/unified/inbox${qs ? '?' + qs : ''}`);
+}
+
+/**
+ * 获取跨渠道会话列表
+ */
+export async function getUserSessions(params?: {
+  page?: number; pageSize?: number; hasUnread?: boolean;
+}): Promise<{ data: { list: ChannelSession[]; total: number } }> {
+  const sp = new URLSearchParams();
+  if (params?.page) sp.set('page', String(params.page));
+  if (params?.pageSize) sp.set('pageSize', String(params.pageSize));
+  if (params?.hasUnread !== undefined) sp.set('hasUnread', String(params.hasUnread));
+  const qs = sp.toString();
+  return apiRequest(`${API_BASE}/messages/unified/sessions${qs ? '?' + qs : ''}`);
+}
+
+/**
+ * 获取跨渠道会话详情
+ */
+export async function getSessionMessages(userGlobalId: string): Promise<{ data: { userGlobalId: string; messages: UnifiedMessage[]; total: number } }> {
+  return apiRequest(`${API_BASE}/messages/unified/sessions/${userGlobalId}`);
+}
+
+/**
+ * 标记已读
+ */
+export async function markUnifiedRead(globalId?: string, userGlobalId?: string): Promise<{ data: { marked: number } }> {
+  return apiRequest(`${API_BASE}/messages/unified/read`, {
+    method: 'POST',
+    body: JSON.stringify({ globalId, userGlobalId }),
+  });
+}
+
+// ========== 消息路由 API ==========
+
+export interface RouteRule {
+  id: string;
+  name: string;
+  conditions: Record<string, unknown>;
+  action: { target: string; agentType?: string; reason?: string };
+  enabled: boolean;
+  priority: number;
+}
+
+export interface RouteResult {
+  routed: boolean;
+  target: 'queue' | 'dlq' | 'drop' | 'agent';
+  reason?: string;
+  agentType?: string;
+  tags?: string[];
+  content?: string;
+  matchedRule?: string;
+}
+
+export interface RouterStats {
+  totalRules: number;
+  enabledRules: number;
+  byTarget: Record<string, number>;
+}
+
+/**
+ * 获取路由规则列表
+ */
+export async function getRouterRules(): Promise<{ data: { rules: RouteRule[]; total: number } }> {
+  return apiRequest(`${API_BASE}/messages/router/rules`);
+}
+
+/**
+ * 添加/更新路由规则
+ */
+export async function upsertRouterRule(rule: RouteRule): Promise<{ data: { ruleId: string; added: boolean } }> {
+  return apiRequest(`${API_BASE}/messages/router/rules`, {
+    method: 'POST',
+    body: JSON.stringify(rule),
+  });
+}
+
+/**
+ * 删除路由规则
+ */
+export async function deleteRouterRule(ruleId: string): Promise<{ data: { ruleId: string; deleted: boolean } }> {
+  return apiRequest(`${API_BASE}/messages/router/rules/${ruleId}`, { method: 'DELETE' });
+}
+
+/**
+ * 手动路由测试
+ */
+export async function testRouterRoute(params: {
+  channel: string; userId: string; role: string; content: string; priority?: number;
+}): Promise<{ data: RouteResult }> {
+  return apiRequest(`${API_BASE}/messages/router/route`, {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
+/**
+ * 获取路由统计
+ */
+export async function getRouterStats(): Promise<{ data: RouterStats }> {
+  return apiRequest(`${API_BASE}/messages/router/stats`);
+}
