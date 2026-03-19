@@ -12,7 +12,8 @@ import {
   Users,
   Home,
   Settings,
-  FolderPlus
+  FolderPlus,
+  Bot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +22,7 @@ const menuItems = [
   { href: "/import", label: "项目导入", icon: FolderPlus },
   { href: "/tasks", label: "任务管理", icon: Layers },
   { href: "/versions", label: "版本管理", icon: GitBranch },
+  { href: "/agent-team", label: "Agent 团队", icon: Bot },
   { href: "/capabilities", label: "能力配置", icon: Zap },
   { href: "/cron", label: "定时任务", icon: Clock },
   { href: "/docs", label: "文档中心", icon: FileText },
