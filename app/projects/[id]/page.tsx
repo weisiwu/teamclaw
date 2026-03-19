@@ -5,6 +5,225 @@ import Link from 'next/link';
 import { useProject, useProjectTree } from '../../../hooks/useProjects';
 import { FileTreeView } from '../../../components/FileTree';
 
+// ========== 分支管理面板 ==========
+
+interface Branch {
+  id: string;
+  name: string;
+  isMain: boolean;
+  isProtected: boolean;
+  lastCommitHash?: string;
+  lastCommitMessage?: string;
+  lastCommitAt?: string;
+  commitCount?: number;
+}
+
+function BranchesPanel() {
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newBranchName, setNewBranchName] = useState('');
+  const [baseBranch, setBaseBranch] = useState('main');
+  const [creating, setCreating] = useState(false);
+  const [settingMain, setSettingMain] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  const showToast = (type: 'success' | 'error', msg: string) => {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const loadBranches = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/v1/branches?pageSize=100`);
+      const json = await res.json();
+      if (json.code === 0) setBranches(json.data.data || []);
+      else showToast('error', json.message || '加载失败');
+    } catch {
+      showToast('error', '网络错误');
+    }
+    setLoading(false);
+  };
+
+  const createBranch = async () => {
+    if (!newBranchName.trim()) { showToast('error', '分支名不能为空'); return; }
+    setCreating(true);
+    try {
+      const res = await fetch('/api/v1/branches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newBranchName.trim(), baseBranch }),
+      });
+      const json = await res.json();
+      if (json.code === 0) {
+        showToast('success', `分支 ${newBranchName} 创建成功`);
+        setNewBranchName('');
+        setShowCreate(false);
+        loadBranches();
+      } else {
+        showToast('error', json.message || '创建失败');
+      }
+    } catch {
+      showToast('error', '网络错误');
+    }
+    setCreating(false);
+  };
+
+  const setMain = async (branchId: string, branchName: string) => {
+    setSettingMain(branchId);
+    try {
+      const res = await fetch(`/api/v1/branches/${branchId}/main`, { method: 'PUT' });
+      const json = await res.json();
+      if (json.code === 0) {
+        showToast('success', `${branchName} 已设为主分支`);
+        loadBranches();
+      } else {
+        showToast('error', json.message || '设置失败');
+      }
+    } catch {
+      showToast('error', '网络错误');
+    }
+    setSettingMain(null);
+  };
+
+  const deleteBranch = async (branch: Branch) => {
+    if (!confirm(`确定删除分支 "${branch.name}" 吗？`)) return;
+    setDeleting(branch.id);
+    try {
+      const res = await fetch(`/api/v1/branches/${branch.id}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (json.code === 0) {
+        showToast('success', `分支 ${branch.name} 已删除`);
+        loadBranches();
+      } else {
+        showToast('error', json.message || '删除失败');
+      }
+    } catch {
+      showToast('error', '网络错误');
+    }
+    setDeleting(null);
+  };
+
+  return (
+    <div className="space-y-4">
+      {toast && (
+        <div className={`px-4 py-2 rounded-lg text-sm ${toast.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          {toast.msg}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-gray-900">🌿 分支管理</h2>
+        <div className="flex gap-2">
+          <button onClick={loadBranches} className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+            🔄 刷新
+          </button>
+          <button onClick={() => setShowCreate(true)} className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+            + 新建分支
+          </button>
+        </div>
+      </div>
+
+      {showCreate && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <h3 className="text-sm font-medium text-gray-700 mb-3">创建新分支</h3>
+          <div className="flex gap-2 mb-3">
+            <input
+              value={newBranchName}
+              onChange={e => setNewBranchName(e.target.value)}
+              placeholder="feature/xxx 或 release/xxx"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              onKeyDown={e => e.key === 'Enter' && createBranch()}
+            />
+            <select value={baseBranch} onChange={e => setBaseBranch(e.target.value)} className="px-2 py-2 border border-gray-300 rounded-lg text-sm">
+              {branches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={createBranch} disabled={creating} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              {creating ? '创建中...' : '确认创建'}
+            </button>
+            <button onClick={() => { setShowCreate(false); setNewBranchName(''); }} className="px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300">
+              取消
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading && <div className="text-sm text-gray-500">加载中...</div>}
+      {!loading && branches.length === 0 && <div className="text-sm text-gray-400">暂无分支</div>}
+
+      {!loading && branches.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">分支</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">状态</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">最后提交</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">操作</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {branches.map(branch => (
+                <tr key={branch.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      {branch.isMain && <span className="text-yellow-500" title="主分支">⭐</span>}
+                      {branch.isProtected && <span className="text-red-400" title="保护分支">🔒</span>}
+                      <span className="font-mono text-gray-900">{branch.name}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1.5">
+                      {branch.isMain && <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded text-xs">主分支</span>}
+                      {branch.isProtected && <span className="px-2 py-0.5 bg-red-50 text-red-600 rounded text-xs">保护</span>}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-gray-500 text-xs">
+                    {branch.lastCommitMessage ? (
+                      <div>
+                        <div className="truncate max-w-xs">{branch.lastCommitMessage}</div>
+                        <div className="text-gray-400 mt-0.5">
+                          {branch.lastCommitAt ? new Date(branch.lastCommitAt).toLocaleString('zh-CN') : ''}
+                        </div>
+                      </div>
+                    ) : <span className="text-gray-400">-</span>}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex justify-end gap-2">
+                      {!branch.isMain && (
+                        <button
+                          onClick={() => setMain(branch.id, branch.name)}
+                          disabled={settingMain === branch.id}
+                          className="px-2 py-1 text-xs bg-yellow-50 hover:bg-yellow-100 text-yellow-700 rounded transition-colors disabled:opacity-50"
+                        >
+                          {settingMain === branch.id ? '设置中...' : '设为主分支'}
+                        </button>
+                      )}
+                      {!branch.isProtected && (
+                        <button
+                          onClick={() => deleteBranch(branch)}
+                          disabled={deleting === branch.id}
+                          className="px-2 py-1 text-xs bg-red-50 hover:bg-red-100 text-red-600 rounded transition-colors disabled:opacity-50"
+                        >
+                          {deleting === branch.id ? '删除中...' : '删除'}
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface Props {
   params: Promise<{ id: string }>;
 }
@@ -27,7 +246,7 @@ export default function ProjectDetailPage({ params }: Props) {
   const { data, isLoading, error } = useProject(id);
   const { data: treeData, isLoading: treeLoading } = useProjectTree(id);
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'features' | 'docs' | 'history'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'features' | 'docs' | 'history' | 'branches'>('overview');
   const [featureMap, setFeatureMap] = useState<FeatureMap | null>(null);
   const [docs, setDocs] = useState<ConvertedDoc[]>([]);
   const [gitHistory, setGitHistory] = useState<unknown[]>([]);
@@ -118,7 +337,7 @@ export default function ProjectDetailPage({ params }: Props) {
 
       {/* Tab 导航 */}
       <div className="flex gap-1 mb-6 border-b border-gray-200">
-        {(['overview', 'features', 'docs', 'history'] as const).map(tab => (
+        {(['overview', 'features', 'docs', 'history', 'branches'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => {
@@ -137,6 +356,7 @@ export default function ProjectDetailPage({ params }: Props) {
             {tab === 'features' && '🗺️ 功能定位'}
             {tab === 'docs' && '📄 文档库'}
             {tab === 'history' && '📜 Git历史'}
+            {tab === 'branches' && '🌿 分支'}
           </button>
         ))}
       </div>
@@ -347,6 +567,8 @@ export default function ProjectDetailPage({ params }: Props) {
           </button>
         </div>
       )}
+
+      {activeTab === 'branches' && <BranchesPanel />}
     </div>
   );
 }
