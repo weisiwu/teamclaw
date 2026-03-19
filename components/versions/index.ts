@@ -59,3 +59,8 @@ export { BranchManager } from "./BranchManager";
  * Version Summary exports
  */
 export { VersionSummaryPanel } from "./VersionSummaryPanel";
+
+/**
+ * Version Git Tag exports
+ */
+export { VersionGitTagPanel } from "./VersionGitTagPanel";

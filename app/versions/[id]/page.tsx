@@ -6,7 +6,7 @@ import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT, VERSION_STATU
 import { getVersion, bumpVersion } from "@/lib/api/versions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Tag, Calendar, Clock, GitBranch, FileText, Star, RefreshCw, History, Download, RotateCcw, Zap, Settings } from "lucide-react";
+import { Loader2, ArrowLeft, Tag, Calendar, Clock, GitBranch, FileText, Star, History, Download, RotateCcw, Zap, Settings } from "lucide-react";
 import Link from "next/link";
 import { BumpHistoryPanel } from "@/components/versions/BumpHistoryPanel";
 import { ArtifactsPanel } from "@/components/versions/ArtifactsPanel";
@@ -15,8 +15,7 @@ import { RollbackHistoryPanel } from "@/components/versions/RollbackHistoryPanel
 import { UpgradeConfigDialog } from "@/components/versions/UpgradeConfigDialog";
 import { VersionChangeLogPanel } from "@/components/versions/VersionChangeLogPanel";
 import { VersionSummaryPanel } from "@/components/versions/VersionSummaryPanel";
-
-const API_BASE = "/api/v1";
+import { VersionGitTagPanel } from "@/components/versions/VersionGitTagPanel";
 
 export default function VersionDetailPage() {
   const params = useParams();
@@ -25,9 +24,7 @@ export default function VersionDetailPage() {
 
   const [version, setVersion] = useState<Version | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRegeneratingTag, setIsRegeneratingTag] = useState(false);
-  const [tagMessage, setTagMessage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"details" | "bumpHistory" | "artifacts" | "rollback" | "changelog" | "versionSummary">("details");
+  const [activeTab, setActiveTab] = useState<"details" | "bumpHistory" | "artifacts" | "rollback" | "changelog" | "versionSummary" | "gitTag">("details");
   const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false);
   const [upgradeConfigOpen, setUpgradeConfigOpen] = useState(false);
   const [isUpgrading, setIsUpgrading] = useState(false);
@@ -41,32 +38,6 @@ export default function VersionDetailPage() {
       .catch(console.error)
       .finally(() => setIsLoading(false));
   }, [id]);
-
-  const handleRegenerateTag = async () => {
-    if (!version?.gitTag) return;
-    setIsRegeneratingTag(true);
-    setTagMessage(null);
-    try {
-      const res = await fetch(`${API_BASE}/versions/${id}/git-tags`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tagName: version.gitTag }),
-      });
-      const json = await res.json();
-      if (json.code === 200 || json.code === 0) {
-        setTagMessage("Tag 重新生成成功");
-        // Refresh version data
-        const refreshed = await getVersion(id);
-        setVersion(refreshed);
-      } else {
-        setTagMessage(`失败: ${json.message}`);
-      }
-    } catch {
-      setTagMessage("请求失败");
-    } finally {
-      setIsRegeneratingTag(false);
-    }
-  };
 
   const handleManualUpgrade = async (bumpType?: "major" | "minor" | "patch") => {
     setIsUpgrading(true);
@@ -199,6 +170,17 @@ export default function VersionDetailPage() {
             <FileText className="w-4 h-4" />
             版本摘要
           </button>
+          <button
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+              activeTab === "gitTag"
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-500 hover:bg-gray-100"
+            }`}
+            onClick={() => setActiveTab("gitTag")}
+          >
+            <Tag className="w-4 h-4" />
+            Git Tag
+          </button>
         </div>
       </div>
 
@@ -265,6 +247,10 @@ export default function VersionDetailPage() {
             versionName={version.version}
           />
         </div>
+      ) : activeTab === "gitTag" ? (
+        <div className="bg-white rounded-xl border p-5">
+          <VersionGitTagPanel version={version} onRefresh={setVersion} />
+        </div>
       ) : (
         <div className="space-y-6">
         {/* Description */}
@@ -326,46 +312,7 @@ export default function VersionDetailPage() {
           </div>
         </div>
 
-        {/* Git Tag */}
-        {version.gitTag && (
-          <div className="bg-white rounded-xl border p-5">
-            <h2 className="text-sm font-medium text-gray-500 mb-3 flex items-center gap-2">
-              <Tag className="w-4 h-4" />
-              Git Tag
-            </h2>
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-mono font-medium text-lg text-blue-600">{version.gitTag}</span>
-                  {version.gitTagCreatedAt && (
-                    <span className="text-sm text-gray-400">
-                      创建于 {new Date(version.gitTagCreatedAt).toLocaleString("zh-CN")}
-                    </span>
-                  )}
-                </div>
-                {tagMessage && (
-                  <p className={`text-sm ${tagMessage.includes("成功") ? "text-green-600" : "text-red-600"}`}>
-                    {tagMessage}
-                  </p>
-                )}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1"
-                onClick={handleRegenerateTag}
-                disabled={isRegeneratingTag}
-              >
-                {isRegeneratingTag ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-4 h-4" />
-                )}
-                重新生成 Tag
-              </Button>
-            </div>
-          </div>
-        )}
+
 
         {/* Info grid */}
         <div className="bg-white rounded-xl border p-5">
