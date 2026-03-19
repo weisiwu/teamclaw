@@ -1,31 +1,33 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { capabilityApi } from "@/lib/api/capabilities";
+import { useEffect, useState } from 'react';
+import { getAbilities } from '@/lib/api/capabilities';
 
-// Query Keys
-export const capabilityKeys = {
-  all: ["capabilities"] as const,
-  lists: () => [...capabilityKeys.all, "list"] as const,
-  list: () => [...capabilityKeys.lists()] as const,
-};
-
-// 能力列表 Hook
-export function useCapabilityList() {
-  return useQuery({
-    queryKey: capabilityKeys.list(),
-    queryFn: () => capabilityApi.getList(),
-    staleTime: 30000,
-  });
+export interface Ability {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  requiredRole: string;
 }
 
-// 更新能力状态 Mutation
-export function useUpdateCapability() {
-  const queryClient = useQueryClient();
+export function useCapabilities() {
+  const [abilities, setAbilities] = useState<Ability[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  return useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
-      capabilityApi.update(id, enabled),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: capabilityKeys.lists() });
-    },
-  });
+  const fetch = async () => {
+    setLoading(true);
+    try {
+      const data = await getAbilities();
+      setAbilities(data);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetch(); }, []);
+
+  return { abilities, loading, error, refetch: fetch };
 }

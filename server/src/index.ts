@@ -8,6 +8,9 @@ import versionRouter from './routes/version.js';
 import agentRouter from './routes/agent.js';
 import messageRouter from './routes/message.js';
 import taskRouter from './routes/task.js';
+import abilityRouter from './routes/ability.js';
+import docRouter from './routes/doc.js';
+import searchRouter from './routes/search.js';
 import { getArtifactsRootDir } from './services/artifactStore.js';
 import './services/taskInit.js'; // 初始化任务机制钩子
 
@@ -36,6 +39,9 @@ app.use('/api/v1/versions', versionRouter);
 app.use('/api/v1/agents', agentRouter);
 app.use('/api/v1/messages', messageRouter);
 app.use('/api/v1/tasks', taskRouter);
+app.use('/api/v1/abilities', abilityRouter);
+app.use('/api/v1/docs', docRouter);
+app.use('/api/v1/search', searchRouter);
 
 // Root
 app.get('/', (req, res) => {
