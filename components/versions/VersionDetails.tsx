@@ -6,9 +6,10 @@
 
 import { useState } from "react";
 import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT } from "@/lib/api/types";
-import { useBuildArtifacts } from "@/lib/api/versions";
+import { useBuildArtifacts, useVersionScreenshots, useVersionChangelog } from "@/lib/api/versions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ScreenshotGallery, ChangelogPanel, VersionTimeline } from "@/components/versions";
 
 import {
   Calendar,
@@ -21,6 +22,8 @@ import {
   Loader2,
   X,
   Play,
+  Image,
+  History,
 } from "lucide-react";
 import { BuildTriggerDialog } from "./BuildTriggerDialog";
 
@@ -30,14 +33,27 @@ interface VersionDetailsProps {
   onOpenChange: (open: boolean) => void;
   /** 构建完成回调，用于更新外部构建历史 */
   onBuildComplete?: (buildId: string, versionName: string, status: 'success' | 'failed') => void;
+  /** 消息截图关联回调 */
+  onLinkScreenshot?: () => void;
+  /** 取消关联截图回调 */
+  onUnlinkScreenshot?: (screenshotId: string) => void;
+  /** 生成变更摘要回调 */
+  onGenerateChangelog?: () => void;
 }
 
-export function VersionDetails({ version, open, onOpenChange, onBuildComplete }: VersionDetailsProps) {
-  const [activeTab, setActiveTab] = useState<"info" | "logs" | "artifacts">("info");
+export function VersionDetails({ version, open, onOpenChange, onBuildComplete, onLinkScreenshot, onUnlinkScreenshot, onGenerateChangelog }: VersionDetailsProps) {
+  const [activeTab, setActiveTab] = useState<"info" | "logs" | "artifacts" | "screenshots" | "changelog" | "timeline">("info");
   const [buildDialogOpen, setBuildDialogOpen] = useState(false);
 
   // 从 API 获取真实产物列表（version.title 可用，因为 open=true 时 version 必定存在）
   const { data: realArtifacts = [] } = useBuildArtifacts(version?.title);
+
+  // 截图和变更摘要数据
+  const { data: screenshotsData, isLoading: isLoadingScreenshots } = useVersionScreenshots(version?.id || "");
+  const { data: changelogData } = useVersionChangelog(version?.id || "");
+
+  const screenshots = screenshotsData?.data || [];
+  const changelog = changelogData?.data || null;
 
   if (!version || !open) return null;
 
@@ -116,6 +132,27 @@ export function VersionDetails({ version, open, onOpenChange, onBuildComplete }:
             onClick={() => setActiveTab("artifacts")}
           >
             产物列表
+          </button>
+          <button
+            className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-1 ${activeTab === "screenshots" ? "border-b-2 border-blue-500 text-blue-500" : "text-gray-500"}`}
+            onClick={() => setActiveTab("screenshots")}
+          >
+            <Image className="w-3.5 h-3.5" />
+            截图
+          </button>
+          <button
+            className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-1 ${activeTab === "changelog" ? "border-b-2 border-blue-500 text-blue-500" : "text-gray-500"}`}
+            onClick={() => setActiveTab("changelog")}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            变更摘要
+          </button>
+          <button
+            className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-1 ${activeTab === "timeline" ? "border-b-2 border-blue-500 text-blue-500" : "text-gray-500"}`}
+            onClick={() => setActiveTab("timeline")}
+          >
+            <History className="w-3.5 h-3.5" />
+            时间线
           </button>
         </div>
 
@@ -236,6 +273,38 @@ export function VersionDetails({ version, open, onOpenChange, onBuildComplete }:
                 ))
               )}
             </div>
+          )}
+
+          {activeTab === "screenshots" && (
+            <ScreenshotGallery
+              screenshots={screenshots}
+              loading={isLoadingScreenshots}
+              onLink={onLinkScreenshot}
+              onUnlink={onUnlinkScreenshot}
+            />
+          )}
+
+          {activeTab === "changelog" && (
+            <ChangelogPanel
+              changelog={changelog}
+              loading={false}
+              generating={false}
+              onGenerate={onGenerateChangelog || (() => {})}
+            />
+          )}
+
+          {activeTab === "timeline" && (
+            <VersionTimeline
+              screenshots={screenshots}
+              changelog={changelog}
+              versionInfo={{
+                version: version.version,
+                createdAt: version.createdAt,
+                createdBy: "",
+              }}
+              isOpen={activeTab === "timeline"}
+              onClose={() => setActiveTab("info")}
+            />
           )}
         </div>
       </div>

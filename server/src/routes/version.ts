@@ -37,6 +37,8 @@ export interface Version {
   isMain: boolean;
   commitCount: number;
   changedFiles: string[];
+  hasScreenshot?: boolean;
+  hasSummary?: boolean;
 }
 
 export interface VersionSettings {
@@ -165,7 +167,14 @@ router.get('/', (req: Request, res: Response) => {
 
   const total = list.length;
   const start = (page - 1) * pageSize;
-  const data = list.slice(start, start + pageSize);
+  const paginatedList = list.slice(start, start + pageSize);
+
+  // Enrich with hasScreenshot/hasSummary
+  const data = paginatedList.map(v => ({
+    ...v,
+    hasScreenshot: ScreenshotModel.findByVersionId(v.id).length > 0,
+    hasSummary: !!VersionSummaryModel.findByVersionId(v.id),
+  }));
 
   res.json(success({
     data,
@@ -183,7 +192,11 @@ router.get('/:id', (req: Request, res: Response) => {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
-  res.json(success(v));
+  res.json(success({
+    ...v,
+    hasScreenshot: ScreenshotModel.findByVersionId(v.id).length > 0,
+    hasSummary: !!VersionSummaryModel.findByVersionId(v.id),
+  }));
 });
 
 // POST /api/v1/versions — 创建版本
@@ -1048,6 +1061,80 @@ router.get('/:id/summary/status', (req: Request, res: Response) => {
     hasSummary: !!summary,
     generatedAt: summary?.generatedAt || null,
     generatedBy: summary?.generatedBy || null,
+  }));
+});
+
+// ========== Timeline Route ==========
+
+interface TimelineEvent {
+  id: string;
+  type: 'version_created' | 'screenshot_linked' | 'changelog_generated';
+  title: string;
+  description: string;
+  timestamp: string;
+  actor?: string;
+  screenshotId?: string;
+  summaryId?: string;
+}
+
+// GET /api/v1/versions/:id/timeline — 获取版本变更时间线
+router.get('/:id/timeline', (req: Request, res: Response) => {
+  const { id: versionId } = req.params;
+  const version = versions.get(versionId);
+  if (!version) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  // 获取截图记录
+  const screenshots = ScreenshotModel.findByVersionId(versionId);
+  // 获取摘要记录
+  const summary = VersionSummaryModel.findByVersionId(versionId);
+
+  const events: TimelineEvent[] = [];
+
+  // 版本创建 event
+  events.push({
+    id: `version-created-${versionId}`,
+    type: 'version_created',
+    title: '版本创建',
+    description: `版本 ${version.version} 已创建`,
+    timestamp: version.createdAt,
+  });
+
+  // 截图关联 events
+  for (const shot of screenshots) {
+    events.push({
+      id: `screenshot-linked-${shot.id}`,
+      type: 'screenshot_linked',
+      title: '截图关联',
+      description: `${shot.senderName}：${shot.messageContent.substring(0, 50)}...`,
+      timestamp: shot.createdAt,
+      actor: shot.senderName,
+      screenshotId: shot.id,
+    });
+  }
+
+  // 摘要生成 event
+  if (summary) {
+    events.push({
+      id: `changelog-generated-${summary.id}`,
+      type: 'changelog_generated',
+      title: '变更摘要生成',
+      description: `${summary.generatedBy === 'AI' ? 'AI' : '手动'}生成了包含 ${summary.features?.length || 0} 个新功能的变更摘要`,
+      timestamp: summary.generatedAt,
+      actor: summary.generatedBy,
+      summaryId: summary.id,
+    });
+  }
+
+  // 按时间倒序
+  events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  res.json(success({
+    versionId,
+    version: version.version,
+    events,
   }));
 });
 

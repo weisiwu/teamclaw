@@ -403,6 +403,9 @@ export interface Version {
   summaryGeneratedAt?: string;
   // 快照列表
   snapshots?: VersionSnapshot[];
+  // 变更追踪指标
+  hasScreenshot?: boolean;
+  hasSummary?: boolean;
 }
 
 // 版本摘要结构
@@ -999,4 +1002,26 @@ export interface RollbackHistoryRecord {
   message: string;
   backupCreated: boolean;
   status: "success" | "failed";
+}
+
+// ========== 变更时间线 ==========
+export interface TimelineEvent {
+  id: string;
+  type: 'version_created' | 'screenshot_linked' | 'changelog_generated';
+  title: string;
+  description: string;
+  timestamp: string;
+  actor?: string;
+  screenshotId?: string;
+  summaryId?: string;
+}
+
+export interface TimelineResponse {
+  code: number;
+  message: string;
+  data: {
+    versionId: string;
+    version: string;
+    events: TimelineEvent[];
+  };
 }

@@ -74,6 +74,7 @@ export default function VersionsPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState<string>("all");
+  const [mediaFilter, setMediaFilter] = useState<"all" | "hasScreenshot" | "hasSummary">("all");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingVersion, setEditingVersion] = useState<Version | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -215,10 +216,15 @@ export default function VersionsPage() {
   const branches = branchesData?.data || [];
 
   const versions = data?.data || [];
-  // 前端标签筛选
-  const filteredVersions = tagFilter === "all" 
-    ? versions 
-    : versions.filter((v) => v.tags.includes(tagFilter as VersionTag));
+  // 前端标签筛选 + 媒体筛选
+  const filteredVersions = versions.filter((v) => {
+    // 标签筛选
+    if (tagFilter !== "all" && !v.tags.includes(tagFilter as VersionTag)) return false;
+    // 媒体筛选（截图/摘要）
+    if (mediaFilter === "hasScreenshot" && !v.hasScreenshot) return false;
+    if (mediaFilter === "hasSummary" && !v.hasSummary) return false;
+    return true;
+  });
   const totalPages = data?.totalPages || 1;
   const total = data?.total || 0;
 
@@ -681,6 +687,41 @@ export default function VersionsPage() {
                 {option.label}
               </Button>
             ))}
+          </div>
+          <div className="flex items-center gap-2 ml-6">
+            <span className="text-sm text-gray-600">媒体:</span>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant={mediaFilter === "all" ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setMediaFilter("all");
+                setPage(1);
+              }}
+            >
+              全部
+            </Button>
+            <Button
+              variant={mediaFilter === "hasScreenshot" ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setMediaFilter("hasScreenshot");
+                setPage(1);
+              }}
+            >
+              📷 有截图
+            </Button>
+            <Button
+              variant={mediaFilter === "hasSummary" ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setMediaFilter("hasSummary");
+                setPage(1);
+              }}
+            >
+              📝 有摘要
+            </Button>
           </div>
         </div>
       </div>

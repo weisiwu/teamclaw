@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, RenameBranchRequest, BranchProtectionRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult, SimilarVersion, TagLifecycleRecord, BatchTagResponse, BuildEnhancementSettings, BuildNotificationSettings, BuildEnvironment, BUILD_ENVIRONMENTS, DEFAULT_BUILD_RETRY_SETTINGS, DEFAULT_NOTIFICATION_SETTINGS, BatchDownloadRequest, BatchDownloadResponse, DownloadUrlVerification, DownloadStats, VersionSummary, BuildArtifact, RollbackHistoryRecord } from "./types";
+import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, RenameBranchRequest, BranchProtectionRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult, SimilarVersion, TagLifecycleRecord, BatchTagResponse, BuildEnhancementSettings, BuildNotificationSettings, BuildEnvironment, BUILD_ENVIRONMENTS, DEFAULT_BUILD_RETRY_SETTINGS, DEFAULT_NOTIFICATION_SETTINGS, BatchDownloadRequest, BatchDownloadResponse, DownloadUrlVerification, DownloadStats, VersionSummary, BuildArtifact, RollbackHistoryRecord, TimelineEvent, TimelineResponse } from "./types";
 
 // 全局版本自动升级和 Tag 设置
 let versionSettings: VersionSettings = {
@@ -2724,5 +2724,25 @@ export function useAutoBump() {
       queryClient.invalidateQueries({ queryKey: ['versions'] });
       queryClient.invalidateQueries({ queryKey: ['versionSettings'] });
     },
+  });
+}
+
+// ========== Timeline API ==========
+
+export async function getVersionTimeline(versionId: string): Promise<TimelineEvent[]> {
+  const res = await fetch(`${API_BASE}/versions/${versionId}/timeline`);
+  const json: TimelineResponse = await res.json();
+  if (json.code === 200 || json.code === 0) {
+    return json.data.events;
+  }
+  throw new Error(json.message || '获取时间线失败');
+}
+
+export function useVersionTimeline(versionId: string | null) {
+  return useQuery({
+    queryKey: ['versionTimeline', versionId],
+    queryFn: () => getVersionTimeline(versionId!),
+    enabled: Boolean(versionId),
+    staleTime: 30 * 1000,
   });
 }
