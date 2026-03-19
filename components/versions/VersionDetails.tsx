@@ -6,7 +6,7 @@
 
 import { useState } from "react";
 import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT } from "@/lib/api/types";
-import { useBuildArtifacts, useVersionScreenshots, useVersionChangelog, useRefreshVersionSummary } from "@/lib/api/versions";
+import { useBuildArtifacts, useVersionScreenshots, useVersionChangelog, useRefreshVersionSummary, useVersionArtifacts } from "@/lib/api/versions";
 import { useLatestBuild, useRebuildBuild } from "@/lib/api/builds";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -60,6 +60,9 @@ export function VersionDetails(props: VersionDetailsProps) {
   const { data: latestBuild } = useLatestBuild(version?.id || "");
   const rebuildBuild = useRebuildBuild();
   const [rebuilding, setRebuilding] = useState(false);
+
+  // Express 服务器产物列表（真实构建产物）
+  const { data: serverArtifacts = [] } = useVersionArtifacts(version?.id || "", latestBuild?.buildNumber);
 
   const screenshots = screenshotsData?.data || [];
   const changelog = changelogData?.data || null;
@@ -140,6 +143,19 @@ export function VersionDetails(props: VersionDetailsProps) {
               >
                 <RefreshCw className={`w-4 h-4 mr-1 ${rebuilding || rebuildBuild.isPending ? 'animate-spin' : ''}`} />
                 重新打包
+              </Button>
+            )}
+            {serverArtifacts.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const first = serverArtifacts[0];
+                  if (first) window.open(first.url, "_blank");
+                }}
+              >
+                <Download className="w-4 h-4 mr-1" />
+                下载产物
               </Button>
             )}
             <Button
@@ -301,37 +317,81 @@ export function VersionDetails(props: VersionDetailsProps) {
           )}
 
           {activeTab === "artifacts" && (
-            <div className="space-y-2">
-              {realArtifacts.length === 0 ? (
-                <div className="text-center py-8 text-gray-400">
-                  <Download className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">暂无构建产物</p>
-                  <p className="text-xs mt-1">请先执行构建任务</p>
+            <div className="space-y-3">
+              {/* 构建产物（来自 Express 服务器） */}
+              {serverArtifacts.length > 0 ? (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-medium text-gray-500">构建产物（第 {latestBuild?.buildNumber || "?"} 次构建）</h4>
+                    <span className="text-xs text-gray-400">{latestBuild?.status || ""}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {serverArtifacts.map((artifact, i) => (
+                      <div key={`srv-${i}`} className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 rounded-lg">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Download className="w-5 h-5 text-blue-500 shrink-0" />
+                          <div className="min-w-0">
+                            <span className="font-mono text-sm block truncate">{artifact.name}</span>
+                            <div className="flex items-center gap-2 text-xs text-gray-400">
+                              <span>{artifact.sizeFormatted}</span>
+                              <span>·</span>
+                              <span>{artifact.type}</span>
+                              <span>·</span>
+                              <span>{new Date(artifact.modifiedAt).toLocaleDateString("zh-CN")}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <a
+                          href={artifact.url}
+                          download={artifact.name}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center rounded-md text-sm font-medium h-8 px-3 bg-blue-600 text-white hover:bg-blue-700 shrink-0"
+                        >
+                          下载
+                        </a>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : (
-                realArtifacts.map((artifact, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Download className="w-5 h-5 text-gray-400 shrink-0" />
-                      <div className="min-w-0">
-                        <span className="font-mono text-sm block truncate">{artifact.filename}</span>
-                        <span className="text-xs text-gray-400">{artifact.platform} / {artifact.arch} / {artifact.env}</span>
+                <div className="text-center py-6 text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                  <Download className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">暂无构建产物</p>
+                  <p className="text-xs mt-1">构建完成后产物将显示在这里</p>
+                </div>
+              )}
+
+              {/* 手动上传的产物（来自 Next.js API） */}
+              {realArtifacts.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500 mb-2">手动上传</h4>
+                  <div className="space-y-2">
+                    {realArtifacts.map((artifact, i) => (
+                      <div key={`manual-${i}`} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Download className="w-5 h-5 text-gray-400 shrink-0" />
+                          <div className="min-w-0">
+                            <span className="font-mono text-sm block truncate">{artifact.filename}</span>
+                            <span className="text-xs text-gray-400">{artifact.platform} / {artifact.arch} / {artifact.env}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 shrink-0">
+                          <span className="text-sm text-gray-500">{artifact.size}</span>
+                          <a
+                            href={artifact.downloadUrl}
+                            download={artifact.filename}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center rounded-md text-sm font-medium h-8 px-3 bg-primary text-primary-foreground hover:bg-primary/90"
+                          >
+                            下载
+                          </a>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-4 shrink-0">
-                      <span className="text-sm text-gray-500">{artifact.size}</span>
-                      <a
-                        href={artifact.downloadUrl}
-                        download={artifact.filename}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center rounded-md text-sm font-medium h-8 px-3 bg-primary text-primary-foreground hover:bg-primary/90"
-                      >
-                        下载
-                      </a>
-                    </div>
+                    ))}
                   </div>
-                ))
+                </div>
               )}
             </div>
           )}

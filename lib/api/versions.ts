@@ -2488,6 +2488,51 @@ export async function uploadBuildArtifact(file: File, versionName: string, env =
 }
 
 
+// Express artifact API (proxied through Next.js)
+const SERVER_ARTIFACTS_API = "/api/v1/build/artifacts";
+
+export interface ServerArtifact {
+  path: string;
+  name: string;
+  size: number;
+  sizeFormatted: string;
+  url: string;
+  type: string;
+  modifiedAt: string;
+}
+
+export interface ServerArtifactsResponse {
+  code: number;
+  data: {
+    versionId: string;
+    buildId: string;
+    buildNumber: number;
+    buildStatus: string;
+    projectPath: string;
+    artifacts: ServerArtifact[];
+    totalSize: number;
+    totalSizeFormatted: string;
+  };
+}
+
+export async function getVersionArtifacts(versionId: string, buildNumber?: number): Promise<ServerArtifact[]> {
+  const params = buildNumber ? `?buildNumber=${buildNumber}` : "";
+  const res = await fetch(`${SERVER_ARTIFACTS_API}/${encodeURIComponent(versionId)}${params}`);
+  const json: ServerArtifactsResponse = await res.json();
+  if (json.code !== 0) return [];
+  return json.data?.artifacts || [];
+}
+
+export function useVersionArtifacts(versionId: string, buildNumber?: number) {
+  return useQuery({
+    queryKey: ["versionArtifacts", versionId, buildNumber],
+    queryFn: () => getVersionArtifacts(versionId, buildNumber),
+    staleTime: 30 * 1000,
+    enabled: !!versionId,
+  });
+}
+
+
 // Version Rollback API
 export interface RollbackRequest {
   versionId: string;
