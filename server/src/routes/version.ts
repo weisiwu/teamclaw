@@ -281,8 +281,8 @@ router.delete('/:id', (req: Request, res: Response) => {
   res.json(success({ deleted: true }));
 });
 
-// POST /api/v1/versions/:id/bump — 手动 bump
-router.post('/:id/bump', (req: Request, res: Response) => {
+// POST /api/v1/versions/:id/bump — 手动 bump（自动生成摘要）
+router.post('/:id/bump', async (req: Request, res: Response) => {
   const v = versions.get(req.params.id);
   if (!v) {
     res.status(404).json(error(404, 'Version not found'));
@@ -303,6 +303,29 @@ router.post('/:id/bump', (req: Request, res: Response) => {
   }
 
   versions.set(v.id, v);
+
+  // Auto-generate summary after bump
+  try {
+    const projectPath = (v as { projectPath?: string }).projectPath ||
+      path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+    const commits = getGitLog(projectPath, { maxCount: 30, branch: v.gitTag });
+    const commitText = commits.map(c => `${c.hash.slice(0, 7)} ${c.message}`).join('\n') || 'bump version';
+    const currentBranch = getCurrentBranch(projectPath);
+    const generated = await generateChangelogFromCommits(v.id, commitText, currentBranch);
+    VersionSummaryModel.upsert({
+      versionId: v.id,
+      title: generated.title,
+      content: generated.content,
+      features: generated.features,
+      fixes: generated.fixes,
+      changes: generated.improvements,
+      breaking: generated.breaking,
+      createdBy: 'AI',
+    });
+  } catch (e) {
+    console.warn('[bump] Auto summary generation failed:', e);
+  }
+
   res.json(success({
     previousVersion,
     newVersion,
@@ -915,6 +938,68 @@ router.post('/:id/summary/generate', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Changelog generation error:', err);
     res.status(500).json(error(500, '变更摘要生成失败'));
+  }
+});
+
+// GET /api/v1/versions/:id/summary/status — Check if summary exists
+router.get('/:id/summary/status', (req: Request, res: Response) => {
+  const v = versions.get(req.params.id);
+  if (!v) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+  const summary = VersionSummaryModel.findByVersionId(req.params.id);
+  res.json(success({
+    hasSummary: !!summary,
+    generatedAt: summary?.generatedAt || null,
+    generatedBy: summary?.generatedBy || null,
+  }));
+});
+
+// POST /api/v1/versions/summary/batch-generate — Batch generate summaries for multiple versions
+router.post('/summary/batch-generate', async (req: Request, res: Response) => {
+  try {
+    const { versionIds } = req.body as { versionIds: string[] };
+    if (!Array.isArray(versionIds) || versionIds.length === 0) {
+      res.status(400).json(error(400, 'versionIds must be a non-empty array'));
+      return;
+    }
+
+    const results: { versionId: string; success: boolean; error?: string }[] = [];
+
+    for (const id of versionIds) {
+      const v = versions.get(id);
+      if (!v) {
+        results.push({ versionId: id, success: false, error: 'Version not found' });
+        continue;
+      }
+      try {
+        const projectPath = (v as { projectPath?: string }).projectPath ||
+          path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', v.id);
+        const commits = getGitLog(projectPath, { maxCount: 30, branch: v.gitTag });
+        const commitText = commits.map(c => `${c.hash.slice(0, 7)} ${c.message}`).join('\n') || 'version update';
+        const currentBranch = getCurrentBranch(projectPath);
+        const generated = await generateChangelogFromCommits(id, commitText, currentBranch);
+        VersionSummaryModel.upsert({
+          versionId: id,
+          title: generated.title,
+          content: generated.content,
+          features: generated.features,
+          fixes: generated.fixes,
+          changes: generated.improvements,
+          breaking: generated.breaking,
+          createdBy: 'AI',
+        });
+        results.push({ versionId: id, success: true });
+      } catch (e) {
+        results.push({ versionId: id, success: false, error: e instanceof Error ? e.message : 'Unknown error' });
+      }
+    }
+
+    res.json(success({ total: versionIds.length, results }));
+  } catch (err) {
+    console.error('Batch summary generation error:', err);
+    res.status(500).json(error(500, '批量生成失败'));
   }
 });
 

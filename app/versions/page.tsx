@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
+
 import {
   useVersions,
   useCreateVersion,
@@ -38,6 +41,7 @@ import {
   generateVersionSummaryLLM,
   storeVersionSummary,
   getVersionSummary,
+  saveVersionSummary,
 } from "@/lib/api/versions";
 import {
   Version,
@@ -1943,6 +1947,8 @@ function VersionDetailDialog({
               <VersionSummaryPanel
                 summary={versionSummary}
                 generating={isGeneratingSummary}
+                versionId={version.id}
+                onSave={(s) => { storeVersionSummary(s); setVersionSummary(s); }}
                 onRegenerate={async () => {
                   setIsGeneratingSummary(true);
                   try {
@@ -2791,9 +2797,39 @@ interface VersionSummaryPanelProps {
   summary: VersionSummary | null;
   generating: boolean;
   onRegenerate: () => void;
+  versionId: string;
+  onSave?: (summary: VersionSummary) => void;
 }
 
-function VersionSummaryPanel({ summary, generating, onRegenerate }: VersionSummaryPanelProps) {
+function VersionSummaryPanel({ summary, generating, onRegenerate, versionId, onSave }: VersionSummaryPanelProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleEdit = () => {
+    setEditTitle(summary?.title || '');
+    setEditContent(summary?.content || '');
+    setIsEditing(true);
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const updated = await saveVersionSummary(versionId, {
+        content: editContent,
+        createdBy: 'manual',
+      });
+      if (updated) {
+        onSave?.(updated);
+      }
+      setIsEditing(false);
+    } catch (e) {
+      console.error('Failed to save summary:', e);
+    } finally {
+      setIsSaving(false);
+    }
+  };
   if (generating) {
     return (
       <div className="space-y-4">
@@ -2834,28 +2870,108 @@ function VersionSummaryPanel({ summary, generating, onRegenerate }: VersionSumma
     );
   }
 
+  if (isEditing) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-medium">编辑版本摘要</div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setIsEditing(false)} disabled={isSaving}>
+              取消
+            </Button>
+            <Button size="sm" onClick={handleSave} disabled={isSaving}>
+              {isSaving ? '保存中...' : '保存'}
+            </Button>
+          </div>
+        </div>
+        <Input
+          placeholder="摘要标题"
+          value={editTitle}
+          onChange={e => setEditTitle(e.target.value)}
+          className="font-medium"
+        />
+        <textarea
+          placeholder="使用 Markdown 编写版本摘要..."
+          value={editContent}
+          onChange={e => setEditContent(e.target.value)}
+          rows={6}
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 font-mono"
+        />
+        <p className="text-xs text-muted-foreground">支持 Markdown 语法（GFM）</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-medium">版本摘要</div>
-        <Button variant="outline" size="sm" onClick={onRegenerate}>
-          <Sparkles className="h-4 w-4 mr-2" />
-          重新生成
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="text-sm font-medium">版本摘要</div>
+          {summary?.generatedBy && (
+            <Badge variant={summary.generatedBy === 'AI' ? 'default' : 'info'} className="text-xs">
+              {summary.generatedBy === 'AI' ? '🤖 AI' : summary.generatedBy === 'manual' ? '✏️ 手动' : summary.generatedBy}
+            </Badge>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleEdit}>
+            <Edit3 className="h-4 w-4 mr-2" />
+            编辑
+          </Button>
+          <Button variant="outline" size="sm" onClick={onRegenerate}>
+            <Sparkles className="h-4 w-4 mr-2" />
+            重新生成
+          </Button>
+        </div>
       </div>
 
-      {/* 摘要文本 */}
-      {(summary.content || summary.text) && (
-        <div className="bg-blue-50 rounded-lg p-4">
-          <p className="text-sm text-blue-900 font-medium">{summary.content || summary.text}</p>
-          <p className="text-xs text-blue-600 mt-2">
+      {/* 标题 */}
+      {summary?.title && (
+        <div className="text-base font-semibold text-foreground">
+          {summary.title}
+        </div>
+      )}
+
+      {/* 摘要文本 - Markdown 渲染 */}
+      {(summary?.content || summary?.text) && (
+        <div className="bg-muted/50 rounded-lg p-4 border">
+          <div className="prose prose-sm dark:prose-invert max-w-none">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {summary.content || summary.text}
+            </ReactMarkdown>
+          </div>
+          <p className="text-xs text-muted-foreground mt-3">
             生成时间: {new Date(summary.generatedAt).toLocaleString("zh-CN")}
           </p>
         </div>
       )}
 
+      {/* 分类标签区 */}
+      <div className="flex flex-wrap gap-2">
+        {summary?.features.length > 0 && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+            ✨ {summary.features.length} 新功能
+          </span>
+        )}
+        {summary?.changes.length > 0 && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+            🔄 {summary.changes.length} 变更
+          </span>
+        )}
+        {summary?.fixes.length > 0 && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+            🐛 {summary.fixes.length} 修复
+          </span>
+        )}
+        {summary?.breaking.length > 0 && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
+            ⚠️ {summary.breaking.length} 破坏性变更
+          </span>
+        )}
+      </div>
+
       {/* 功能列表 */}
-      {summary.features.length > 0 && (
+      {summary?.features.length > 0 && (
         <div>
           <div className="text-sm font-medium text-green-700 mb-2">✨ 新功能</div>
           <ul className="space-y-2">
@@ -2870,7 +2986,7 @@ function VersionSummaryPanel({ summary, generating, onRegenerate }: VersionSumma
       )}
 
       {/* 变更列表 */}
-      {summary.changes.length > 0 && (
+      {summary?.changes.length > 0 && (
         <div>
           <div className="text-sm font-medium text-blue-700 mb-2">🔄 变更</div>
           <ul className="space-y-2">
@@ -2885,7 +3001,7 @@ function VersionSummaryPanel({ summary, generating, onRegenerate }: VersionSumma
       )}
 
       {/* 修复列表 */}
-      {summary.fixes.length > 0 && (
+      {summary?.fixes.length > 0 && (
         <div>
           <div className="text-sm font-medium text-amber-700 mb-2">🐛 Bug 修复</div>
           <ul className="space-y-2">
@@ -2900,7 +3016,7 @@ function VersionSummaryPanel({ summary, generating, onRegenerate }: VersionSumma
       )}
 
       {/* 破坏性变更 */}
-      {summary.breaking.length > 0 && (
+      {summary?.breaking.length > 0 && (
         <div>
           <div className="text-sm font-medium text-red-700 mb-2">⚠️ 破坏性变更</div>
           <ul className="space-y-2">
@@ -2915,8 +3031,7 @@ function VersionSummaryPanel({ summary, generating, onRegenerate }: VersionSumma
       )}
 
       {/* 无内容提示 */}
-      {summary.features.length === 0 && summary.changes.length === 0 &&
-       summary.fixes.length === 0 && summary.breaking.length === 0 && (
+      {(!summary?.features.length && !summary?.changes.length && !summary?.fixes.length && !summary?.breaking.length) && (
         <div className="text-center py-4 text-sm text-gray-500">
           摘要内容为空，请尝试重新生成
         </div>
