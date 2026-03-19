@@ -42,6 +42,9 @@ export interface Task {
   result?: string;           // 执行结果（错误信息或成功摘要）
   retryCount: number;        // 重试次数
   maxRetries: number;        // 最大重试次数
+
+  // 关联的版本（用于自动 bump）
+  versionId?: string;       // 关联的 Version ID
 }
 
 // API 请求/响应类型

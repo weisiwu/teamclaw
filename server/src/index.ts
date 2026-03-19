@@ -25,6 +25,7 @@ import llmRouter from './routes/llm.js';
 import downloadRouter from './routes/download.js';
 import { getArtifactsRootDir } from './services/artifactStore.js';
 import './services/taskInit.js'; // 初始化任务机制钩子
+import { registerAutoBumpHook } from './hooks/autoBumpOnTaskDone.js';
 
 const app = express();
 const PORT = process.env.PORT || 9700;
@@ -74,6 +75,8 @@ app.get('/', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`TeamClaw server running on port ${PORT}`);
+  // 注册自动版本升级钩子
+  registerAutoBumpHook();
 });
 
 export default app;

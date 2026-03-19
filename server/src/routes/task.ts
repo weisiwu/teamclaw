@@ -243,6 +243,41 @@ router.post('/:taskId/cancel', async (req, res) => {
   }
 });
 
+// POST /api/v1/tasks/:taskId/trigger-bump — 手动触发版本升级
+router.post('/:taskId/trigger-bump', async (req, res) => {
+  try {
+    const { executeAutoBump } = await import('../services/autoBump.js');
+    const task = taskLifecycle.getTask(req.params.taskId);
+    if (!task) {
+      res.status(404).json({ success: false, error: 'Task not found' });
+      return;
+    }
+    if (!task.versionId) {
+      res.status(400).json({ success: false, error: 'Task has no linked versionId' });
+      return;
+    }
+    const db = await import('../db/sqlite.js');
+    const row = db.getDb().prepare('SELECT * FROM versions WHERE id = ?').get(task.versionId) as Record<string, unknown> | undefined;
+    if (!row) {
+      res.status(404).json({ success: false, error: 'Linked version not found' });
+      return;
+    }
+    const result = await executeAutoBump({
+      versionId: task.versionId,
+      currentVersion: row.version as string,
+      triggerType: 'manual',
+      taskId: task.taskId,
+      taskTitle: task.title,
+      taskType: task.tags?.[0] || 'feature',
+      projectPath: row.projectPath as string | undefined,
+    });
+    res.json({ success: true, data: result });
+  } catch (err) {
+    console.error('[TaskRoutes] trigger-bump error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
 // GET /api/v1/tasks/:taskId/chain - 获取任务链
 router.get('/:taskId/chain', (req, res) => {
   try {

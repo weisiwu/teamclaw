@@ -14,6 +14,7 @@ import { autoCreateTagForVersion, makeTagName as makeTagNameFromConfig, createTa
 import { isValidSemver, bumpVersion } from '../services/semver.js';
 import { getDb } from '../db/sqlite.js';
 import { runMigrations } from '../db/migrations/run.js';
+import { executeAutoBump, getBumpHistory } from '../services/autoBump.js';
 import path from 'path';
 import os from 'os';
 
@@ -68,6 +69,11 @@ const settings: VersionSettings = {
   tagPrefix: 'v',
   tagOnStatus: ['published'],
 };
+
+/** 导出 settings 访问函数（供 autoBump 服务使用） */
+export function getVersionSettings(): VersionSettings {
+  return settings;
+}
 
 // Initialize with sample data
 const sampleVersions: Version[] = [
@@ -561,42 +567,24 @@ router.post('/:id/build', async (req: Request, res: Response) => {
       artifactUrl = `/artifacts/${req.params.id}/${row.version}`;
     }
 
-    // Auto-bump on build success: create a new bumped version + tag + tag record
+    // Auto-bump on build success via shared executeAutoBump()
     let autoBumped = false;
     let bumpedVersionId: string | undefined;
     let bumpedVersionStr: string | undefined;
     if (result.success && settings.autoBump) {
-      const prevVersion = row.version as string;
-      const newVersionStr = autoBumpVersion(prevVersion, settings.bumpType);
-      const tagName = makeTagName(newVersionStr, settings.tagPrefix, settings.customPrefix);
-
-      // Create new version record in DB
-      const newId = `v${Date.now()}`;
-      db.prepare(`
-        INSERT INTO versions (id, version, branch, summary, created_by, created_at, build_status, tag_created)
-        VALUES (?, ?, 'main', ?, 'system', datetime('now'), 'success', 1)
-      `).run(newId, newVersionStr, `Build ${newVersionStr}`);
-
       try {
-        createTag(projectPath, tagName, `Auto-bump from build ${req.params.id} (${prevVersion} → ${newVersionStr})`);
+        const bumpResult = await executeAutoBump({
+          versionId: req.params.id,
+          currentVersion: row.version as string,
+          triggerType: 'build_success',
+          projectPath,
+        });
+        autoBumped = bumpResult.success;
+        bumpedVersionId = bumpResult.newVersionId;
+        bumpedVersionStr = bumpResult.newVersion;
       } catch (err) {
-        console.warn('[build] Failed to create git tag:', err);
+        console.warn('[build] executeAutoBump failed:', err);
       }
-
-      // Create Tag record via tagService
-      createTagRecord({
-        name: tagName,
-        versionId: newId,
-        versionName: newVersionStr,
-        message: `Auto-bump from build ${req.params.id} (${prevVersion} → ${newVersionStr})`,
-        createdBy: 'system',
-        commitHash: undefined,
-        annotation: undefined,
-      });
-
-      autoBumped = true;
-      bumpedVersionId = newId;
-      bumpedVersionStr = newVersionStr;
     }
 
     res.json(success({
@@ -609,7 +597,7 @@ router.post('/:id/build', async (req: Request, res: Response) => {
       outputExcerpt: result.output.slice(-2000),
       errorOutput: result.errorOutput.slice(-2000),
       autoBumped,
-      bumpedVersion: bumpedVersionId ? { id: bumpedVersionId, version: bumpedVersionStr, gitTag: bumpedVersionStr ? makeTagName(bumpedVersionStr, settings.tagPrefix, settings.customPrefix) : undefined } : undefined,
+      bumpedVersion: bumpedVersionId ? { id: bumpedVersionId, version: bumpedVersionStr } : undefined,
     }));
   } catch (err: unknown) {
     db.prepare('UPDATE versions SET build_status = ? WHERE id = ?').run('failed', req.params.id);
@@ -1269,6 +1257,26 @@ router.get('/:id/timeline', (req: Request, res: Response) => {
   }));
 });
 
+// GET /api/v1/versions/:id/bump-history — Get bump history for a version
+router.get('/:id/bump-history', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const page = parseInt(req.query.page as string) || 1;
+  const pageSize = parseInt(req.query.pageSize as string) || 50;
+  const offset = (page - 1) * pageSize;
+
+  const history = getBumpHistory(id);
+  const total = history.length;
+  const paginated = history.slice(offset, offset + pageSize);
+
+  res.json(success({
+    data: paginated,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize),
+  }));
+});
+
 // POST /api/v1/versions/summary/batch-generate — Batch generate summaries for multiple versions
 router.post('/summary/batch-generate', async (req: Request, res: Response) => {
   try {
@@ -1372,7 +1380,7 @@ router.get('/compare/quick', async (req: Request, res: Response) => {
 });
 
 // POST /api/v1/versions/:id/bump-with-task — Bump version based on task type
-router.post('/:id/bump-with-task', (req: Request, res: Response) => {
+router.post('/:id/bump-with-task', async (req: Request, res: Response) => {
   const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
@@ -1395,32 +1403,27 @@ router.post('/:id/bump-with-task', (req: Request, res: Response) => {
     return;
   }
 
-  const result = performBump(row.version as string, { taskType, taskId, taskTitle });
+  const projectPath = (row.projectPath as string) ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
 
-  if (!result) {
-    res.status(500).json(error(500, 'Bump failed'));
-    return;
-  }
+  // Use shared executeAutoBump for consistency
+  const bumpResult = await executeAutoBump({
+    versionId: req.params.id,
+    currentVersion: row.version as string,
+    triggerType: 'manual',
+    taskId,
+    taskTitle,
+    taskType,
+    projectPath,
+  });
 
-  // Apply the bump to the version
-  db.prepare('UPDATE versions SET version = ? WHERE id = ?').run(result.newVersion, req.params.id);
-
-  if (settings.autoTag && settings.tagOnStatus.includes('published')) {
-    const tagName = makeTagName(result.newVersion, settings.tagPrefix, settings.customPrefix);
-    const projectPath = (row.projectPath as string) ||
-      path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
-    try {
-      createTag(projectPath, tagName, `Release ${result.newVersion}`);
-      db.prepare('UPDATE versions SET tag_created = 1 WHERE id = ?').run(req.params.id);
-    } catch (err) {
-      console.warn('[bump-with-task] Failed to create git tag:', err);
-    }
-  }
+  // Build changelog summary using existing performBump logic
+  const performResult = performBump(row.version as string, { taskType, taskId, taskTitle });
 
   res.json(success({
-    version: { id: req.params.id, version: result.newVersion },
-    bump: result,
-    summary: formatBumpSummary(result),
+    version: { id: req.params.id, version: bumpResult.newVersion },
+    bump: performResult,
+    summary: formatBumpSummary(performResult!),
   }));
 });
 

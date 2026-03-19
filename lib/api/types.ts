@@ -533,6 +533,24 @@ export interface ReleaseLog {
   releasedBy: string;
 }
 
+// Bump 历史记录
+export type BumpHistoryTriggerType = 'task_done' | 'build_success' | 'manual';
+
+export interface BumpHistoryRecord {
+  id: string;
+  versionId: string;
+  versionName: string;
+  previousVersion: string;
+  newVersion: string;
+  bumpType: VersionBumpType;
+  triggerType: BumpHistoryTriggerType;
+  triggerTaskId?: string;
+  triggerTaskTitle?: string;
+  summary?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
 // 版本号递增请求
 export interface BumpVersionRequest {
   bumpType: VersionBumpType;

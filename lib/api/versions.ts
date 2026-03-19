@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, RenameBranchRequest, BranchProtectionRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult, SimilarVersion, TagLifecycleRecord, BatchTagResponse, BuildEnhancementSettings, BuildNotificationSettings, BuildEnvironment, BUILD_ENVIRONMENTS, DEFAULT_BUILD_RETRY_SETTINGS, DEFAULT_NOTIFICATION_SETTINGS, BatchDownloadRequest, BatchDownloadResponse, DownloadUrlVerification, DownloadStats, VersionSummary, BuildArtifact, RollbackHistoryRecord, TimelineEvent, TimelineResponse } from "./types";
+import { Version, VersionListResponse, CreateVersionRequest, UpdateVersionRequest, VersionTag, VersionSnapshot, SnapshotListResponse, CreateSnapshotRequest, GitBranch, CreateBranchRequest, RenameBranchRequest, BranchProtectionRequest, BranchListResponse, VersionBumpType, ReleaseLog, BumpVersionResponse, VersionSettings, VersionMessageScreenshot, ScreenshotListResponse, LinkScreenshotRequest, VersionChangelog, ChangelogResponse, GenerateChangelogRequest, ChangelogChange, TagPrefix, CreateTagRequest, CreateTagResponse, VersionStatus, VersionUpgradeConfig, UpgradeHistoryRecord, UpgradePreview, VersionSummaryVector, VectorSearchResult, SimilarVersion, TagLifecycleRecord, BatchTagResponse, BuildEnhancementSettings, BuildNotificationSettings, BuildEnvironment, BUILD_ENVIRONMENTS, DEFAULT_BUILD_RETRY_SETTINGS, DEFAULT_NOTIFICATION_SETTINGS, BatchDownloadRequest, BatchDownloadResponse, DownloadUrlVerification, DownloadStats, VersionSummary, BuildArtifact, RollbackHistoryRecord, TimelineEvent, TimelineResponse, BumpHistoryRecord } from "./types";
 
 // 全局版本自动升级和 Tag 设置
 let versionSettings: VersionSettings = {
@@ -3003,4 +3003,54 @@ export function useGitFileChanges(versionId: string | null, from?: string, to?: 
     enabled: Boolean(versionId),
     staleTime: 5 * 60 * 1000,
   });
+}
+
+// ============ Bump History API ============
+
+export interface BumpHistoryResponse {
+  data: BumpHistoryRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export async function getVersionBumpHistory(
+  versionId: string,
+  page = 1,
+  pageSize = 50
+): Promise<BumpHistoryResponse> {
+  const url = `${API_BASE}/versions/${versionId}/bump-history?page=${page}&pageSize=${pageSize}`;
+  const res = await fetch(url);
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) return json.data;
+  throw new Error(json.message || '获取 bump 历史失败');
+}
+
+export function useVersionBumpHistory(versionId: string | null, page = 1, pageSize = 50) {
+  return useQuery({
+    queryKey: ['versionBumpHistory', versionId, page, pageSize],
+    queryFn: () => getVersionBumpHistory(versionId!, page, pageSize),
+    enabled: Boolean(versionId),
+    staleTime: 30 * 1000,
+  });
+}
+
+export async function triggerTaskBump(taskId: string): Promise<{
+  success: boolean;
+  previousVersion: string;
+  newVersion: string;
+  newVersionId: string;
+  bumpType: string;
+  gitTag?: string;
+  bumpHistoryId: string;
+  summary: string;
+}> {
+  const res = await fetch(`${API_BASE}/tasks/${taskId}/trigger-bump`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  const json = await res.json();
+  if (json.success) return json.data;
+  throw new Error(json.error || '触发 bump 失败');
 }
