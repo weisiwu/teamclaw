@@ -5,12 +5,12 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Tag, Lock, Trash2, Edit3, Check, X, AlertTriangle } from "lucide-react";
+import { Loader2, ArrowLeft, Tag, Lock, Trash2, Edit3, Check, X, AlertTriangle, User, GitCommit, Clock } from "lucide-react";
 import Link from "next/link";
 
 const API_BASE = "/api/v1";
 
-interface TagRecord {
+interface TagDetail {
   id: string;
   name: string;
   versionId?: string;
@@ -22,6 +22,12 @@ interface TagRecord {
   protected?: boolean;
   archived?: boolean;
   createdBy?: string;
+  author?: string | null;
+  authorEmail?: string | null;
+  taggerDate?: string | null;
+  date?: string;
+  commit?: string;
+  hasRecord?: boolean;
 }
 
 function isProtectedTag(name: string): boolean {
@@ -34,7 +40,7 @@ export default function TagDetailPage() {
   const rawName = params.name as string;
   const tagName = decodeURIComponent(rawName);
 
-  const [tag, setTag] = useState<TagRecord | null>(null);
+  const [tag, setTag] = useState<TagDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRenaming, setIsRenaming] = useState(false);
   const [newName, setNewName] = useState("");
@@ -46,14 +52,22 @@ export default function TagDetailPage() {
   useEffect(() => {
     if (!tagName) return;
     setIsLoading(true);
-    fetch(`${API_BASE}/tags?prefix=${encodeURIComponent(tagName)}`)
+    // Use dedicated tag detail endpoint which includes author info
+    fetch(`${API_BASE}/tags/${encodeURIComponent(tagName)}`)
       .then((r) => r.json())
       .then((json) => {
-        if ((json.code === 200 || json.code === 0) && json.data?.data?.length > 0) {
-          // Find exact match
-          const found = json.data.data.find((t: TagRecord) => t.name === tagName);
-          setTag(found || json.data.data[0]);
+        if ((json.code === 200 || json.code === 0) && json.data) {
+          setTag(json.data);
         } else {
+          // Fallback to list endpoint
+          return fetch(`${API_BASE}/tags?prefix=${encodeURIComponent(tagName)}`).then(r => r.json());
+        }
+      })
+      .then((json) => {
+        if (json && (json.code === 200 || json.code === 0) && json.data?.data?.length > 0) {
+          const found = json.data.data.find((t: TagDetail) => t.name === tagName);
+          setTag(found || json.data.data[0]);
+        } else if (!tag) {
           setTag(null);
         }
       })
@@ -76,7 +90,6 @@ export default function TagDetailPage() {
         setActionMsg({ type: "success", text: `已重命名为: ${newName}` });
         setTag((prev) => prev ? { ...prev, name: newName } : prev);
         setIsRenaming(false);
-        // Navigate to new name
         router.replace(`/tags/${encodeURIComponent(newName)}`);
       } else {
         setRenameError(json.message || "重命名失败");
@@ -109,6 +122,7 @@ export default function TagDetailPage() {
   };
 
   const protected_ = tag ? (isProtectedTag(tag.name) || tag.protected) : false;
+  const displayDate = tag?.taggerDate || tag?.date || tag?.createdAt || null;
 
   if (isLoading) {
     return (
@@ -201,7 +215,7 @@ export default function TagDetailPage() {
       )}
 
       <div className="space-y-6">
-        {/* Info card */}
+        {/* Info card - enhanced with author info */}
         <div className="bg-white rounded-xl border p-5">
           <h2 className="text-sm font-medium text-gray-500 mb-4">Tag 信息</h2>
           <div className="space-y-3">
@@ -210,18 +224,33 @@ export default function TagDetailPage() {
               <span className="font-mono font-medium text-gray-900">{tag.name}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-500">Commit Hash</span>
-              <span className="font-mono text-sm text-gray-900">{tag.commitHash || "-"}</span>
+              <span className="text-sm text-gray-500 flex items-center gap-1">
+                <GitCommit className="w-3.5 h-3.5" /> Commit Hash
+              </span>
+              <span className="font-mono text-sm text-gray-900">{tag.commitHash || tag.commit || "-"}</span>
+            </div>
+            {(tag.author || tag.authorEmail) && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-500 flex items-center gap-1">
+                  <User className="w-3.5 h-3.5" /> 作者
+                </span>
+                <span className="text-sm text-gray-900">
+                  {tag.author}
+                  {tag.authorEmail && <span className="text-gray-400 ml-1">&lt;{tag.authorEmail}&gt;</span>}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-500 flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5" /> 创建时间
+              </span>
+              <span className="text-sm text-gray-900">
+                {displayDate ? new Date(displayDate).toLocaleString("zh-CN") : "-"}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-500">版本</span>
               <span className="text-sm text-gray-900">{tag.versionName || tag.versionId || "-"}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-500">创建时间</span>
-              <span className="text-sm text-gray-900">
-                {tag.createdAt ? new Date(tag.createdAt).toLocaleString("zh-CN") : "-"}
-              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-500">创建者</span>
@@ -230,12 +259,22 @@ export default function TagDetailPage() {
           </div>
         </div>
 
+        {/* Commit Message */}
+        {tag.message && (
+          <div className="bg-white rounded-xl border p-5">
+            <h2 className="text-sm font-medium text-gray-500 mb-3">Commit 信息</h2>
+            <div className="bg-gray-50 rounded-lg p-4 border-l-4 border-blue-400">
+              <p className="text-sm font-medium text-gray-900 mb-1">{tag.message}</p>
+            </div>
+          </div>
+        )}
+
         {/* Annotation / Message */}
-        {(tag.annotation || tag.message) && (
+        {(tag.annotation) && tag.annotation !== tag.message && (
           <div className="bg-white rounded-xl border p-5">
             <h2 className="text-sm font-medium text-gray-500 mb-3">Annotation</h2>
             <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans bg-gray-50 rounded p-3">
-              {tag.annotation || tag.message}
+              {tag.annotation}
             </pre>
           </div>
         )}

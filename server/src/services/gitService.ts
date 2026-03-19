@@ -302,6 +302,53 @@ export function getTagCommit(cwd: string, tagName: string): string {
 }
 
 /**
+ * Get detailed info about a git tag including author, date, message, annotation
+ */
+export function getTagDetails(cwd: string, tagName: string): {
+  name: string;
+  commit: string;
+  date: string;
+  message: string;
+  author: string;
+  authorEmail: string;
+  taggerDate: string;
+  taggerName: string;
+  taggerEmail: string;
+} | null {
+  if (!existsSync(join(cwd, '.git'))) return null;
+
+  try {
+    // Use git show to get tag details - works for both annotated and lightweight tags
+    // Format: name||commit||tagger-date||author-name||author-email||tagger-name||tagger-email||subject
+    const output = execGit(cwd, [
+      'for-each-ref',
+      '--format=%(refname:short)||%(objectname)||%(taggerdate:iso)||%(authorname)||%(authoremail)||%(taggername)||%(taggeremail)||%(contents:subject)',
+      `refs/tags/${tagName}`,
+    ]);
+
+    if (!output.trim()) return null;
+
+    const parts = output.trim().split('||');
+    if (parts.length < 8) return null;
+
+    const [name, commit, taggerDate, author, authorEmail, taggerName, taggerEmail, message] = parts;
+    return {
+      name: name || tagName,
+      commit: commit || '',
+      date: taggerDate || '',
+      message: message || '',
+      author: author || taggerName || '',
+      authorEmail: authorEmail || taggerEmail || '',
+      taggerDate: taggerDate || '',
+      taggerName: taggerName || '',
+      taggerEmail: taggerEmail || '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Get list of commits between two refs
  */
 export function getCommitsBetween(cwd: string, fromRef: string, toRef: string): GitCommit[] {

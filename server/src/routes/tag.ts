@@ -3,7 +3,7 @@
 
 import { Router, Request, Response } from 'express';
 import { success, error } from '../utils/response.js';
-import { getTags as gitGetTags, createTag as gitCreateTag } from '../services/gitService.js';
+import { getTags as gitGetTags, createTag as gitCreateTag, getTagDetails } from '../services/gitService.js';
 import {
   getAllTagRecords,
   getTagRecord,
@@ -91,12 +91,15 @@ router.get('/:tagName', (req: Request, res: Response) => {
 
   const projectPath = (reqProjectPath as string) || DEFAULT_PROJECT_PATH;
 
-  // Get git tag info
+  // Get git tag basic info
   let tagInfo: { name: string; commit: string; date: string; message?: string } | undefined;
   if (projectPath) {
     const allGitTags = gitGetTags(projectPath);
     tagInfo = allGitTags.find(t => t.name === tagName);
   }
+
+  // Get detailed git tag info (author, message, annotation)
+  const tagDetails = projectPath ? getTagDetails(projectPath, tagName) : null;
 
   // Check DB for protected and record info
   const dbRecord = getTagByName(tagName);
@@ -108,11 +111,15 @@ router.get('/:tagName', (req: Request, res: Response) => {
 
   res.json(success({
     name: tagName,
-    commit: tagInfo?.commit || dbRecord?.commitHash || '',
-    date: tagInfo?.date || dbRecord?.createdAt || '',
-    annotation: tagInfo?.message || dbRecord?.annotation || '',
+    commit: tagInfo?.commit || dbRecord?.commitHash || tagDetails?.commit || '',
+    date: tagInfo?.date || dbRecord?.createdAt || tagDetails?.date || '',
+    message: tagDetails?.message || tagInfo?.message || dbRecord?.message || '',
+    author: tagDetails?.author || null,
+    authorEmail: tagDetails?.authorEmail || null,
+    taggerDate: tagDetails?.taggerDate || null,
     hasRecord: !!dbRecord,
     protected: dbRecord?.protected || false,
+    annotation: tagInfo?.message || dbRecord?.annotation || '',
   }));
 });
 
