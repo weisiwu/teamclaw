@@ -19,12 +19,16 @@ const ALLOWED_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
 };
 
 export type StatusChangeHook = (task: Task, oldStatus: TaskStatus, newStatus: TaskStatus) => void | Promise<void>;
+export type TaskCreateHook = (task: Task) => void | Promise<void>;
+export type TaskStartHook = (task: Task) => void | Promise<void>;
 
 class TaskLifecycleService {
   private static instance: TaskLifecycleService;
 
   // 状态变更钩子
   private hooks: StatusChangeHook[] = [];
+  private createHooks: TaskCreateHook[] = [];
+  private startHooks: TaskStartHook[] = [];
 
   // 任务存储
   private tasks: Map<string, Task> = new Map();
@@ -43,6 +47,14 @@ class TaskLifecycleService {
    */
   onStatusChange(hook: StatusChangeHook): void {
     this.hooks.push(hook);
+  }
+
+  onCreate(hook: TaskCreateHook): void {
+    this.createHooks.push(hook);
+  }
+
+  onStart(hook: TaskStartHook): void {
+    this.startHooks.push(hook);
   }
 
   /**
@@ -74,6 +86,8 @@ class TaskLifecycleService {
     // 更新时间戳
     if (newStatus === 'running' && !task.startedAt) {
       task.startedAt = task.updatedAt;
+      // 执行开始钩子
+      await this.executeStartHooks(task);
     }
     if (['done', 'failed', 'cancelled'].includes(newStatus)) {
       task.completedAt = task.updatedAt;
@@ -100,6 +114,8 @@ class TaskLifecycleService {
       retryCount: 0,
     };
     this.tasks.set(task.taskId, task);
+    // 执行创建钩子
+    this.executeCreateHooks(task);
     return task;
   }
 
@@ -156,6 +172,13 @@ class TaskLifecycleService {
     return task;
   }
 
+  updateTaskStatus(taskId: string, status: TaskStatus): Task | null {
+    const task = this.tasks.get(taskId);
+    if (!task) return null;
+    this.transition(taskId, status);
+    return this.tasks.get(taskId) ?? null;
+  }
+
   /**
    * 获取任务概览
    */
@@ -180,6 +203,26 @@ class TaskLifecycleService {
         await hook(task, oldStatus, newStatus);
       } catch (err) {
         console.error(`[TaskLifecycle] Hook error:`, err);
+      }
+    }
+  }
+
+  private async executeCreateHooks(task: Task): Promise<void> {
+    for (const hook of this.createHooks) {
+      try {
+        await hook(task);
+      } catch (err) {
+        console.error(`[TaskLifecycle] Create hook error:`, err);
+      }
+    }
+  }
+
+  private async executeStartHooks(task: Task): Promise<void> {
+    for (const hook of this.startHooks) {
+      try {
+        await hook(task);
+      } catch (err) {
+        console.error(`[TaskLifecycle] Start hook error:`, err);
       }
     }
   }

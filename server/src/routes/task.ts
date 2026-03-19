@@ -304,4 +304,213 @@ router.post('/:taskId/checkpoint', (req, res) => {
   }
 });
 
+// ============ 任务调度 ============
+
+// POST /api/v1/tasks/:taskId/schedule - 创建调度
+router.post('/:taskId/schedule', (req, res) => {
+  try {
+    const { type, delayMs, intervalMs, cronExpr, maxRuns, description } = req.body;
+    if (!type) {
+      res.status(400).json({ success: false, error: 'type required (delay|interval|cron)' });
+      return;
+    }
+    let schedule: any;
+    if (type === 'delay') {
+      schedule = taskScheduler.scheduleDelay(req.params.taskId, delayMs ?? 60000, { maxRuns, description });
+    } else if (type === 'interval') {
+      schedule = taskScheduler.scheduleInterval(req.params.taskId, intervalMs ?? 60000, { maxRuns, description });
+    } else if (type === 'cron') {
+      schedule = taskScheduler.scheduleCron(req.params.taskId, cronExpr ?? '* * * * *', { maxRuns, description });
+    } else {
+      res.status(400).json({ success: false, error: 'Invalid type' });
+      return;
+    }
+    res.status(201).json({ success: true, data: schedule });
+  } catch (err) {
+    console.error('[TaskRoutes] schedule error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// GET /api/v1/tasks/:taskId/schedules - 获取任务的所有调度
+router.get('/:taskId/schedules', (_req, res) => {
+  try {
+    const schedules = taskScheduler.getSchedulesByTask(_req.params.taskId);
+    res.json({ success: true, data: schedules });
+  } catch (err) {
+    console.error('[TaskRoutes] get schedules error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// DELETE /api/v1/tasks/:taskId/schedule/:scheduleId - 取消调度
+router.delete('/:taskId/schedule/:scheduleId', (req, res) => {
+  try {
+    const ok = taskScheduler.cancelSchedule(req.params.scheduleId);
+    res.json({ success: ok });
+  } catch (err) {
+    console.error('[TaskRoutes] cancel schedule error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// PATCH /api/v1/tasks/:taskId/schedule/:scheduleId - 暂停/恢复调度
+router.patch('/:taskId/schedule/:scheduleId', (req, res) => {
+  try {
+    const { action } = req.body; // 'pause' | 'resume'
+    let ok = false;
+    if (action === 'pause') ok = taskScheduler.pauseSchedule(req.params.scheduleId);
+    else if (action === 'resume') ok = taskScheduler.resumeSchedule(req.params.scheduleId);
+    res.json({ success: ok });
+  } catch (err) {
+    console.error('[TaskRoutes] update schedule error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// GET /api/v1/tasks/schedules - 获取所有调度
+router.get('/schedules/all', (_req, res) => {
+  try {
+    const schedules = taskScheduler.getAllSchedules();
+    res.json({ success: true, data: schedules });
+  } catch (err) {
+    console.error('[TaskRoutes] get all schedules error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// ============ 任务超时 ============
+
+// POST /api/v1/tasks/:taskId/timeout/set - 设置超时
+router.post('/:taskId/timeout/set', (req, res) => {
+  try {
+    const { timeoutMs, priority } = req.body;
+    const record = taskTimeout.setTimeout(req.params.taskId, timeoutMs, priority);
+    res.json({ success: true, data: record });
+  } catch (err) {
+    console.error('[TaskRoutes] set timeout error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// POST /api/v1/tasks/:taskId/timeout/heartbeat - 心跳
+router.post('/:taskId/timeout/heartbeat', (req, res) => {
+  try {
+    taskTimeout.heartbeat(req.params.taskId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[TaskRoutes] heartbeat error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// DELETE /api/v1/tasks/:taskId/timeout - 清除超时
+router.delete('/:taskId/timeout', (req, res) => {
+  try {
+    const ok = taskTimeout.clearTimeout(req.params.taskId);
+    res.json({ success: ok });
+  } catch (err) {
+    console.error('[TaskRoutes] clear timeout error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// GET /api/v1/tasks/:taskId/timeout - 获取超时记录
+router.get('/:taskId/timeout', (req, res) => {
+  try {
+    const record = taskTimeout.getTimeoutRecord(req.params.taskId);
+    res.json({ success: true, data: record ?? null });
+  } catch (err) {
+    console.error('[TaskRoutes] get timeout error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// GET /api/v1/tasks/timeouts/imminent - 获取即将超时的任务
+router.get('/timeouts/imminent', (_req, res) => {
+  try {
+    const records = taskTimeout.getImminentTimeouts();
+    res.json({ success: true, data: records });
+  } catch (err) {
+    console.error('[TaskRoutes] get imminent timeouts error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// ============ 任务统计 ============
+
+// GET /api/v1/tasks/stats - 获取综合统计
+router.get('/stats', (req, res) => {
+  try {
+    const period = (req.query.period as any) ?? '24h';
+    const stats = taskStats.getStats(period);
+    res.json({ success: true, data: stats });
+  } catch (err) {
+    console.error('[TaskRoutes] stats error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// GET /api/v1/tasks/stats/trend - 获取趋势数据
+router.get('/stats/trend', (req, res) => {
+  try {
+    const period = (req.query.period as any) ?? '24h';
+    const interval = parseInt(req.query.interval as string) ?? 60;
+    const trend = taskStats.getTrend(period, interval);
+    res.json({ success: true, data: trend });
+  } catch (err) {
+    console.error('[TaskRoutes] trend error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// GET /api/v1/tasks/stats/agents - 获取各Agent统计
+router.get('/stats/agents', (_req, res) => {
+  try {
+    const agentStats = taskStats.getAgentStats();
+    res.json({ success: true, data: agentStats });
+  } catch (err) {
+    console.error('[TaskRoutes] agent stats error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// ============ 任务取消（增强版）============
+
+// POST /api/v1/tasks/:taskId/cancel-with-subtasks - 取消任务及所有子任务
+router.post('/:taskId/cancel-with-subtasks', async (req, res) => {
+  try {
+    const { force, reason, notify, cancelledBy } = req.body;
+    const result = await taskCancel.cancelWithSubtasks(req.params.taskId, { force, reason, notify }, cancelledBy ?? 'api');
+    res.json({ success: result.success, data: result });
+  } catch (err) {
+    console.error('[TaskRoutes] cancel-with-subtasks error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// POST /api/v1/tasks/:taskId/cancel-blocked - 取消被依赖失败阻塞的任务
+router.post('/:taskId/cancel-blocked', async (req, res) => {
+  try {
+    const { cancelledBy } = req.body;
+    const result = await taskCancel.cancelBlockedBy(req.params.taskId, cancelledBy ?? 'api');
+    res.json({ success: result.success, data: result });
+  } catch (err) {
+    console.error('[TaskRoutes] cancel-blocked error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// GET /api/v1/tasks/cancel/audit - 获取取消审计日志
+router.get('/cancel/audit', (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit as string) ?? 50;
+    const entries = taskCancel.getAuditLog(limit);
+    res.json({ success: true, data: entries });
+  } catch (err) {
+    console.error('[TaskRoutes] audit error:', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
 export default router;
