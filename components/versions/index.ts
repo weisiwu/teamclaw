@@ -48,3 +48,8 @@ export { VersionTagsEmptyState } from "./VersionTagsEmptyState";
 export { VersionTagsSkeleton } from "./VersionTagsSkeleton";
 export { CopyButton } from "./CopyButton";
 export { CopyToast } from "./CopyToast";
+
+/**
+ * Branch Management exports
+ */
+export { BranchManager } from "./BranchManager";
