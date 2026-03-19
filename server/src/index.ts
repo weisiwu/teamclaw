@@ -1,4 +1,5 @@
 import express from 'express';
+import { join } from 'path';
 import cors from 'cors';
 import { success } from './utils/response.js';
 import healthRouter from './routes/health.js';
@@ -35,6 +36,17 @@ app.use(express.json());
 
 // Static artifact downloads
 app.use('/artifacts', express.static(getArtifactsRootDir(), {
+  maxAge: '1d',
+  etag: true,
+  lastModified: true,
+  setHeaders: (res) => {
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+  },
+}));
+
+// Static package downloads (zip/tar.gz)
+const ARCHIVE_ROOT = join(process.env.HOME || '/tmp', '.openclaw', 'packages');
+app.use('/packages', express.static(ARCHIVE_ROOT, {
   maxAge: '1d',
   etag: true,
   lastModified: true,

@@ -16,6 +16,14 @@ import {
 } from '../models/buildRecord.js';
 import { runBuild } from '../services/buildService.js';
 import { rollbackToCommit, rollbackToTag } from '../services/rollbackService.js';
+import {
+  createPackage,
+  getPackageInfo,
+  deletePackage,
+  listPackages,
+  getPackageFilePath,
+  type PackageFormat,
+} from '../services/packageService.js';
 import { getCurrentBranch } from '../services/gitService.js';
 import path from 'path';
 import os from 'os';
@@ -279,6 +287,125 @@ router.post('/:id/rollback', (req: Request, res: Response) => {
     buildNumber: record.buildNumber,
     rollbackCount: (record.rollbackCount || 0) + 1,
   }));
+});
+
+// GET /api/v1/builds/:id/package — Get package info for a build
+router.get('/:id/package', (req: Request, res: Response) => {
+  const record = getBuildRecord(req.params.id);
+  if (!record) {
+    return res.status(404).json(error(404, 'Build record not found'));
+  }
+
+  const { format = 'zip' } = req.query as { format?: string };
+  const safeFormat = ['zip', 'tar.gz', 'tar'].includes(format) ? format as 'zip' | 'tar.gz' | 'tar' : 'zip';
+
+  const info = getPackageInfo(record.versionId, record.buildNumber, safeFormat);
+  res.json(success(info));
+});
+
+// POST /api/v1/builds/:id/package — Create a package from a build's artifacts
+router.post('/:id/package', async (req: Request, res: Response) => {
+  const record = getBuildRecord(req.params.id);
+  if (!record) {
+    return res.status(404).json(error(404, 'Build record not found'));
+  }
+
+  if (record.status !== 'success') {
+    return res.status(400).json(error(400, 'Can only package successful builds'));
+  }
+
+  if (!record.artifactPaths || record.artifactPaths.length === 0) {
+    return res.status(400).json(error(400, 'No artifacts found in this build'));
+  }
+
+  const { format = 'zip' } = req.body as { format?: string };
+  const safeFormat = ['zip', 'tar.gz', 'tar'].includes(format) ? format as 'zip' | 'tar.gz' | 'tar' : 'zip';
+
+  const projectPath = getVersionProjectPath(record.versionId, record.projectPath);
+
+  // Check if package already exists
+  const existing = getPackageInfo(record.versionId, record.buildNumber, safeFormat);
+  if (existing.exists) {
+    return res.json(success({ ...existing, cached: true }));
+  }
+
+  const result = await createPackage(
+    record.versionId,
+    record.buildNumber,
+    projectPath,
+    record.artifactPaths,
+    safeFormat
+  );
+
+  if (!result.success) {
+    return res.status(500).json(error(500, result.error || 'Failed to create package'));
+  }
+
+  // Update build record with package info
+  updateBuildRecord(record.id, {
+    packagePath: result.packagePath,
+    packageUrl: result.packageUrl,
+    packageFormat: result.format,
+    packageSize: result.size,
+    packageCreatedAt: new Date().toISOString(),
+  });
+
+  res.json(success({
+    ...result,
+    cached: false,
+    packageUrl: result.packageUrl,
+  }));
+});
+
+// GET /api/v1/builds/:id/package/download — Download the package file
+router.get('/:id/package/download', (req: Request, res: Response) => {
+  const record = getBuildRecord(req.params.id);
+  if (!record) {
+    return res.status(404).json(error(404, 'Build record not found'));
+  }
+
+  const { format = 'zip' } = req.query as { format?: string };
+  const safeFormat = ['zip', 'tar.gz', 'tar'].includes(format) ? format as 'zip' | 'tar.gz' | 'tar' : 'zip';
+
+  const packagePath = getPackageFilePath(record.versionId, record.buildNumber, safeFormat);
+  const fs = require('fs');
+
+  if (!fs.existsSync(packagePath)) {
+    return res.status(404).json(error(404, 'Package not found. Please create it first via POST /builds/:id/package'));
+  }
+
+  const stats = fs.statSync(packagePath);
+  const fileName = `build-${record.buildNumber}.${safeFormat === 'tar.gz' ? 'tar.gz' : safeFormat}`;
+  const mimeType = safeFormat === 'zip' ? 'application/zip'
+    : safeFormat === 'tar.gz' ? 'application/gzip'
+    : 'application/x-tar';
+
+  res.setHeader('Content-Type', mimeType);
+  res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+  res.setHeader('Content-Length', stats.size);
+
+  const stream = fs.createReadStream(packagePath);
+  stream.pipe(res);
+});
+
+// DELETE /api/v1/builds/:id/package — Delete a package
+router.delete('/:id/package', (req: Request, res: Response) => {
+  const record = getBuildRecord(req.params.id);
+  if (!record) {
+    return res.status(404).json(error(404, 'Build record not found'));
+  }
+
+  const { format = 'zip' } = req.query as { format?: string };
+  const safeFormat = ['zip', 'tar.gz', 'tar'].includes(format) ? format as 'zip' | 'tar.gz' | 'tar' : 'zip';
+
+  const deleted = deletePackage(record.versionId, record.buildNumber, safeFormat);
+  res.json(success({ deleted }));
+});
+
+// GET /api/v1/builds/packages/:versionId — List all packages for a version
+router.get('/packages/:versionId', (req: Request, res: Response) => {
+  const packages = listPackages(req.params.versionId);
+  res.json(success(packages));
 });
 
 export default router;

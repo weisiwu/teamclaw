@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT } from "@/lib/api/types";
 import { useBuildArtifacts, useVersionScreenshots, useVersionChangelog, useRefreshVersionSummary, useVersionArtifacts } from "@/lib/api/versions";
-import { useLatestBuild, useRebuildBuild, useRollbackBuild } from "@/lib/api/builds";
+import { useLatestBuild, useRebuildBuild, useRollbackBuild, createPackageAPI, getPackageDownloadUrl } from "@/lib/api/builds";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScreenshotGallery, ChangelogPanel, VersionTimeline } from "@/components/versions";
@@ -62,6 +62,7 @@ export function VersionDetails(props: VersionDetailsProps) {
   const rollbackBuild = useRollbackBuild();
   const [rebuilding, setRebuilding] = useState(false);
   const [rollingBack, setRollingBack] = useState(false);
+  const [packaging, setPackaging] = useState(false);
 
   // Express 服务器产物列表（真实构建产物）
   const { data: serverArtifacts = [] } = useVersionArtifacts(version?.id || "", latestBuild?.buildNumber);
@@ -81,6 +82,20 @@ export function VersionDetails(props: VersionDetailsProps) {
       console.error('Rebuild failed:', err);
     } finally {
       setRebuilding(false);
+    }
+  };
+
+  const handlePackageDownload = async () => {
+    if (!latestBuild?.id) return;
+    setPackaging(true);
+    try {
+      await createPackageAPI(latestBuild.id, 'zip');
+      window.open(getPackageDownloadUrl(latestBuild.id, 'zip'), '_blank');
+    } catch (err) {
+      console.error('Package failed:', err);
+      alert('打包失败: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setPackaging(false);
     }
   };
 
@@ -178,17 +193,32 @@ export function VersionDetails(props: VersionDetailsProps) {
               </>
             )}
             {serverArtifacts.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const first = serverArtifacts[0];
-                  if (first) window.open(first.url, "_blank");
-                }}
-              >
-                <Download className="w-4 h-4 mr-1" />
-                下载产物
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const first = serverArtifacts[0];
+                    if (first) window.open(first.url, "_blank");
+                  }}
+                >
+                  <Download className="w-4 h-4 mr-1" />
+                  下载产物
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePackageDownload}
+                  disabled={packaging}
+                >
+                  {packaging ? (
+                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-1" />
+                  )}
+                  打包下载
+                </Button>
+              </>
             )}
             <Button
               variant="outline"

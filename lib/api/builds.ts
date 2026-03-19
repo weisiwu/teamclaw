@@ -34,6 +34,11 @@ export interface BuildRecord {
   lastRollbackAt?: string;
   lastRollbackCommit?: string;
   rollbackFromCommit?: string;
+  packagePath?: string;
+  packageUrl?: string;
+  packageFormat?: 'zip' | 'tar.gz' | 'tar';
+  packageSize?: number;
+  packageCreatedAt?: string;
 }
 
 export interface BuildStats {
@@ -240,5 +245,87 @@ export function useRollbackBuild() {
   return useMutation({
     mutationFn: (vars: { buildId: string; target?: string; targetType?: 'tag' | 'branch' | 'commit'; createBranch?: boolean }) =>
       rollbackBuildAPI(vars.buildId, vars),
+  });
+}
+
+// Package types
+export interface PackageInfo {
+  exists: boolean;
+  packagePath: string;
+  packageUrl: string;
+  format: 'zip' | 'tar.gz' | 'tar';
+  size?: number;
+  sizeFormatted?: string;
+  createdAt?: string;
+  fileCount?: number;
+  cached?: boolean;
+}
+
+export interface CreatePackageRequest {
+  format?: 'zip' | 'tar.gz' | 'tar';
+}
+
+// Get package info for a build
+export async function getPackageInfoAPI(buildId: string, format = 'zip'): Promise<PackageInfo> {
+  const res = await fetch(`${API_BASE}/builds/${buildId}/package?format=${format}`);
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) return json.data;
+  throw new Error(json.message || 'Failed to get package info');
+}
+
+// Create package from build artifacts
+export async function createPackageAPI(buildId: string, format = 'zip'): Promise<PackageInfo> {
+  const res = await fetch(`${API_BASE}/builds/${buildId}/package`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ format }),
+  });
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) return json.data;
+  throw new Error(json.message || 'Failed to create package');
+}
+
+// Get package download URL
+export function getPackageDownloadUrl(buildId: string, format = 'zip'): string {
+  return `${API_BASE}/builds/${buildId}/package/download?format=${format}`;
+}
+
+// Delete package
+export async function deletePackageAPI(buildId: string, format = 'zip'): Promise<{ deleted: boolean }> {
+  const res = await fetch(`${API_BASE}/builds/${buildId}/package?format=${format}`, { method: 'DELETE' });
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) return json.data;
+  throw new Error(json.message || 'Failed to delete package');
+}
+
+// List all packages for a version
+export async function listVersionPackagesAPI(versionId: string): Promise<PackageInfo[]> {
+  const res = await fetch(`${API_BASE}/builds/packages/${encodeURIComponent(versionId)}`);
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) return json.data;
+  throw new Error(json.message || 'Failed to list packages');
+}
+
+// React Query hooks
+export function usePackageInfo(buildId: string, format = 'zip') {
+  return useQuery({
+    queryKey: ['builds', buildId, 'package', format],
+    queryFn: () => getPackageInfoAPI(buildId, format),
+    enabled: !!buildId,
+    staleTime: 30000,
+  });
+}
+
+export function useCreatePackage() {
+  return useMutation({
+    mutationFn: ({ buildId, format }: { buildId: string; format?: 'zip' | 'tar.gz' | 'tar' }) =>
+      createPackageAPI(buildId, format),
+  });
+}
+
+export function useDeletePackage() {
+  return useMutation({
+    mutationFn: ({ buildId, format }: { buildId: string; format?: 'zip' | 'tar.gz' | 'tar' }) =>
+      deletePackageAPI(buildId, format),
   });
 }

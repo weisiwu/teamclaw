@@ -46,6 +46,13 @@ export interface BuildRecord {
   lastRollbackAt?: string;       // ISO timestamp of last rollback
   lastRollbackCommit?: string;   // the commit we rolled back to
   rollbackFromCommit?: string;   // the commit we rolled back from (before rollback)
+
+  // Package
+  packagePath?: string;          // absolute path to the created package
+  packageUrl?: string;           // URL path to download the package
+  packageFormat?: 'zip' | 'tar.gz' | 'tar';
+  packageSize?: number;          // bytes
+  packageCreatedAt?: string;     // ISO timestamp
 }
 
 const buildRecords = new Map<string, BuildRecord>();
