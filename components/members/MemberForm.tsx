@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { LegacySelect as Select } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { Member, MemberRole, MemberStatus, MEMBER_ROLE_OPTIONS, CreateMemberRequest, UpdateMemberRequest } from "@/lib/api/types";
 

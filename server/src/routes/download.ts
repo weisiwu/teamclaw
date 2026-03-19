@@ -1,162 +1,402 @@
 /**
- * Download Routes - Batch download management with SSE progress
+ * Download Routes - API endpoints for batch download management
  */
 
 import { Router } from 'express';
-import * as fs from 'fs';
-import * as path from 'path';
-import { downloadQueue } from '../services/downloadService.js';
-import { success, error } from '../utils/response.js';
+import { z } from 'zod';
+import {
+  createDownloadTask,
+  getDownloadTask,
+  getUserDownloadTasks,
+  cancelDownloadTask,
+  deleteDownloadTask,
+  getDownloadFilePath,
+  downloadEvents,
+} from '../services/downloadService.js';
+import { getDoc } from '../services/docService.js';
+import { getArtifact } from '../services/artifactStore.js';
+import path from 'path';
+import fs from 'fs';
 
 const router = Router();
 
-// SSE progress stream GET /api/v1/downloads/:taskId/progress
-router.get('/:taskId/progress', (req, res) => {
-  const { taskId } = req.params;
-
-  // Set SSE headers
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-
-  // Send initial connection event
-  res.write(`data: ${JSON.stringify({ type: 'connected', taskId })}\n\n`);
-
-  const unsubscribe = downloadQueue.subscribeSse(taskId, (event) => {
-    res.write(`data: ${JSON.stringify(event)}\n\n`);
-  });
-
-  // Keep connection alive with heartbeat
-  const heartbeat = setInterval(() => {
-    res.write(`: heartbeat\n\n`);
-  }, 30000);
-
-  // Cleanup on disconnect
-  req.on('close', () => {
-    clearInterval(heartbeat);
-    unsubscribe();
-  });
+// Validation schemas
+const createDownloadSchema = z.object({
+  fileIds: z.array(z.string()).min(1),
+  zipName: z.string().optional(),
 });
 
-// Create download task POST /api/v1/downloads
-router.post('/', async (req, res) => {
-  const { fileIds, zipName, userId = 'default' } = req.body;
-
-  if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
-    return res.status(400).json(error(400, '需要 fileIds 数组参数'));
+// Get file paths for file IDs (docs and artifacts)
+async function resolveFilePaths(fileIds: string[]): Promise<Map<string, string>> {
+  const paths = new Map<string, string>();
+  
+  for (const fileId of fileIds) {
+    // Try docService first
+    const doc = await getDoc(fileId);
+    if (doc?.path) {
+      paths.set(fileId, doc.path);
+      continue;
+    }
+    
+    // Try artifactStore
+    const artifact = await getArtifact(fileId);
+    if (artifact?.path) {
+      paths.set(fileId, artifact.path);
+      continue;
+    }
+    
+    // Fallback: assume it's in uploads directory
+    const uploadPath = path.join('./uploads', fileId);
+    if (fs.existsSync(uploadPath)) {
+      paths.set(fileId, uploadPath);
+    }
   }
+  
+  return paths;
+}
 
+/**
+ * POST /api/v1/downloads
+ * Create a new download task
+ */
+router.post('/', async (req, res) => {
   try {
-    const task = await downloadQueue.createTask(userId, fileIds, zipName);
-    res.json(success({
+    const userId = (req as any).user?.id || 'anonymous';
+    const parsed = createDownloadSchema.safeParse(req.body);
+    
+    if (!parsed.success) {
+      return res.status(400).json({
+        code: 400,
+        message: 'Invalid request body',
+        errors: parsed.error.errors,
+      });
+    }
+
+    const { fileIds, zipName } = parsed.data;
+    
+    // Resolve file paths
+    const filePaths = await resolveFilePaths(fileIds);
+    
+    if (filePaths.size === 0) {
+      return res.status(404).json({
+        code: 404,
+        message: 'No valid files found',
+      });
+    }
+
+    // Create download task
+    const task = await createDownloadTask(
+      userId,
+      Array.from(filePaths.keys()),
+      zipName || `download_${Date.now()}.zip`,
+      filePaths
+    );
+
+    // Calculate estimated size
+    let estimatedSize = 0;
+    for (const [, filePath] of filePaths) {
+      try {
+        const stat = fs.statSync(filePath);
+        estimatedSize += stat.size;
+      } catch {
+        // Ignore errors
+      }
+    }
+
+    return res.status(201).json({
+      code: 0,
+      message: 'success',
+      data: {
+        taskId: task.id,
+        status: task.status,
+        estimatedSize,
+      },
+    });
+  } catch (err: any) {
+    console.error('[DownloadRoutes] Create task error:', err);
+    return res.status(500).json({
+      code: 500,
+      message: err.message || 'Failed to create download task',
+    });
+  }
+});
+
+/**
+ * GET /api/v1/downloads
+ * Get user's download tasks
+ */
+router.get('/', async (req, res) => {
+  try {
+    const userId = (req as any).user?.id || 'anonymous';
+    const tasks = getUserDownloadTasks(userId);
+
+    return res.json({
+      code: 0,
+      message: 'success',
+      data: {
+        tasks: tasks.map(t => ({
+          id: t.id,
+          type: t.type,
+          status: t.status,
+          progress: t.progress,
+          totalBytes: t.totalBytes,
+          downloadedBytes: t.downloadedBytes,
+          fileCount: t.fileIds.length,
+          zipName: t.zipName,
+          createdAt: t.createdAt,
+          completedAt: t.completedAt,
+          errorMessage: t.errorMessage,
+        })),
+        total: tasks.length,
+      },
+    });
+  } catch (err: any) {
+    console.error('[DownloadRoutes] Get tasks error:', err);
+    return res.status(500).json({
+      code: 500,
+      message: err.message || 'Failed to get download tasks',
+    });
+  }
+});
+
+/**
+ * GET /api/v1/downloads/:taskId
+ * Get specific download task
+ */
+router.get('/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const task = getDownloadTask(taskId);
+
+    if (!task) {
+      return res.status(404).json({
+        code: 404,
+        message: 'Download task not found',
+      });
+    }
+
+    return res.json({
+      code: 0,
+      message: 'success',
+      data: {
+        id: task.id,
+        type: task.type,
+        status: task.status,
+        progress: task.progress,
+        totalBytes: task.totalBytes,
+        downloadedBytes: task.downloadedBytes,
+        fileIds: task.fileIds,
+        zipName: task.zipName,
+        zipPath: task.zipPath,
+        createdAt: task.createdAt,
+        completedAt: task.completedAt,
+        errorMessage: task.errorMessage,
+      },
+    });
+  } catch (err: any) {
+    console.error('[DownloadRoutes] Get task error:', err);
+    return res.status(500).json({
+      code: 500,
+      message: err.message || 'Failed to get download task',
+    });
+  }
+});
+
+/**
+ * GET /api/v1/downloads/:taskId/progress
+ * SSE endpoint for download progress
+ */
+router.get('/:taskId/progress', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const userId = (req as any).user?.id || 'anonymous';
+    const task = getDownloadTask(taskId);
+
+    if (!task) {
+      return res.status(404).json({
+        code: 404,
+        message: 'Download task not found',
+      });
+    }
+
+    // Verify user owns this task
+    if (task.userId !== userId) {
+      return res.status(403).json({
+        code: 403,
+        message: 'Access denied',
+      });
+    }
+
+    // Set up SSE
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
+
+    // Send initial state
+    res.write(`data: ${JSON.stringify({
       taskId: task.id,
       status: task.status,
-      estimatedSize: task.totalBytes,
-      zipName: task.zipName,
-    }));
-  } catch (err: any) {
-    res.status(500).json(error(500, err?.message || '创建下载任务失败'));
-  }
-});
+      progress: task.progress,
+      speed: 0,
+      eta: 0,
+      downloadedBytes: task.downloadedBytes,
+      totalBytes: task.totalBytes,
+    })}\n\n`);
 
-// Get task status GET /api/v1/downloads/:taskId
-router.get('/:taskId', (req, res) => {
-  const { taskId } = req.params;
-  const task = downloadQueue.getTask(taskId);
+    // If already completed/failed/cancelled, close connection
+    if (['completed', 'failed', 'cancelled'].includes(task.status)) {
+      res.write(`data: ${JSON.stringify({
+        taskId: task.id,
+        status: task.status,
+        progress: task.progress,
+        done: true,
+      })}\n\n`);
+      return res.end();
+    }
 
-  if (!task) {
-    return res.status(404).json(error(404, '下载任务不存在'));
-  }
+    // Listen for progress events
+    const onProgress = (event: any) => {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+      
+      if (['completed', 'failed', 'cancelled'].includes(event.status)) {
+        res.write(`data: ${JSON.stringify({ ...event, done: true })}\n\n`);
+        cleanup();
+        res.end();
+      }
+    };
 
-  res.json(success({
-    id: task.id,
-    status: task.status,
-    progress: task.progress,
-    totalBytes: task.totalBytes,
-    downloadedBytes: task.downloadedBytes,
-    zipPath: task.zipPath ? `/api/v1/downloads/${taskId}/file` : undefined,
-    zipName: task.zipName,
-    createdAt: task.createdAt,
-    completedAt: task.completedAt,
-    errorMessage: task.errorMessage,
-  }));
-});
+    const cleanup = () => {
+      downloadEvents.off(`progress:${taskId}`, onProgress);
+      downloadEvents.off(`progress:${userId}`, onProgress);
+    };
 
-// Download ZIP file GET /api/v1/downloads/:taskId/file
-router.get('/:taskId/file', (req, res) => {
-  const { taskId } = req.params;
-  const task = downloadQueue.getTask(taskId);
+    downloadEvents.on(`progress:${taskId}`, onProgress);
+    downloadEvents.on(`progress:${userId}`, onProgress);
 
-  if (!task) {
-    return res.status(404).json(error(404, '下载任务不存在'));
-  }
-
-  if (task.status !== 'completed') {
-    return res.status(400).json(error(400, `任务状态为 ${task.status}，文件尚未就绪`));
-  }
-
-  if (!task.zipPath || !fs.existsSync(task.zipPath)) {
-    return res.status(404).json(error(404, 'ZIP 文件不存在或已被清理'));
-  }
-
-  const filename = task.zipName || `download_${taskId}.zip`;
-  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
-  res.setHeader('Content-Type', 'application/zip');
-  res.setHeader('Content-Length', fs.statSync(task.zipPath).size);
-
-  // Support Range requests for resume
-  const range = req.headers['range'];
-  if (range) {
-    const stat = fs.statSync(task.zipPath);
-    const fileSize = stat.size;
-    const parts = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(parts[0], 10);
-    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-    const chunkSize = end - start + 1;
-
-    res.writeHead(206, {
-      'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-      'Accept-Ranges': 'bytes',
-      'Content-Length': chunkSize,
+    // Handle client disconnect
+    req.on('close', () => {
+      cleanup();
     });
-    fs.createReadStream(task.zipPath, { start, end }).pipe(res);
-  } else {
-    fs.createReadStream(task.zipPath).pipe(res);
+  } catch (err: any) {
+    console.error('[DownloadRoutes] SSE error:', err);
+    res.status(500).json({
+      code: 500,
+      message: err.message || 'Failed to setup progress stream',
+    });
   }
 });
 
-// Cancel download task DELETE /api/v1/downloads/:taskId
-router.delete('/:taskId', (req, res) => {
-  const { taskId } = req.params;
-  const ok = downloadQueue.cancelTask(taskId);
-  if (!ok) {
-    return res.status(400).json(error(400, '无法取消任务（可能已完成或不存在）'));
+/**
+ * GET /api/v1/downloads/:taskId/file
+ * Download the completed ZIP file
+ */
+router.get('/:taskId/file', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const userId = (req as any).user?.id || 'anonymous';
+    const task = getDownloadTask(taskId);
+
+    if (!task) {
+      return res.status(404).json({
+        code: 404,
+        message: 'Download task not found',
+      });
+    }
+
+    // Verify user owns this task
+    if (task.userId !== userId) {
+      return res.status(403).json({
+        code: 403,
+        message: 'Access denied',
+      });
+    }
+
+    // Check if task is completed
+    if (task.status !== 'completed') {
+      return res.status(400).json({
+        code: 400,
+        message: `Download not ready, current status: ${task.status}`,
+      });
+    }
+
+    const filePath = getDownloadFilePath(taskId);
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({
+        code: 404,
+        message: 'Download file not found',
+      });
+    }
+
+    // Set headers for file download
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${task.zipName || 'download.zip'}"`);
+    res.setHeader('Content-Length', fs.statSync(filePath).size);
+
+    // Stream file
+    const stream = fs.createReadStream(filePath);
+    stream.pipe(res);
+  } catch (err: any) {
+    console.error('[DownloadRoutes] Download file error:', err);
+    res.status(500).json({
+      code: 500,
+      message: err.message || 'Failed to download file',
+    });
   }
-  res.json(success({ message: '下载任务已取消' }));
 });
 
-// List user's download tasks GET /api/v1/downloads?userId=xxx
-router.get('/', (req, res) => {
-  const { userId = 'default' } = req.query;
-  const tasks = downloadQueue.getTasksByUser(userId as string);
-  res.json(success({
-    list: tasks.map(t => ({
-      id: t.id,
-      status: t.status,
-      progress: t.progress,
-      totalBytes: t.totalBytes,
-      downloadedBytes: t.downloadedBytes,
-      type: t.type,
-      fileCount: t.fileIds.length,
-      zipName: t.zipName,
-      createdAt: t.createdAt,
-      completedAt: t.completedAt,
-      errorMessage: t.errorMessage,
-    })),
-    total: tasks.length,
-  }));
+/**
+ * DELETE /api/v1/downloads/:taskId
+ * Cancel or delete a download task
+ */
+router.delete('/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const userId = (req as any).user?.id || 'anonymous';
+    const task = getDownloadTask(taskId);
+
+    if (!task) {
+      return res.status(404).json({
+        code: 404,
+        message: 'Download task not found',
+      });
+    }
+
+    // Verify user owns this task
+    if (task.userId !== userId) {
+      return res.status(403).json({
+        code: 403,
+        message: 'Access denied',
+      });
+    }
+
+    // Cancel if still pending or downloading
+    if (['pending', 'downloading'].includes(task.status)) {
+      const cancelled = await cancelDownloadTask(taskId);
+      if (cancelled) {
+        return res.json({
+          code: 0,
+          message: 'Download cancelled',
+          data: { taskId, status: 'cancelled' },
+        });
+      }
+    }
+
+    // Delete completed/failed/cancelled tasks
+    deleteDownloadTask(taskId);
+    return res.json({
+      code: 0,
+      message: 'Download task deleted',
+      data: { taskId },
+    });
+  } catch (err: any) {
+    console.error('[DownloadRoutes] Delete task error:', err);
+    res.status(500).json({
+      code: 500,
+      message: err.message || 'Failed to delete download task',
+    });
+  }
 });
 
 export default router;

@@ -5,7 +5,7 @@ import { useVersions } from "@/lib/api/versions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Select } from "@/components/ui/select";
+import { LegacySelect as Select } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { BatchTagRequest } from "@/lib/api/types";
 import { 

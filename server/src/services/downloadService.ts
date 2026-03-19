@@ -1,282 +1,220 @@
 /**
- * Download Service - Batch download queue with ZIP streaming and SSE progress
+ * Download Service - Batch download queue management with ZIP packaging
  */
 
+import fs from 'fs';
+import path from 'path';
 import archiver from 'archiver';
-import * as fs from 'fs';
-import * as path from 'path';
-import { getDb } from '../db/sqlite.js';
-import { docService } from './docService.js';
+import { v4 as uuidv4 } from 'uuid';
 import { DownloadTask, DownloadStatus, DownloadProgressEvent } from '../models/download.js';
+import { getDb } from '../db/sqlite.js';
+import { EventEmitter } from 'events';
 
-const DOWNLOADS_DIR = process.env.DOWNLOADS_DIR || '/tmp/teamclaw/downloads';
-
-// Ensure download directory exists
-if (!fs.existsSync(DOWNLOADS_DIR)) {
-  fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
-}
-
-// SSE clients map: taskId -> Set of response objects
-const sseClients = new Map<string, Set<(event: DownloadProgressEvent) => void>>();
-
-function getDb() {
-  // Dynamic import to avoid circular
-  const { getDb } = require('../db/sqlite.js');
-  return getDb();
-}
+// SSE event emitter for progress updates
+export const downloadEvents = new EventEmitter();
 
 class DownloadQueue {
   private tasks = new Map<string, DownloadTask>();
   private activeDownloads = new Set<string>();
-  private maxConcurrent = 3;
+  private readonly maxConcurrent = 3;
+  private readonly downloadDir = './downloads';
 
   constructor() {
-    // Restore tasks from DB on startup
-    this.restoreFromDb();
+    // Ensure download directory exists
+    if (!fs.existsSync(this.downloadDir)) {
+      fs.mkdirSync(this.downloadDir, { recursive: true });
+    }
+    // Load pending tasks from database on startup
+    this.loadPendingTasks();
   }
 
-  private restoreFromDb(): void {
-    try {
-      const db = getDb();
-      if (!db) return;
-      const rows = db.prepare('SELECT * FROM download_tasks WHERE status IN (?, ?)').all('pending', 'downloading') as any[];
-      for (const row of rows) {
-        const task: DownloadTask = {
-          id: row.id,
-          userId: row.user_id,
-          type: row.type as 'single' | 'batch',
-          fileIds: JSON.parse(row.file_ids || '[]'),
-          status: row.status as DownloadStatus,
-          progress: row.progress || 0,
-          totalBytes: row.total_bytes || 0,
-          downloadedBytes: row.downloaded_bytes || 0,
-          zipPath: row.zip_path,
-          zipName: row.zip_name,
-          createdAt: row.created_at,
-          completedAt: row.completed_at,
-          errorMessage: row.error_message,
-        };
-        this.tasks.set(task.id, task);
-        if (task.status === 'downloading') {
-          this.tasks.set(task.id, { ...task, status: 'pending' });
-        }
+  private loadPendingTasks(): void {
+    const db = getDb();
+    const tasks = db.prepare(
+      "SELECT * FROM download_tasks WHERE status IN ('pending', 'downloading') ORDER BY created_at ASC"
+    ).all() as any[];
+    
+    for (const row of tasks) {
+      const task: DownloadTask = {
+        id: row.id,
+        userId: row.user_id,
+        type: row.type,
+        fileIds: JSON.parse(row.file_ids),
+        status: row.status,
+        progress: row.progress,
+        totalBytes: row.total_bytes,
+        downloadedBytes: row.downloaded_bytes,
+        zipPath: row.zip_path,
+        zipName: row.zip_name,
+        createdAt: row.created_at,
+        completedAt: row.completed_at,
+        errorMessage: row.error_message,
+      };
+      this.tasks.set(task.id, task);
+      if (task.status === 'downloading') {
+        // Resume downloading tasks
+        this.processQueue();
       }
-    } catch {
-      // DB not available, ignore
     }
   }
 
-  async createTask(userId: string, fileIds: string[], zipName?: string): Promise<DownloadTask> {
-    const id = `dl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const totalBytes = await this.calculateTotalSize(fileIds);
-    const type = fileIds.length > 1 ? 'batch' : 'single';
-
+  async createTask(
+    userId: string,
+    fileIds: string[],
+    zipName: string,
+    filePaths: Map<string, string>
+  ): Promise<DownloadTask> {
     const task: DownloadTask = {
-      id,
+      id: `dl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       userId,
-      type,
+      type: fileIds.length > 1 ? 'batch' : 'single',
       fileIds,
       status: 'pending',
       progress: 0,
-      totalBytes,
+      totalBytes: await this.calculateTotalSize(filePaths),
       downloadedBytes: 0,
-      zipPath: path.join(DOWNLOADS_DIR, `${id}.zip`),
-      zipName: zipName || (type === 'batch' ? `批量下载_${new Date().toISOString().slice(0, 10)}.zip` : undefined),
+      zipName: zipName || `download_${Date.now()}.zip`,
       createdAt: new Date().toISOString(),
     };
 
-    this.tasks.set(id, task);
-    this.saveToDb(task);
+    // Save to database
+    this.saveTaskToDb(task);
+    this.tasks.set(task.id, task);
+    
+    // Start processing queue
     this.processQueue();
+    
     return task;
   }
 
-  getTask(taskId: string): DownloadTask | undefined {
-    return this.tasks.get(taskId);
-  }
-
-  getTasksByUser(userId: string): DownloadTask[] {
-    return Array.from(this.tasks.values())
-      .filter(t => t.userId === userId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }
-
-  cancelTask(taskId: string): boolean {
-    const task = this.tasks.get(taskId);
-    if (!task) return false;
-    if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled') return false;
-
-    task.status = 'cancelled';
-    this.saveToDb(task);
-
-    // Clean up temp file
-    if (task.zipPath && fs.existsSync(task.zipPath)) {
-      try { fs.unlinkSync(task.zipPath); } catch { /* ignore */ }
-    }
-    this.broadcastProgress(task, 0, 0);
-    return true;
-  }
-
-  deleteTask(taskId: string): boolean {
-    const task = this.tasks.get(taskId);
-    if (!task) return false;
-
-    // Clean up temp file
-    if (task.zipPath && fs.existsSync(task.zipPath)) {
-      try { fs.unlinkSync(task.zipPath); } catch { /* ignore */ }
-    }
-
-    this.tasks.delete(taskId);
-    try {
-      const db = getDb();
-      db?.prepare('DELETE FROM download_tasks WHERE id = ?').run(taskId);
-    } catch { /* ignore */ }
-    return true;
-  }
-
-  private async calculateTotalSize(fileIds: string[]): Promise<number> {
+  private async calculateTotalSize(filePaths: Map<string, string>): Promise<number> {
     let total = 0;
-    for (const fileId of fileIds) {
-      const doc = docService.getDoc(fileId);
-      if (doc) total += doc.size;
+    for (const [, filePath] of filePaths) {
+      try {
+        const stat = fs.statSync(filePath);
+        total += stat.size;
+      } catch {
+        // File not found, skip
+      }
     }
     return total;
+  }
+
+  private saveTaskToDb(task: DownloadTask): void {
+    const db = getDb();
+    db.prepare(`
+      INSERT OR REPLACE INTO download_tasks 
+      (id, user_id, type, file_ids, status, progress, total_bytes, downloaded_bytes, zip_path, zip_name, created_at, completed_at, error_message)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      task.id,
+      task.userId,
+      task.type,
+      JSON.stringify(task.fileIds),
+      task.status,
+      task.progress,
+      task.totalBytes,
+      task.downloadedBytes,
+      task.zipPath,
+      task.zipName,
+      task.createdAt,
+      task.completedAt,
+      task.errorMessage
+    );
   }
 
   private async processQueue(): Promise<void> {
     if (this.activeDownloads.size >= this.maxConcurrent) return;
 
-    const pending = Array.from(this.tasks.values())
-      .find(t => t.status === 'pending');
+    const pending = Array.from(this.tasks.values()).find(
+      (t) => t.status === 'pending'
+    );
 
     if (!pending) return;
 
     this.activeDownloads.add(pending.id);
     pending.status = 'downloading';
-    this.saveToDb(pending);
+    this.saveTaskToDb(pending);
 
     try {
       await this.executeDownload(pending);
       pending.status = 'completed';
       pending.completedAt = new Date().toISOString();
-      pending.progress = 100;
-      pending.downloadedBytes = pending.totalBytes;
     } catch (err: any) {
       pending.status = 'failed';
-      pending.errorMessage = err?.message || 'Unknown error';
+      pending.errorMessage = err.message || 'Download failed';
+      console.error(`[DownloadQueue] Task ${pending.id} failed:`, err);
     } finally {
       this.activeDownloads.delete(pending.id);
-      this.saveToDb(pending);
-      this.broadcastProgress(pending, 0, 0);
-      this.processQueue(); // Process next
+      this.saveTaskToDb(pending);
+      this.emitProgress(pending);
+      
+      // Process next task
+      setImmediate(() => this.processQueue());
     }
   }
 
   private async executeDownload(task: DownloadTask): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const output = fs.createWriteStream(task.zipPath!);
-      const archive = archiver('zip', { zlib: { level: 6 } });
+    const zipPath = path.join(this.downloadDir, `${task.id}.zip`);
+    task.zipPath = zipPath;
 
-      let lastEmitted = 0;
-      const EMIT_INTERVAL = 500; // ms
+    const output = fs.createWriteStream(zipPath);
+    const archive = archiver('zip', { zlib: { level: 6 } });
+
+    return new Promise((resolve, reject) => {
+      let lastProgress = 0;
+      const startTime = Date.now();
 
       output.on('close', () => {
-        task.downloadedBytes = task.totalBytes;
         task.progress = 100;
-      });
-
-      archive.on('progress', (progress) => {
-        task.downloadedBytes = progress.fs.processedBytes || 0;
-        const pct = task.totalBytes > 0 ? Math.round((task.downloadedBytes / task.totalBytes) * 100) : 0;
-        task.progress = pct;
-
-        const now = Date.now();
-        if (now - lastEmitted > EMIT_INTERVAL) {
-          lastEmitted = now;
-          const speed = this.estimateSpeed(task);
-          const eta = this.estimateEta(task, speed);
-          this.broadcastProgress(task, speed, eta);
-        }
+        task.downloadedBytes = task.totalBytes;
+        this.emitProgress(task);
+        resolve();
       });
 
       archive.on('error', (err) => {
         reject(err);
       });
 
+      archive.on('progress', (progressData) => {
+        const processed = progressData.fs.processedBytes;
+        task.downloadedBytes = processed;
+        task.progress = Math.round((processed / task.totalBytes) * 100);
+        
+        // Emit progress every 5% or on significant changes
+        if (task.progress - lastProgress >= 5 || task.progress >= 100) {
+          lastProgress = task.progress;
+          this.emitProgress(task);
+        }
+      });
+
       archive.pipe(output);
 
       // Add files to archive
-      let filesAdded = 0;
       for (const fileId of task.fileIds) {
-        const filePath = docService.getDocFilePath(fileId);
+        // Get file path from docService or artifactStore
+        const filePath = this.getFilePath(fileId);
         if (filePath && fs.existsSync(filePath)) {
-          const doc = docService.getDoc(fileId);
-          archive.file(filePath, { name: doc?.name || path.basename(filePath) });
-          filesAdded++;
+          archive.file(filePath, { name: path.basename(filePath) });
         }
       }
 
-      if (filesAdded === 0) {
-        output.close();
-        reject(new Error('No files available for download'));
-        return;
-      }
-
-      archive.finalize().then(() => {
-        resolve();
-      }).catch(reject);
+      archive.finalize();
     });
   }
 
-  private estimateSpeed(task: DownloadTask): number {
-    const elapsed = (new Date(task.createdAt).getTime()) > 0
-      ? (Date.now() - new Date(task.createdAt).getTime()) / 1000
-      : 1;
-    return elapsed > 0 ? Math.round(task.downloadedBytes / elapsed) : 0;
+  private getFilePath(fileId: string): string | null {
+    // TODO: Integrate with docService or artifactStore to get actual file path
+    // For now, return a mock path
+    return `./uploads/${fileId}`;
   }
 
-  private estimateEta(task: DownloadTask, speed: number): number {
-    if (speed <= 0) return 0;
+  private emitProgress(task: DownloadTask): void {
+    const now = Date.now();
+    const elapsed = (now - new Date(task.createdAt).getTime()) / 1000;
+    const speed = elapsed > 0 ? task.downloadedBytes / elapsed : 0;
     const remaining = task.totalBytes - task.downloadedBytes;
-    return Math.round(remaining / speed);
-  }
-
-  private saveToDb(task: DownloadTask): void {
-    try {
-      const db = getDb();
-      if (!db) return;
-      db.prepare(`
-        INSERT OR REPLACE INTO download_tasks
-        (id, user_id, type, file_ids, status, progress, total_bytes, downloaded_bytes, zip_path, zip_name, created_at, completed_at, error_message)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        task.id, task.userId, task.type, JSON.stringify(task.fileIds),
-        task.status, task.progress, task.totalBytes, task.downloadedBytes,
-        task.zipPath || null, task.zipName || null, task.createdAt,
-        task.completedAt || null, task.errorMessage || null
-      );
-    } catch { /* ignore */ }
-  }
-
-  // SSE support
-  subscribeSse(taskId: string, callback: (event: DownloadProgressEvent) => void): () => void {
-    if (!sseClients.has(taskId)) {
-      sseClients.set(taskId, new Set());
-    }
-    sseClients.get(taskId)!.add(callback);
-
-    // Return unsubscribe function
-    return () => {
-      sseClients.get(taskId)?.delete(callback);
-      if (sseClients.get(taskId)?.size === 0) {
-        sseClients.delete(taskId);
-      }
-    };
-  }
-
-  private broadcastProgress(task: DownloadTask, speed: number, eta: number): void {
-    const clients = sseClients.get(task.id);
-    if (!clients || clients.size === 0) return;
+    const eta = speed > 0 ? remaining / speed : 0;
 
     const event: DownloadProgressEvent = {
       taskId: task.id,
@@ -288,12 +226,119 @@ class DownloadQueue {
       totalBytes: task.totalBytes,
     };
 
-    for (const cb of clients) {
-      try { cb(event); } catch { /* ignore */ }
+    downloadEvents.emit(`progress:${task.userId}`, event);
+    downloadEvents.emit(`progress:${task.id}`, event);
+  }
+
+  getTask(taskId: string): DownloadTask | undefined {
+    return this.tasks.get(taskId);
+  }
+
+  getUserTasks(userId: string): DownloadTask[] {
+    return Array.from(this.tasks.values())
+      .filter((t) => t.userId === userId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async cancelTask(taskId: string): Promise<boolean> {
+    const task = this.tasks.get(taskId);
+    if (!task) return false;
+
+    if (task.status === 'downloading') {
+      // Cannot cancel active download immediately, mark for cancellation
+      task.status = 'cancelled';
+    } else if (task.status === 'pending') {
+      task.status = 'cancelled';
+    } else {
+      return false;
     }
+
+    task.completedAt = new Date().toISOString();
+    this.saveTaskToDb(task);
+    this.emitProgress(task);
+
+    // Clean up partial download
+    if (task.zipPath && fs.existsSync(task.zipPath)) {
+      fs.unlinkSync(task.zipPath);
+    }
+
+    return true;
+  }
+
+  deleteTask(taskId: string): boolean {
+    const task = this.tasks.get(taskId);
+    if (!task) return false;
+
+    // Clean up file
+    if (task.zipPath && fs.existsSync(task.zipPath)) {
+      fs.unlinkSync(task.zipPath);
+    }
+
+    // Remove from database
+    const db = getDb();
+    db.prepare('DELETE FROM download_tasks WHERE id = ?').run(taskId);
+
+    this.tasks.delete(taskId);
+    return true;
+  }
+
+  getZipFilePath(taskId: string): string | null {
+    const task = this.tasks.get(taskId);
+    if (task?.zipPath && fs.existsSync(task.zipPath)) {
+      return task.zipPath;
+    }
+    return null;
   }
 }
 
-// Singleton
-const downloadQueue = new DownloadQueue();
-export { downloadQueue };
+// Singleton instance
+export const downloadQueue = new DownloadQueue();
+
+// Service functions
+export async function createDownloadTask(
+  userId: string,
+  fileIds: string[],
+  zipName: string,
+  filePaths: Map<string, string>
+): Promise<DownloadTask> {
+  return downloadQueue.createTask(userId, fileIds, zipName, filePaths);
+}
+
+export function getDownloadTask(taskId: string): DownloadTask | undefined {
+  return downloadQueue.getTask(taskId);
+}
+
+export function getUserDownloadTasks(userId: string): DownloadTask[] {
+  return downloadQueue.getUserTasks(userId);
+}
+
+export async function cancelDownloadTask(taskId: string): Promise<boolean> {
+  return downloadQueue.cancelTask(taskId);
+}
+
+export function deleteDownloadTask(taskId: string): boolean {
+  return downloadQueue.deleteTask(taskId);
+}
+
+export function getDownloadFilePath(taskId: string): string | null {
+  return downloadQueue.getZipFilePath(taskId);
+}
+
+// Cleanup old completed tasks (run periodically)
+export function cleanupOldTasks(maxAgeHours: number = 24): void {
+  const cutoff = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000).toISOString();
+  const db = getDb();
+  
+  const oldTasks = db.prepare(
+    "SELECT * FROM download_tasks WHERE status IN ('completed', 'failed', 'cancelled') AND created_at < ?"
+  ).all(cutoff) as any[];
+
+  for (const row of oldTasks) {
+    if (row.zip_path && fs.existsSync(row.zip_path)) {
+      fs.unlinkSync(row.zip_path);
+    }
+    db.prepare('DELETE FROM download_tasks WHERE id = ?').run(row.id);
+  }
+
+  console.log(`[DownloadService] Cleaned up ${oldTasks.length} old tasks`);
+}

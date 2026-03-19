@@ -1,127 +1,113 @@
 /**
- * Download API client - batch download with SSE progress
+ * Download API - Batch download management
  */
 
-const BASE = '/api/v1';
+import {
+  DownloadTask,
+  DownloadProgressEvent,
+} from './types';
 
-export interface DownloadTaskResponse {
-  id: string;
-  status: 'pending' | 'downloading' | 'completed' | 'failed' | 'cancelled';
-  progress: number;
-  totalBytes: number;
-  downloadedBytes: number;
-  type: 'single' | 'batch';
-  fileCount: number;
+// Re-export types for backward compatibility
+export type { DownloadTask, DownloadProgressEvent };
+
+const API_BASE = '/api/v1';
+
+export interface CreateDownloadRequest {
+  fileIds: string[];
   zipName?: string;
-  createdAt: string;
-  completedAt?: string;
-  errorMessage?: string;
 }
 
-export interface DownloadProgressEvent {
+export interface CreateDownloadResponse {
   taskId: string;
-  status: 'pending' | 'downloading' | 'completed' | 'failed' | 'cancelled';
-  progress: number;
-  speed: number;
-  eta: number;
-  downloadedBytes?: number;
-  totalBytes?: number;
+  status: string;
+  estimatedSize: number;
 }
 
-// ========== Download Tasks ==========
-
-/**
- * Create a batch download task
- */
+// Create download task
 export async function createDownloadTask(
-  fileIds: string[],
-  options?: { zipName?: string; userId?: string }
-): Promise<{ taskId: string; status: string; estimatedSize: number }> {
-  const userId = options?.userId || 'default';
-  const res = await fetch(`${BASE}/downloads`, {
+  request: CreateDownloadRequest
+): Promise<CreateDownloadResponse> {
+  const res = await fetch(`${API_BASE}/downloads`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fileIds, zipName: options?.zipName, userId }),
+    body: JSON.stringify(request),
   });
-  const data = await res.json();
-  if (data.code !== 0) throw new Error(data.message || '创建下载任务失败');
-  return data.data;
+  const json = await res.json();
+  if (json.code !== 0) throw new Error(json.message);
+  return json.data;
 }
 
-/**
- * Get download task status
- */
-export async function getDownloadTask(taskId: string): Promise<DownloadTaskResponse> {
-  const res = await fetch(`${BASE}/downloads/${taskId}`);
-  const data = await res.json();
-  if (data.code !== 0) throw new Error(data.message);
-  return data.data;
+// Get user's download tasks
+export async function getDownloadTasks(): Promise<{
+  tasks: DownloadTask[];
+  total: number;
+}> {
+  const res = await fetch(`${API_BASE}/downloads`);
+  const json = await res.json();
+  if (json.code !== 0) throw new Error(json.message);
+  return json.data;
 }
 
-/**
- * List user's download tasks
- */
-export async function listDownloadTasks(userId = 'default'): Promise<{ list: DownloadTaskResponse[]; total: number }> {
-  const res = await fetch(`${BASE}/downloads?userId=${userId}`);
-  const data = await res.json();
-  if (data.code !== 0) throw new Error(data.message);
-  return data.data || { list: [], total: 0 };
+// Get specific download task
+export async function getDownloadTask(taskId: string): Promise<DownloadTask> {
+  const res = await fetch(`${API_BASE}/downloads/${taskId}`);
+  const json = await res.json();
+  if (json.code !== 0) throw new Error(json.message);
+  return json.data;
 }
 
-/**
- * Cancel a download task
- */
+// Cancel or delete download task
 export async function cancelDownloadTask(taskId: string): Promise<void> {
-  const res = await fetch(`${BASE}/downloads/${taskId}`, { method: 'DELETE' });
-  const data = await res.json();
-  if (data.code !== 0) throw new Error(data.message);
+  const res = await fetch(`${API_BASE}/downloads/${taskId}`, { method: 'DELETE' });
+  const json = await res.json();
+  if (json.code !== 0) throw new Error(json.message);
 }
 
-/**
- * Get download file URL for a completed task
- */
+// Get download file URL
 export function getDownloadFileUrl(taskId: string): string {
-  return `${BASE}/downloads/${taskId}/file`;
+  return `${API_BASE}/downloads/${taskId}/file`;
 }
 
-/**
- * Subscribe to SSE progress stream for a download task
- * Returns an unsubscribe function
- */
+// Download ZIP file
+export function downloadZipFile(taskId: string, zipName?: string): void {
+  const url = getDownloadFileUrl(taskId);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = zipName || 'download.zip';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// Subscribe to download progress via SSE
 export function subscribeDownloadProgress(
   taskId: string,
-  onEvent: (event: DownloadProgressEvent) => void
+  onProgress: (event: DownloadProgressEvent) => void,
+  onError?: (error: Error) => void
 ): () => void {
-  const eventSource = new EventSource(`${BASE}/downloads/${taskId}/progress`);
+  const eventSource = new EventSource(`${API_BASE}/downloads/${taskId}/progress`);
 
   eventSource.onmessage = (event) => {
     try {
-      const data = JSON.parse(event.data);
-      if (data.type === 'connected') return; // Skip connection confirmation
-      onEvent(data);
-    } catch { /* ignore parse errors */ }
+      const data = JSON.parse(event.data) as DownloadProgressEvent & { done?: boolean };
+      onProgress(data);
+      if (data.done) {
+        eventSource.close();
+      }
+    } catch {
+      onError?.(new Error('Failed to parse progress data'));
+    }
   };
 
   eventSource.onerror = () => {
-    // EventSource will auto-reconnect, but if it's a permanent error
-    // the caller can handle it
+    onError?.(new Error('SSE connection error'));
+    eventSource.close();
   };
 
-  // Return unsubscribe function
   return () => {
     eventSource.close();
   };
 }
 
-/**
- * Trigger browser download of a ZIP file
- */
-export function downloadZipFile(taskId: string, zipName?: string): void {
-  const url = getDownloadFileUrl(taskId);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = zipName || `download_${taskId}.zip`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-}
+// Legacy type alias for backward compatibility
+export type DownloadTaskResponse = DownloadTask;

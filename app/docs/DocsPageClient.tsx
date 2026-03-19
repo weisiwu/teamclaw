@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
+import { LegacySelect as Select } from '@/components/ui/select';
 
 interface DocMeta {
   slug: string;

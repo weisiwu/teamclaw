@@ -1032,3 +1032,87 @@ export interface TimelineResponse {
     events: TimelineEvent[];
   };
 }
+
+// ========== 智能搜索增强 (iter-25) ==========
+
+export interface SearchFilter {
+  type?: string;         // doc type: md, pdf, txt, code, image
+  dateFrom?: string;     // ISO date string
+  dateTo?: string;       // ISO date string
+  projectId?: string;    // project filter
+  sizeMin?: number;      // min size in bytes
+  sizeMax?: number;      // max size in bytes
+}
+
+export interface SearchHistoryRecord {
+  id: string;
+  userId: string;
+  query: string;
+  type: 'keyword' | 'semantic';
+  filters?: SearchFilter;
+  resultCount: number;
+  createdAt: string;
+}
+
+export interface EnhancedSearchResult {
+  type: 'doc' | 'task' | 'version';
+  id: string;
+  title: string;
+  snippet: string;
+  url: string;
+  score: number;
+  metadata?: Record<string, string | number | boolean>;
+}
+
+// ========== 批量下载管理 (iter-25) ==========
+
+export type DownloadStatus = 'pending' | 'downloading' | 'completed' | 'failed' | 'cancelled';
+
+export interface DownloadTask {
+  id: string;
+  userId: string;
+  type: 'single' | 'batch';
+  fileIds: string[];
+  status: DownloadStatus;
+  progress: number;
+  totalBytes: number;
+  downloadedBytes: number;
+  zipPath?: string;
+  zipName?: string;
+  fileCount?: number;
+  createdAt: string;
+  completedAt?: string;
+  errorMessage?: string;
+}
+
+export interface DownloadProgressEvent {
+  taskId: string;
+  status: DownloadStatus;
+  progress: number;
+  speed: number;
+  eta: number;
+  downloadedBytes?: number;
+  totalBytes?: number;
+  done?: boolean;
+}
+
+// ========== 文档预览 (iter-25) ==========
+
+export interface DocPreviewConfig {
+  maxFileSize: number;
+  supportedTypes: string[];
+  pdfRenderDpi: number;
+  codePreviewLines: number;
+}
+
+export interface DocPreviewResult {
+  type: 'html' | 'pdf' | 'code' | 'text' | 'unsupported' | 'image';
+  content?: string;
+  url?: string;
+  pages?: number;
+  currentPage?: number;
+  size: number;
+  canPreview: boolean;
+  message?: string;
+  filename?: string;
+}

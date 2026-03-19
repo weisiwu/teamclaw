@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Select } from "@/components/ui/select";
+import { LegacySelect as Select } from "@/components/ui/select";
 import { PriorityBadge, StatusBadge, RoleBadge } from "@/components/messages/PriorityBadge";
 import { useQueueStatus, usePreemptMessage, useSendMessage } from "@/hooks/useMessages";
 import {

@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { LegacySelect as Select } from "@/components/ui/select";
 import { MemberForm } from "@/components/members";
 import { useMemberList, useCreateMember, useUpdateMember, useDeleteMember, useBatchDeleteMembers } from "@/hooks/useMembers";
 import { Member, ROLE_LABELS, MEMBER_ROLE_OPTIONS, MemberRole, MemberStatus, CreateMemberRequest, UpdateMemberRequest } from "@/lib/api/types";
