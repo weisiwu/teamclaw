@@ -13,6 +13,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { VersionMessageScreenshot, VersionChangelog, TimelineEvent as ApiTimelineEvent } from "@/lib/api/types";
 import { useVersionTimeline, useAddTimelineEvent, useDeleteTimelineEvent, useUpdateTimelineEvent } from "@/lib/api/versions";
 
@@ -44,7 +45,7 @@ interface TimelineEvent {
 
 export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOpen, onClose, availableBranches = [], versionId }: VersionTimelineProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "screenshot" | "changelog">("all");
+  const [filterType, setFilterType] = useState<"all" | "screenshot" | "changelog" | "version" | "manual_note">("all");
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
   const [branchFilter, setBranchFilter] = useState<string>("all");
 
@@ -276,30 +277,31 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
           </div>
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value as "all" | "screenshot" | "changelog")}
-              className="text-sm border rounded-md px-2 py-1"
-            >
-              <option value="all">全部</option>
-              <option value="screenshot">截图</option>
-              <option value="changelog">变更摘要</option>
-            </select>
+            <Select value={filterType} onValueChange={(v) => setFilterType(v as typeof filterType)}>
+              <SelectTrigger className="h-8 text-xs w-auto min-w-[100px]">
+                <SelectValue placeholder="筛选类型" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部</SelectItem>
+                <SelectItem value="screenshot">截图</SelectItem>
+                <SelectItem value="changelog">变更摘要</SelectItem>
+                <SelectItem value="manual_note">备注</SelectItem>
+                <SelectItem value="version">版本</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           {availableBranches.length > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">分支:</span>
-              <select
-                value={branchFilter}
-                onChange={(e) => setBranchFilter(e.target.value)}
-                className="text-sm border rounded-md px-2 py-1"
-              >
-                <option value="all">全部分支</option>
+            <Select value={branchFilter} onValueChange={setBranchFilter}>
+              <SelectTrigger className="h-8 text-xs w-auto min-w-[100px]">
+                <SelectValue placeholder="全部分支" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部分支</SelectItem>
                 {availableBranches.map((branch) => (
-                  <option key={branch} value={branch}>{branch}</option>
+                  <SelectItem key={branch} value={branch}>{branch}</SelectItem>
                 ))}
-              </select>
-            </div>
+              </SelectContent>
+            </Select>
           )}
           <Button variant="outline" size="sm" onClick={exportToMarkdown}>
             <Download className="h-4 w-4 mr-1" />
