@@ -335,6 +335,16 @@ function CreateTaskModal({
     onClose();
   };
 
+  // Cmd/Ctrl+Enter 提交
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      if (formData.title.trim() && !isCreating) {
+        handleCreate();
+      }
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -352,7 +362,7 @@ function CreateTaskModal({
           </Button>
         </div>
         
-        <div className="space-y-4">
+        <div className="space-y-4" onKeyDown={handleKeyDown}>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
               任务标题 <span className="text-red-500">*</span>
@@ -361,7 +371,7 @@ function CreateTaskModal({
               ref={titleInputRef}
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              placeholder="请输入任务标题，回车即可提交"
+              placeholder="请输入任务标题"
               disabled={isCreating}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && formData.title.trim() && !isCreating) {
@@ -413,6 +423,12 @@ function CreateTaskModal({
             {isCreating ? "创建中..." : "创建"}
           </Button>
         </div>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 text-center">
+          <kbd className="px-1 py-0.5 rounded bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 font-mono text-[10px]">⌘</kbd>
+          <span className="mx-0.5">+</span>
+          <kbd className="px-1 py-0.5 rounded bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 font-mono text-[10px]">Enter</kbd>
+          <span className="ml-1.5">快速提交</span>
+        </p>
       </div>
     </div>
   );
