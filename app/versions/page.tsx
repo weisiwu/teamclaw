@@ -6,7 +6,7 @@ import { getVersions } from "@/lib/api/versions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Tag, Star, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Search, Tag, Star, Loader2, ChevronLeft, ChevronRight, LayoutGrid, List } from "lucide-react";
 import Link from "next/link";
 
 export default function VersionsPage() {
@@ -15,6 +15,7 @@ export default function VersionsPage() {
   const [search, setSearch] = useState("");
   const [data, setData] = useState<{ data: Version[]; total: number; totalPages: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<"card" | "compact">("card");
 
   const pageSize = 20;
 
@@ -75,6 +76,25 @@ export default function VersionsPage() {
             </Button>
           ))}
         </div>
+        {/* View mode toggle */}
+        <div className="flex gap-1 border rounded-lg p-1">
+          <Button
+            variant={viewMode === "card" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("card")}
+            title="卡片视图"
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </Button>
+          <Button
+            variant={viewMode === "compact" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("compact")}
+            title="紧凑视图"
+          >
+            <List className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Loading */}
@@ -96,7 +116,8 @@ export default function VersionsPage() {
         </div>
       ) : (
         <>
-          {/* Card grid */}
+          {viewMode === "card" ? (
+          /* Card grid */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
             {filtered.map((v) => (
               <Link key={v.id} href={`/versions/${v.id}`} className="block">
@@ -164,6 +185,46 @@ export default function VersionsPage() {
               </Link>
             ))}
           </div>
+          ) : (
+          /* Compact table view */
+          <div className="overflow-x-auto mb-6">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b dark:border-slate-700">
+                  <th className="text-left py-2 px-3 font-medium text-muted-foreground">版本</th>
+                  <th className="text-left py-2 px-3 font-medium text-muted-foreground">标题</th>
+                  <th className="text-left py-2 px-3 font-medium text-muted-foreground">构建状态</th>
+                  <th className="text-left py-2 px-3 font-medium text-muted-foreground">提交</th>
+                  <th className="text-left py-2 px-3 font-medium text-muted-foreground">文件</th>
+                  <th className="text-left py-2 px-3 font-medium text-muted-foreground">创建时间</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((v) => (
+                  <tr key={v.id} className="border-b dark:border-slate-800 hover:bg-muted/50">
+                    <td className="py-2 px-3">
+                      <Link href={`/versions/${v.id}`} className="flex items-center gap-2 hover:underline">
+                        <span className="font-mono font-bold">{v.version}</span>
+                        {v.isMain && <Badge variant="success" className="text-xs gap-1"><Star className="w-3 h-3" /></Badge>}
+                      </Link>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className="font-medium">{v.title}</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <Badge variant={BUILD_STATUS_BADGE_VARIANT[v.buildStatus]} className={`text-xs ${v.buildStatus === "pending" ? "bg-muted text-muted-foreground border-border" : ""}`}>
+                        {BUILD_STATUS_LABELS[v.buildStatus]}
+                      </Badge>
+                    </td>
+                    <td className="py-2 px-3 text-muted-foreground">{v.commitCount}</td>
+                    <td className="py-2 px-3 text-muted-foreground">{v.changedFiles.length}</td>
+                    <td className="py-2 px-3 text-muted-foreground">{v.createdAt ? new Date(v.createdAt).toLocaleDateString("zh-CN") : "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          )}
 
           {/* Pagination */}
           {totalPages > 1 && (
