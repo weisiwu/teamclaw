@@ -1489,7 +1489,7 @@ interface TimelineEvent {
   summaryId?: string;
 }
 
-// GET /api/v1/versions/:id/timeline — 获取版本变更时间线
+// GET /api/v1/versions/:id/timeline — 获取版本变更时间线（统一入口，统一使用 version_change_events 表）
 router.get('/:id/timeline', (req: Request, res: Response) => {
   const { id: versionId } = req.params;
   const row = db.prepare('SELECT id, version, created_at FROM versions WHERE id = ?').get(versionId) as Record<string, unknown> | undefined;
@@ -1498,56 +1498,55 @@ router.get('/:id/timeline', (req: Request, res: Response) => {
     return;
   }
 
-  // 获取截图记录
-  const screenshots = ScreenshotModel.findByVersionId(versionId);
-  // 获取摘要记录
-  const summary = VersionSummaryModel.findByVersionId(versionId);
+  try {
+    // Primary: use the unified changeTracker which reads from version_change_events
+    const { getVersionTimeline } = require('../services/changeTracker.js');
+    const events = getVersionTimeline(versionId);
 
-  const events: TimelineEvent[] = [];
+    // Also include legacy events not yet in version_change_events table
+    const screenshotIdsInEvents = new Set(
+      events.filter(e => e.screenshotId).map(e => e.screenshotId)
+    );
+    const screenshots = ScreenshotModel.findByVersionId(versionId);
+    for (const shot of screenshots) {
+      if (!screenshotIdsInEvents.has(shot.id)) {
+        events.push({
+          id: `legacy-screenshot-${shot.id}`,
+          type: 'screenshot_linked' as const,
+          title: '截图关联',
+          description: `${shot.senderName}：${shot.messageContent.substring(0, 50)}...`,
+          timestamp: shot.createdAt,
+          actor: shot.senderName,
+          screenshotId: shot.id,
+        });
+      }
+    }
 
-  // 版本创建 event
-  events.push({
-    id: `version-created-${versionId}`,
-    type: 'version_created',
-    title: '版本创建',
-    description: `版本 ${row.version} 已创建`,
-    timestamp: row.created_at as string,
-  });
+    // Include version created event if not already recorded
+    const hasVersionCreated = events.some(e => e.type === 'version_created');
+    if (!hasVersionCreated) {
+      events.unshift({
+        id: `legacy-version-created-${versionId}`,
+        type: 'version_created' as const,
+        title: '版本创建',
+        description: `版本 ${row.version} 已创建`,
+        timestamp: row.created_at as string,
+        actor: 'system',
+      });
+    }
 
-  // 截图关联 events
-  for (const shot of screenshots) {
-    events.push({
-      id: `screenshot-linked-${shot.id}`,
-      type: 'screenshot_linked',
-      title: '截图关联',
-      description: `${shot.senderName}：${shot.messageContent.substring(0, 50)}...`,
-      timestamp: shot.createdAt,
-      actor: shot.senderName,
-      screenshotId: shot.id,
-    });
+    // Sort by timestamp descending
+    events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    res.json(success({
+      versionId,
+      version: row.version,
+      events,
+    }));
+  } catch (err) {
+    console.error('[version] Timeline fetch error:', err);
+    res.status(500).json(error(500, 'Failed to fetch timeline'));
   }
-
-  // 摘要生成 event
-  if (summary) {
-    events.push({
-      id: `changelog-generated-${summary.id}`,
-      type: 'changelog_generated',
-      title: '变更摘要生成',
-      description: `${summary.generatedBy === 'AI' ? 'AI' : '手动'}生成了包含 ${summary.features?.length || 0} 个新功能的变更摘要`,
-      timestamp: summary.generatedAt,
-      actor: summary.generatedBy,
-      summaryId: summary.id,
-    });
-  }
-
-  // 按时间倒序
-  events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-  res.json(success({
-    versionId,
-    version: row.version,
-    events,
-  }));
 });
 
 // GET /api/v1/versions/:id/bump-history — Get bump history for a version
