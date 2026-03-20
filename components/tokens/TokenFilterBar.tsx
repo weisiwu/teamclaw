@@ -7,6 +7,47 @@ import { Calendar, X, Bot, ListFilter } from "lucide-react";
 import { useState, useCallback } from "react";
 import { ModelType } from "@/lib/api/types";
 
+// 日期预设选项
+type DatePreset = "today" | "thisWeek" | "thisMonth" | "thisQuarter";
+
+function getDatePresetRange(preset: DatePreset): { start: string; end: string } {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+  const todayStr = `${yyyy}-${mm}-${dd}`;
+
+  switch (preset) {
+    case "today":
+      return { start: todayStr, end: todayStr };
+    case "thisWeek": {
+      const dayOfWeek = today.getDay(); // 0=Sun
+      const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const monday = new Date(today);
+      monday.setDate(today.getDate() + diffToMon);
+      const monY = monday.getFullYear();
+      const monM = String(monday.getMonth() + 1).padStart(2, "0");
+      const monD = String(monday.getDate()).padStart(2, "0");
+      return { start: `${monY}-${monM}-${monD}`, end: todayStr };
+    }
+    case "thisMonth":
+      return { start: `${yyyy}-${mm}-01`, end: todayStr };
+    case "thisQuarter": {
+      const q = Math.floor(today.getMonth() / 3);
+      const quarterStartMonth = q * 3;
+      const qm = String(quarterStartMonth + 1).padStart(2, "0");
+      return { start: `${yyyy}-${qm}-01`, end: todayStr };
+    }
+  }
+}
+
+const DATE_PRESET_OPTIONS: { value: DatePreset; label: string }[] = [
+  { value: "today", label: "今日" },
+  { value: "thisWeek", label: "本周" },
+  { value: "thisMonth", label: "本月" },
+  { value: "thisQuarter", label: "本季度" },
+];
+
 interface TokenFilterBarProps {
   startDate?: string;
   endDate?: string;
@@ -105,12 +146,33 @@ export function TokenFilterBar({
             <Calendar className="w-4 h-4 text-gray-500" />
             <span className="text-sm text-gray-600">日期：</span>
           </div>
+          {/* 日期预设快捷按钮 */}
+          <div className="flex items-center gap-1">
+            {DATE_PRESET_OPTIONS.map((opt) => {
+              const range = getDatePresetRange(opt.value);
+              const isActive = localStartDate === range.start && localEndDate === range.end;
+              return (
+                <Button
+                  key={opt.value}
+                  variant={isActive ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    handleStartDateChange(range.start);
+                    handleEndDateChange(range.end);
+                  }}
+                  className="text-xs h-7 px-2"
+                >
+                  {opt.label}
+                </Button>
+              );
+            })}
+          </div>
           <div className="flex items-center gap-2">
             <Input
               type="date"
               value={localStartDate}
               onChange={(e) => handleStartDateChange(e.target.value)}
-              className="w-40"
+              className="w-36"
               placeholder="开始日期"
             />
             <span className="text-gray-400">至</span>
@@ -118,7 +180,7 @@ export function TokenFilterBar({
               type="date"
               value={localEndDate}
               onChange={(e) => handleEndDateChange(e.target.value)}
-              className="w-40"
+              className="w-36"
               placeholder="结束日期"
             />
           </div>
