@@ -231,9 +231,9 @@ export default function MembersPage() {
 
   if (error) {
     return (
-      <div className="p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">成员管理</h1>
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-600">
+      <div className="page-container">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">成员管理</h1>
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 text-red-600 dark:text-red-400">
           加载数据失败，请刷新页面重试
         </div>
       </div>
@@ -241,9 +241,9 @@ export default function MembersPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="page-container">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">成员管理</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">成员管理</h1>
         <Button onClick={handleAdd}>
           <UserPlus className="w-4 h-4 mr-2" />
           添加成员
@@ -331,31 +331,31 @@ export default function MembersPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-xl border dark:border-slate-700 overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-            <span className="ml-2 text-gray-500">加载中...</span>
+            <span className="ml-2 text-gray-500 dark:text-gray-400">加载中...</span>
           </div>
         ) : filteredMembers.length === 0 ? (
-          <div className="py-12 text-center text-gray-500">
+          <div className="py-12 text-center text-gray-500 dark:text-gray-400">
             {searchQuery ? "没有匹配的成员" : "暂无成员数据"}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b">
+              <thead className="bg-gray-50 dark:bg-slate-800/50 border-b dark:border-slate-700">
                 <tr>
-                  <th className="px-4 py-3 text-sm font-medium text-gray-600 w-10">
+                  <th className="px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-300 w-10">
                     <input
                       type="checkbox"
                       checked={selectedIds.size === filteredMembers.length && filteredMembers.length > 0}
                       onChange={handleSelectAll}
-                      className="rounded border-gray-300"
+                      className="rounded border-gray-300 dark:border-slate-600"
                     />
                   </th>
-                  <th 
-                    className="text-left px-4 py-3 text-sm font-medium text-gray-600 cursor-pointer hover:bg-gray-100"
+                  <th
+                    className="text-left px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700/50"
                     onClick={() => handleSort("name")}
                   >
                     <div className="flex items-center">
@@ -363,8 +363,8 @@ export default function MembersPage() {
                       {getSortIcon("name")}
                     </div>
                   </th>
-                  <th 
-                    className="text-left px-4 py-3 text-sm font-medium text-gray-600 cursor-pointer hover:bg-gray-100"
+                  <th
+                    className="text-left px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700/50"
                     onClick={() => handleSort("role")}
                   >
                     <div className="flex items-center">
@@ -372,8 +372,8 @@ export default function MembersPage() {
                       {getSortIcon("role")}
                     </div>
                   </th>
-                  <th 
-                    className="text-left px-4 py-3 text-sm font-medium text-gray-600 cursor-pointer hover:bg-gray-100"
+                  <th
+                    className="text-left px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700/50"
                     onClick={() => handleSort("weight")}
                   >
                     <div className="flex items-center">
@@ -381,8 +381,8 @@ export default function MembersPage() {
                       {getSortIcon("weight")}
                     </div>
                   </th>
-                  <th 
-                    className="text-left px-4 py-3 text-sm font-medium text-gray-600 cursor-pointer hover:bg-gray-100"
+                  <th
+                    className="text-left px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700/50"
                     onClick={() => handleSort("createdAt")}
                   >
                     <div className="flex items-center">
@@ -390,29 +390,29 @@ export default function MembersPage() {
                       {getSortIcon("createdAt")}
                     </div>
                   </th>
-                  <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">状态</th>
-                  <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">操作</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-300">状态</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-300">操作</th>
                 </tr>
               </thead>
-              <tbody className="divide-y">
+              <tbody className="divide-y dark:divide-slate-700">
                 {filteredMembers.map((member) => (
-                  <tr key={member.id} className="hover:bg-gray-50">
+                  <tr key={member.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
                     <td className="px-4 py-3">
                       <input
                         type="checkbox"
                         checked={selectedIds.has(member.id)}
                         onChange={() => handleSelect(member.id)}
-                        className="rounded border-gray-300"
+                        className="rounded border-gray-300 dark:border-slate-600"
                       />
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{member.name}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">{member.name}</td>
                     <td className="px-4 py-3">
                       <Badge variant={getRoleBadgeVariant(member.role)}>
                         {ROLE_LABELS[member.role]}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{member.weight}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{member.createdAt}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{member.weight}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{member.createdAt}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <Badge variant={member.status === "active" ? "success" : "info"}>
@@ -447,7 +447,7 @@ export default function MembersPage() {
                           variant="ghost"
                           onClick={() => handleEdit(member)}
                         >
-                          <Pencil className="w-4 h-4" />
+                          <Pencil className="w-4 h-4 dark:text-white" />
                         </Button>
                         <Button
                           size="icon"
@@ -482,9 +482,9 @@ export default function MembersPage() {
             className="fixed inset-0 bg-black/50" 
             onClick={() => setDeleteConfirmId(null)}
           />
-          <div className="relative z-50 bg-white rounded-xl shadow-lg w-full max-w-sm p-6">
-            <h3 className="text-lg font-semibold mb-2">确认删除</h3>
-            <p className="text-gray-600 mb-6">
+          <div className="relative z-50 bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-sm p-6">
+            <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">确认删除</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
               确定要删除该成员吗？此操作不可撤销。
             </p>
             <div className="flex justify-end gap-3">
@@ -513,9 +513,9 @@ export default function MembersPage() {
             className="fixed inset-0 bg-black/50" 
             onClick={() => setBatchDeleteConfirm(false)}
           />
-          <div className="relative z-50 bg-white rounded-xl shadow-lg w-full max-w-sm p-6">
-            <h3 className="text-lg font-semibold mb-2">确认批量删除</h3>
-            <p className="text-gray-600 mb-6">
+          <div className="relative z-50 bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-sm p-6">
+            <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">确认批量删除</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
               确定要删除选中的 {selectedIds.size} 个成员吗？此操作不可撤销。
             </p>
             <div className="flex justify-end gap-3">
@@ -544,9 +544,9 @@ export default function MembersPage() {
             className="fixed inset-0 bg-black/50" 
             onClick={() => setViewingMember(null)}
           />
-          <div className="relative z-50 bg-white rounded-xl shadow-lg w-full max-w-md p-6">
+          <div className="relative z-50 bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold">成员详情</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">成员详情</h3>
               <Button
                 size="icon"
                 variant="ghost"
@@ -557,33 +557,33 @@ export default function MembersPage() {
             </div>
             
             <div className="space-y-4">
-              <div className="flex items-center justify-between py-3 border-b">
-                <span className="text-gray-500">ID</span>
-                <span className="text-sm font-mono text-gray-700">{viewingMember.id}</span>
+              <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
+                <span className="text-gray-500 dark:text-gray-400">ID</span>
+                <span className="text-sm font-mono text-gray-700 dark:text-gray-300">{viewingMember.id}</span>
               </div>
-              <div className="flex items-center justify-between py-3 border-b">
-                <span className="text-gray-500">姓名</span>
-                <span className="text-gray-900 font-medium">{viewingMember.name}</span>
+              <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
+                <span className="text-gray-500 dark:text-gray-400">姓名</span>
+                <span className="text-gray-900 dark:text-white font-medium">{viewingMember.name}</span>
               </div>
-              <div className="flex items-center justify-between py-3 border-b">
-                <span className="text-gray-500">角色</span>
+              <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
+                <span className="text-gray-500 dark:text-gray-400">角色</span>
                 <Badge variant={getRoleBadgeVariant(viewingMember.role)}>
                   {ROLE_LABELS[viewingMember.role]}
                 </Badge>
               </div>
-              <div className="flex items-center justify-between py-3 border-b">
-                <span className="text-gray-500">权重</span>
-                <span className="text-gray-900">{viewingMember.weight}</span>
+              <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
+                <span className="text-gray-500 dark:text-gray-400">权重</span>
+                <span className="text-gray-900 dark:text-white">{viewingMember.weight}</span>
               </div>
-              <div className="flex items-center justify-between py-3 border-b">
-                <span className="text-gray-500">状态</span>
+              <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
+                <span className="text-gray-500 dark:text-gray-400">状态</span>
                 <Badge variant={viewingMember.status === "active" ? "success" : "info"}>
                   {viewingMember.status === "active" ? "启用" : "禁用"}
                 </Badge>
               </div>
-              <div className="flex items-center justify-between py-3 border-b">
-                <span className="text-gray-500">加入时间</span>
-                <span className="text-gray-700">{viewingMember.createdAt}</span>
+              <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
+                <span className="text-gray-500 dark:text-gray-400">加入时间</span>
+                <span className="text-gray-700 dark:text-gray-300">{viewingMember.createdAt}</span>
               </div>
             </div>
 

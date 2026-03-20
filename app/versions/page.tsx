@@ -39,13 +39,11 @@ export default function VersionsPage() {
       )
     : versions;
 
-  // buildStatusColor function removed - using Badge variants instead
-
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="page-container">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">版本管理</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">版本管理</h1>
         <Link href="/versions/new">
           <Button className="gap-2">
             <Plus className="w-4 h-4" />
@@ -55,9 +53,9 @@ export default function VersionsPage() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border p-4 mb-6 flex flex-wrap items-center gap-4">
+      <div className="bg-white dark:bg-slate-800 rounded-xl border dark:border-slate-700 p-4 mb-6 flex flex-wrap items-center gap-4">
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
           <Input
             placeholder="搜索版本号、标题..."
             value={search}
@@ -82,11 +80,11 @@ export default function VersionsPage() {
       {/* Loading */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-          <span className="ml-2 text-gray-500">加载中...</span>
+          <Loader2 className="w-6 h-6 animate-spin text-gray-400 dark:text-gray-500" />
+          <span className="ml-2 text-gray-500 dark:text-gray-400">加载中...</span>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-20 text-gray-500">
+        <div className="text-center py-20 text-gray-500 dark:text-gray-400">
           <p>暂无版本记录</p>
           <Link href="/versions/new">
             <Button variant="ghost" className="mt-2">创建第一个版本</Button>
@@ -98,12 +96,12 @@ export default function VersionsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
             {filtered.map((v) => (
               <Link key={v.id} href={`/versions/${v.id}`} className="block">
-                <div className="bg-white rounded-xl border hover:shadow-md transition-shadow cursor-pointer h-full">
+                <div className="bg-white dark:bg-slate-800 rounded-xl border dark:border-slate-700 hover:shadow-md transition-shadow cursor-pointer h-full">
                   <div className="p-5">
                     {/* Top row: version + status */}
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-xl font-bold font-mono text-gray-900">{v.version}</span>
+                        <span className="text-xl font-bold font-mono text-gray-900 dark:text-white">{v.version}</span>
                         {v.isMain && (
                           <Badge variant="success" className="text-xs gap-1">
                             <Star className="w-3 h-3" />主版本
@@ -112,7 +110,7 @@ export default function VersionsPage() {
                       </div>
                       <Badge
                         variant={BUILD_STATUS_BADGE_VARIANT[v.buildStatus]}
-                        className={`text-xs ${v.buildStatus === "pending" ? "bg-gray-100 text-gray-500 border-gray-200" : ""}`}
+                        className={`text-xs ${v.buildStatus === "pending" ? "bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-slate-600" : ""}`}
                       >
                         {BUILD_STATUS_LABELS[v.buildStatus]}
                       </Badge>
@@ -120,16 +118,16 @@ export default function VersionsPage() {
 
                     {/* Title & description */}
                     <div className="mb-3">
-                      <div className="font-medium text-gray-900 mb-1">{v.title}</div>
+                      <div className="font-medium text-gray-900 dark:text-white mb-1">{v.title}</div>
                       {v.description && (
-                        <p className="text-sm text-gray-500 line-clamp-2">{v.description}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2">{v.description}</p>
                       )}
                     </div>
 
                     {/* Tags row */}
                     <div className="flex flex-wrap items-center gap-2 mb-3">
                       {v.tags.map((tag) => (
-                        <span key={tag} className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
+                        <span key={tag} className="px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300">
                           {tag}
                         </span>
                       ))}
@@ -137,7 +135,7 @@ export default function VersionsPage() {
 
                     {/* Git tag */}
                     {v.gitTag && (
-                      <div className="flex items-center gap-1 text-sm text-blue-600 mb-3">
+                      <div className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 mb-3">
                         <Tag className="w-3.5 h-3.5" />
                         <span className="font-mono">{v.gitTag}</span>
                       </div>
@@ -145,14 +143,14 @@ export default function VersionsPage() {
 
                     {/* Version summary preview */}
                     {v.summary && (
-                      <div className="mt-2 p-2 bg-gray-50 rounded-md">
-                        <div className="text-xs text-gray-500 mb-1">摘要 · {v.summaryGeneratedAt ? new Date(v.summaryGeneratedAt).toLocaleDateString("zh-CN") : "自动生成"}</div>
-                        <p className="text-xs text-gray-600 line-clamp-2">{v.summary}</p>
+                      <div className="mt-2 p-2 bg-gray-50 dark:bg-slate-700/50 rounded-md">
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">摘要 · {v.summaryGeneratedAt ? new Date(v.summaryGeneratedAt).toLocaleDateString("zh-CN") : "自动生成"}</div>
+                        <p className="text-xs text-gray-600 dark:text-gray-300 line-clamp-2">{v.summary}</p>
                       </div>
                     )}
 
                     {/* Footer */}
-                    <div className="flex items-center justify-between text-xs text-gray-400 pt-3 border-t">
+                    <div className="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500 pt-3 border-t dark:border-slate-700">
                       <span>{v.commitCount} 次提交</span>
                       <span>{v.changedFiles.length} 个文件</span>
                       <span>{v.createdAt ? new Date(v.createdAt).toLocaleDateString("zh-CN") : "-"}</span>
@@ -165,8 +163,8 @@ export default function VersionsPage() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between bg-white rounded-xl border px-4 py-3">
-              <span className="text-sm text-gray-500">共 {total} 条，第 {page}/{totalPages} 页</span>
+            <div className="flex items-center justify-between bg-white dark:bg-slate-800 rounded-xl border dark:border-slate-700 px-4 py-3">
+              <span className="text-sm text-gray-500 dark:text-gray-400">共 {total} 条，第 {page}/{totalPages} 页</span>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
                   <ChevronLeft className="w-4 h-4" />

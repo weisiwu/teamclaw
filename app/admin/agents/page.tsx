@@ -61,24 +61,24 @@ interface AgentStats {
 
 function AgentHealthCard({ agent }: { agent: AgentHealthData }) {
   const statusIcon = {
-    healthy: <CheckCircle className="w-4 h-4 text-green-600" />,
-    degraded: <AlertTriangle className="w-4 h-4 text-yellow-600" />,
-    unhealthy: <XCircle className="w-4 h-4 text-red-600" />,
-    offline: <WifiOff className="w-4 h-4 text-gray-400" />,
+    healthy: <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />,
+    degraded: <AlertTriangle className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />,
+    unhealthy: <XCircle className="w-4 h-4 text-red-600 dark:text-red-400" />,
+    offline: <WifiOff className="w-4 h-4 text-gray-400 dark:text-gray-500" />,
   }[agent.status] || <WifiOff className="w-4 h-4 text-gray-400" />;
 
   return (
     <Card className="p-4">
       <div className="flex items-start justify-between mb-3">
         <div>
-          <h3 className="font-semibold text-sm">{agent.name}</h3>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <h3 className="font-semibold text-sm text-gray-900 dark:text-white">{agent.name}</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             {agent.lastHeartbeat
               ? `心跳: ${new Date(agent.lastHeartbeat).toLocaleTimeString()}`
               : "无心跳记录"}
           </p>
         </div>
-        <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs ${STATUS_COLORS[agent.status] || "bg-gray-100"}`}>
+        <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs ${STATUS_COLORS[agent.status] || "bg-gray-100 dark:bg-slate-700"}`}>
           {statusIcon}
           <span className="capitalize">{agent.status}</span>
         </div>
@@ -86,27 +86,27 @@ function AgentHealthCard({ agent }: { agent: AgentHealthData }) {
 
       {/* 统计数据 */}
       <div className="grid grid-cols-4 gap-2 mb-3 text-center">
-        <div className="bg-gray-50 rounded p-2">
-          <div className="text-lg font-bold">{agent.totalExecutions}</div>
-          <div className="text-xs text-gray-500">总执行</div>
+        <div className="bg-gray-50 dark:bg-slate-700/50 rounded p-2">
+          <div className="text-lg font-bold text-gray-900 dark:text-white">{agent.totalExecutions}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">总执行</div>
         </div>
-        <div className="bg-green-50 rounded p-2">
-          <div className="text-lg font-bold text-green-700">
+        <div className="bg-green-50 dark:bg-green-900/20 rounded p-2">
+          <div className="text-lg font-bold text-green-700 dark:text-green-400">
             {((1 - agent.failureRate) * 100).toFixed(0)}%
           </div>
-          <div className="text-xs text-green-600">成功率</div>
+          <div className="text-xs text-green-600 dark:text-green-400">成功率</div>
         </div>
-        <div className="bg-gray-50 rounded p-2">
-          <div className="text-lg font-bold">
+        <div className="bg-gray-50 dark:bg-slate-700/50 rounded p-2">
+          <div className="text-lg font-bold text-gray-900 dark:text-white">
             {agent.avgResponseTime > 0
               ? `${Math.round(agent.avgResponseTime / 1000)}s`
               : "-"}
           </div>
-          <div className="text-xs text-gray-500">平均耗时</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">平均耗时</div>
         </div>
-        <div className="bg-gray-50 rounded p-2">
-          <div className="text-lg font-bold">{agent.uptime || "-"}</div>
-          <div className="text-xs text-gray-500">运行时长</div>
+        <div className="bg-gray-50 dark:bg-slate-700/50 rounded p-2">
+          <div className="text-lg font-bold text-gray-900 dark:text-white">{agent.uptime || "-"}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">运行时长</div>
         </div>
       </div>
 
@@ -114,7 +114,7 @@ function AgentHealthCard({ agent }: { agent: AgentHealthData }) {
       {agent.issues?.length > 0 && (
         <div className="mb-3 space-y-1">
           {agent.issues.map((issue: string, i: number) => (
-            <div key={i} className="text-xs text-red-600 flex items-start gap-1">
+            <div key={i} className="text-xs text-red-600 dark:text-red-400 flex items-start gap-1">
               <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
               {issue}
             </div>
@@ -126,8 +126,8 @@ function AgentHealthCard({ agent }: { agent: AgentHealthData }) {
       {agent.recommendations?.length > 0 && (
         <div className="space-y-1">
           {agent.recommendations.map((rec: string, i: number) => (
-            <div key={i} className="text-xs text-blue-600 flex items-start gap-1">
-              <span className="text-blue-400">→</span> {rec}
+            <div key={i} className="text-xs text-blue-600 dark:text-blue-400 flex items-start gap-1">
+              <span className="text-blue-400 dark:text-blue-500">→</span> {rec}
             </div>
           ))}
         </div>
@@ -175,15 +175,15 @@ export default function AgentMonitorPage() {
   const statsMap = statsData || {};
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="page-container space-y-6">
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-2xl font-bold flex items-center gap-2 text-gray-900 dark:text-white">
             <Activity className="w-6 h-6" />
             Agent 监控
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             实时监控 Agent 健康状态与执行统计
           </p>
         </div>
@@ -234,7 +234,7 @@ export default function AgentMonitorPage() {
 
       {/* 检查时间 */}
       {healthReport && (
-        <div className="text-xs text-gray-400">
+        <div className="text-xs text-gray-400 dark:text-gray-500">
           检查时间: {new Date(healthReport.checkedAt).toLocaleString()}
         </div>
       )}
@@ -257,30 +257,30 @@ export default function AgentMonitorPage() {
       {/* 执行统计表格 */}
       {statsData && (
         <Card className="p-4">
-          <h2 className="font-semibold mb-4">执行统计</h2>
+          <h2 className="font-semibold mb-4 text-gray-900 dark:text-white">执行统计</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2 px-3">Agent</th>
-                  <th className="text-right py-2 px-3">总执行</th>
-                  <th className="text-right py-2 px-3">完成</th>
-                  <th className="text-right py-2 px-3">失败</th>
-                  <th className="text-right py-2 px-3">超时</th>
-                  <th className="text-right py-2 px-3">平均耗时</th>
+                <tr className="border-b dark:border-slate-700">
+                  <th className="text-left py-2 px-3 text-gray-600 dark:text-gray-300">Agent</th>
+                  <th className="text-right py-2 px-3 text-gray-600 dark:text-gray-300">总执行</th>
+                  <th className="text-right py-2 px-3 text-gray-600 dark:text-gray-300">完成</th>
+                  <th className="text-right py-2 px-3 text-gray-600 dark:text-gray-300">失败</th>
+                  <th className="text-right py-2 px-3 text-gray-600 dark:text-gray-300">超时</th>
+                  <th className="text-right py-2 px-3 text-gray-600 dark:text-gray-300">平均耗时</th>
                 </tr>
               </thead>
               <tbody>
                 {AGENT_NAMES.map((name) => {
                   const stats = statsMap[name] || { total: 0, completed: 0, failed: 0, timeout: 0, avgDurationMs: 0 };
                   return (
-                    <tr key={name} className="border-b hover:bg-gray-50">
-                      <td className="py-2 px-3 font-medium">{name}</td>
-                      <td className="text-right py-2 px-3">{stats.total}</td>
-                      <td className="text-right py-2 px-3 text-green-600">{stats.completed}</td>
-                      <td className="text-right py-2 px-3 text-red-600">{stats.failed}</td>
-                      <td className="text-right py-2 px-3 text-yellow-600">{stats.timeout}</td>
-                      <td className="text-right py-2 px-3">
+                    <tr key={name} className="border-b dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                      <td className="py-2 px-3 font-medium text-gray-900 dark:text-white">{name}</td>
+                      <td className="text-right py-2 px-3 text-gray-700 dark:text-gray-300">{stats.total}</td>
+                      <td className="text-right py-2 px-3 text-green-600 dark:text-green-400">{stats.completed}</td>
+                      <td className="text-right py-2 px-3 text-red-600 dark:text-red-400">{stats.failed}</td>
+                      <td className="text-right py-2 px-3 text-yellow-600 dark:text-yellow-400">{stats.timeout}</td>
+                      <td className="text-right py-2 px-3 text-gray-700 dark:text-gray-300">
                         {stats.avgDurationMs > 0
                           ? `${Math.round(stats.avgDurationMs / 1000)}s`
                           : "-"}
