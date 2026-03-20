@@ -5,7 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { useProjects, useDeleteProject } from '../../hooks/useProjects';
 
 export default function ProjectsPage() {
-  const { data, isLoading, error } = useProjects();
+  const { data, isLoading, error, refetch } = useProjects();
   const deleteMutation = useDeleteProject();
 
   return (
@@ -33,8 +33,17 @@ export default function ProjectsPage() {
       )}
 
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-400 text-sm">
-          加载失败：{(error as Error).message}
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-400 text-sm flex items-center justify-between gap-3">
+          <div>
+            <p className="font-medium">加载失败</p>
+            <p className="text-xs opacity-75 mt-0.5">{(error as Error).message}</p>
+          </div>
+          <button
+            onClick={() => refetch()}
+            className="px-3 py-1.5 bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 text-xs font-medium rounded transition-colors shrink-0"
+          >
+            重试
+          </button>
         </div>
       )}
 
