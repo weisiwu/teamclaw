@@ -69,8 +69,8 @@ export default function DocsPage() {
   };
 
   // Handle filter change
-  const handleFilterChange = (filter: SearchFilter) => {
-    console.log('Filter changed:', filter);
+  const handleFilterChange = (_filter: SearchFilter) => {
+    // Filter changes are handled internally by DocSearchBox
   };
 
   // Toggle file selection

@@ -510,8 +510,7 @@ export default function VersionDetailPage() {
         onClose={() => setUpgradeConfigOpen(false)}
         versionId={id}
         versionName={version.version}
-        onSave={async (config) => {
-          console.log('Upgrade config saved:', config);
+        onSave={async (_config) => {
           setUpgradeConfigOpen(false);
         }}
         onPreview={() => {
