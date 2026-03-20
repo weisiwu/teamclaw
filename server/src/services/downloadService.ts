@@ -9,6 +9,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { DownloadTask, DownloadStatus, DownloadProgressEvent } from '../models/download.js';
 import { getDb } from '../db/sqlite.js';
 import { EventEmitter } from 'events';
+import { getDoc } from './docService.js';
+import { getArtifact } from './artifactStore.js';
 
 // SSE event emitter for progress updates
 export const downloadEvents = new EventEmitter();
@@ -193,7 +195,7 @@ class DownloadQueue {
       // Add files to archive
       for (const fileId of task.fileIds) {
         // Get file path from docService or artifactStore
-        const filePath = this.getFilePath(fileId);
+        const filePath = await this.getFilePath(fileId);
         if (filePath && fs.existsSync(filePath)) {
           archive.file(filePath, { name: path.basename(filePath) });
         }
@@ -203,10 +205,26 @@ class DownloadQueue {
     });
   }
 
-  private getFilePath(fileId: string): string | null {
-    // TODO: Integrate with docService or artifactStore to get actual file path
-    // For now, return a mock path
-    return `./uploads/${fileId}`;
+  private async getFilePath(fileId: string): Promise<string | null> {
+    // Try docService first
+    const doc = getDoc(fileId);
+    if (doc?.path) {
+      return doc.path;
+    }
+
+    // Try artifactStore
+    const artifact = await getArtifact(fileId);
+    if (artifact?.path) {
+      return artifact.path;
+    }
+
+    // Fallback: assume it's in uploads directory
+    const uploadPath = path.join('./uploads', fileId);
+    if (fs.existsSync(uploadPath)) {
+      return uploadPath;
+    }
+
+    return null;
   }
 
   private emitProgress(task: DownloadTask): void {
