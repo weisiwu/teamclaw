@@ -2,8 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'teamclaw-server',
-      script: './server/src/index.ts',
-      interpreter: '/Users/weisiwu_clawbot_mac/Desktop/致富经/apps/teamclaw/server/node_modules/.bin/tsx',
+      script: './server/dist/index.js',
       cwd: '/Users/weisiwu_clawbot_mac/Desktop/致富经/apps/teamclaw',
       watch: ['/Users/weisiwu_clawbot_mac/Desktop/致富经/apps/teamclaw/server/src'],
       ignore_watch: ['node_modules', '.next', 'dist'],
