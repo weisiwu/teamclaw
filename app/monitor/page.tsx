@@ -1,6 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Loader2, RefreshCw, AlertCircle } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 interface ServiceStatus {
   status: string;
@@ -79,7 +82,12 @@ export default function MonitorPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-gray-500">Loading...</div>
+        <Card className="w-full max-w-md">
+          <CardContent className="flex flex-col items-center py-12 gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-base text-gray-500 dark:text-gray-400">正在加载系统状态...</p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -87,7 +95,23 @@ export default function MonitorPage() {
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-red-500">Error: {error}</div>
+        <Card className="w-full max-w-md">
+          <CardContent className="flex flex-col items-center py-12 gap-3">
+            <div className="p-3 rounded-full bg-red-50 dark:bg-red-900/20">
+              <AlertCircle className="w-8 h-8 text-red-500" />
+            </div>
+            <p className="text-base font-medium text-gray-900 dark:text-white">加载失败</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs">{error}</p>
+            <Button
+              variant="outline"
+              onClick={fetchHealth}
+              className="mt-2 gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              重试
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
