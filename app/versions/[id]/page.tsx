@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT, VERSION_STATUS_LABELS, VERSION_STATUS_BADGE_VARIANT } from "@/lib/api/types";
-import { getVersion, bumpVersion } from "@/lib/api/versions";
+import { getVersion, bumpVersion, getVersionScreenshots, getVersionChangelog } from "@/lib/api/versions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, ArrowLeft, Tag, Calendar, Clock, GitBranch, FileText, Star, History, Download, RotateCcw, Zap, Settings } from "lucide-react";
@@ -16,6 +16,7 @@ import { UpgradeConfigDialog } from "@/components/versions/UpgradeConfigDialog";
 import { VersionChangeLogPanel } from "@/components/versions/VersionChangeLogPanel";
 import { VersionSummaryPanel } from "@/components/versions/VersionSummaryPanel";
 import { VersionGitTagPanel } from "@/components/versions/VersionGitTagPanel";
+import { VersionTimeline } from "@/components/versions/VersionTimeline";
 
 export default function VersionDetailPage() {
   const params = useParams();
@@ -24,7 +25,9 @@ export default function VersionDetailPage() {
 
   const [version, setVersion] = useState<Version | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"details" | "bumpHistory" | "artifacts" | "rollback" | "changelog" | "versionSummary" | "gitTag">("details");
+  const [screenshots, setScreenshots] = useState<import("@/lib/api/types").VersionMessageScreenshot[]>([]);
+  const [changelog, setChangelog] = useState<import("@/lib/api/types").VersionChangelog | null>(null);
+  const [activeTab, setActiveTab] = useState<"details" | "bumpHistory" | "artifacts" | "rollback" | "changelog" | "versionSummary" | "gitTag" | "timeline">("details");
   const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false);
   const [upgradeConfigOpen, setUpgradeConfigOpen] = useState(false);
   const [isUpgrading, setIsUpgrading] = useState(false);
@@ -33,8 +36,16 @@ export default function VersionDetailPage() {
   useEffect(() => {
     if (!id) return;
     setIsLoading(true);
-    getVersion(id)
-      .then((v) => { setVersion(v); })
+    Promise.all([
+      getVersion(id),
+      getVersionScreenshots(id),
+      getVersionChangelog(id),
+    ])
+      .then(([v, screenshotsData, changelogData]) => {
+        setVersion(v);
+        setScreenshots(screenshotsData?.data || []);
+        setChangelog(changelogData?.data || null);
+      })
       .catch(console.error)
       .finally(() => setIsLoading(false));
   }, [id]);
@@ -181,6 +192,17 @@ export default function VersionDetailPage() {
             <Tag className="w-4 h-4" />
             Git Tag
           </button>
+          <button
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+              activeTab === "timeline"
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-500 hover:bg-gray-100"
+            }`}
+            onClick={() => setActiveTab("timeline")}
+          >
+            <Clock className="w-4 h-4" />
+            变更时间线
+          </button>
         </div>
       </div>
 
@@ -250,6 +272,24 @@ export default function VersionDetailPage() {
       ) : activeTab === "gitTag" ? (
         <div className="bg-white rounded-xl border p-5">
           <VersionGitTagPanel version={version} onRefresh={setVersion} />
+        </div>
+      ) : activeTab === "timeline" ? (
+        <div className="bg-white rounded-xl border p-5">
+          <h2 className="text-sm font-medium text-gray-500 mb-4 flex items-center gap-2">
+            <Clock className="w-4 h-4" />
+            变更时间线
+          </h2>
+          <VersionTimeline
+            screenshots={screenshots}
+            changelog={changelog}
+            versionInfo={{
+              version: version.version,
+              createdAt: version.createdAt,
+              createdBy: version.summaryGeneratedBy || "system",
+            }}
+            isOpen={true}
+            onClose={() => setActiveTab("details")}
+          />
         </div>
       ) : (
         <div className="space-y-6">
