@@ -373,3 +373,33 @@ export function getCommitsBetween(cwd: string, fromRef: string, toRef: string): 
     return [];
   }
 }
+
+/**
+ * Compare two branches — get ahead/behind commit counts
+ * Returns { ahead, behind } where:
+ *   ahead = commits in branch but not in baseBranch
+ *   behind = commits in baseBranch but not in branch
+ */
+export function compareBranches(
+  cwd: string,
+  branch: string,
+  baseBranch: string
+): { ahead: number; behind: number } {
+  if (!existsSync(join(cwd, '.git'))) return { ahead: 0, behind: 0 };
+
+  try {
+    // git rev-list --left-right --count base...branch
+    // left (behind) = commits in baseBranch not in branch
+    // right (ahead) = commits in branch not in baseBranch
+    const output = execGit(cwd, [
+      'rev-list',
+      '--left-right',
+      '--count',
+      `${baseBranch}...${branch}`,
+    ]);
+    const [behind, ahead] = output.trim().split('\t').map(n => parseInt(n) || 0);
+    return { ahead, behind };
+  } catch {
+    return { ahead: 0, behind: 0 };
+  }
+}
