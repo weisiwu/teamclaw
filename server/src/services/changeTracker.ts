@@ -358,9 +358,20 @@ export function recordChangeEvent(data: {
 export function getVersionTimeline(versionId: string): TimelineEvent[] {
   const db = getDb();
   const rows = db.prepare(`
-    SELECT e.*, s.screenshot_url, s.message_content, s.sender_name, s.thumbnail_url
+    SELECT
+      e.*,
+      s.screenshot_url,
+      s.message_content,
+      s.sender_name,
+      s.thumbnail_url,
+      c.features,
+      c.fixes,
+      c.improvements,
+      c.breaking,
+      c.docs
     FROM version_change_events e
     LEFT JOIN screenshots s ON e.screenshot_id = s.id
+    LEFT JOIN version_changelog_entries c ON e.changelog_id = c.id
     WHERE e.version_id = ?
     ORDER BY e.created_at DESC
   `).all(versionId) as Array<{
@@ -375,7 +386,13 @@ export function getVersionTimeline(versionId: string): TimelineEvent[] {
     message_content: string | null;
     sender_name: string | null;
     thumbnail_url: string | null;
+    changelog_id: string | null;
     metadata: string | null;
+    features: string | null;
+    fixes: string | null;
+    improvements: string | null;
+    breaking: string | null;
+    docs: string | null;
   }>;
 
   return rows.map(row => ({
@@ -386,12 +403,20 @@ export function getVersionTimeline(versionId: string): TimelineEvent[] {
     actor: row.actor,
     timestamp: row.created_at,
     screenshotId: row.screenshot_id ?? undefined,
+    changelogId: row.changelog_id ?? undefined,
     screenshot: row.screenshot_id ? {
       id: row.screenshot_id,
       url: row.screenshot_url!,
       thumbnailUrl: row.thumbnail_url ?? undefined,
       messageContent: row.message_content ?? undefined,
       senderName: row.sender_name ?? undefined,
+    } : undefined,
+    changelog: row.changelog_id ? {
+      features: row.features ? JSON.parse(row.features) : [],
+      fixes: row.fixes ? JSON.parse(row.fixes) : [],
+      improvements: row.improvements ? JSON.parse(row.improvements) : [],
+      breaking: row.breaking ? JSON.parse(row.breaking) : [],
+      docs: row.docs ? JSON.parse(row.docs) : [],
     } : undefined,
   }));
 }
