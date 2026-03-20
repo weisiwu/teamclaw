@@ -19,7 +19,7 @@ import { VersionStatsOverview } from "./VersionStatsOverview";
 
 type SortOrder = "asc" | "desc";
 type SortType = "date" | "semver";
-type StatusFilter = "all" | "active" | "published" | "archived" | "buildSuccess" | "buildFailed";
+type StatusFilter = "all" | "active" | "published" | "archived" | "buildSuccess" | "buildFailed" | "hasScreenshot" | "hasChangelog";
 
 const NOW = new Date();
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -83,6 +83,10 @@ export function VersionTagsPanel() {
         result = result.filter((tag) => tag.buildStatus === "success");
       } else if (statusFilter === "buildFailed") {
         result = result.filter((tag) => tag.buildStatus === "failed");
+      } else if (statusFilter === "hasScreenshot") {
+        result = result.filter((tag) => tag.hasScreenshot === true);
+      } else if (statusFilter === "hasChangelog") {
+        result = result.filter((tag) => tag.hasChangelog === true);
       } else {
         result = result.filter((tag) => tag.status === statusFilter);
       }

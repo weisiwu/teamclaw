@@ -1,7 +1,7 @@
 "use client";
 
 import { GitTag } from "@/lib/api/types";
-import { CheckCircle, Archive, Shield, Layers, CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle, Archive, Shield, Layers, CheckCircle2, XCircle, Image, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface VersionStatsOverviewProps {
@@ -64,6 +64,20 @@ const buildStatOptions: {
     icon: <XCircle className="w-3.5 h-3.5" />,
     className: "bg-red-50 text-red-600 border-red-200 hover:bg-red-100",
     getCount: (tags) => tags.filter((t) => t.buildStatus === "failed").length,
+  },
+  {
+    key: "hasScreenshot",
+    label: "有截图",
+    icon: <Image className="w-3.5 h-3.5" />,
+    className: "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100",
+    getCount: (tags) => tags.filter((t) => t.hasScreenshot === true).length,
+  },
+  {
+    key: "hasChangelog",
+    label: "有摘要",
+    icon: <FileText className="w-3.5 h-3.5" />,
+    className: "bg-cyan-50 text-cyan-600 border-cyan-200 hover:bg-cyan-100",
+    getCount: (tags) => tags.filter((t) => t.hasChangelog === true).length,
   },
 ];
 
