@@ -1066,11 +1066,12 @@ export interface RollbackHistoryRecord {
 // ========== 变更时间线 ==========
 export interface TimelineEvent {
   id: string;
-  type: 'version_created' | 'screenshot_linked' | 'changelog_generated';
+  type: 'version_created' | 'screenshot_linked' | 'changelog_generated' | 'manual_note';
   title: string;
   description: string;
   timestamp: string;
   actor?: string;
+  actorId?: string;
   screenshotId?: string;
   summaryId?: string;
 }

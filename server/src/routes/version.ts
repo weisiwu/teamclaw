@@ -305,6 +305,62 @@ router.get('/:id/timeline', (req: Request, res: Response) => {
   }
 });
 
+// POST /api/v1/versions/:id/events — Add a manual note to the timeline
+router.post('/:id/events', (req: Request, res: Response) => {
+  const { id: versionId } = req.params;
+  const { note, actor, actorId } = req.body as {
+    note: string;
+    actor?: string;
+    actorId?: string;
+  };
+
+  if (!note || typeof note !== 'string') {
+    res.status(400).json(error(400, 'note is required and must be a string'));
+    return;
+  }
+
+  const row = db.prepare('SELECT id FROM versions WHERE id = ?').get(versionId);
+  if (!row) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  try {
+    const { onManualNote } = require('../services/changeTracker.js');
+    const eventId = onManualNote(versionId, note, actor || 'user', actorId);
+    res.json(success({ eventId }));
+  } catch (err) {
+    console.error('[version] Add manual note error:', err);
+    res.status(500).json(error(500, 'Failed to add manual note'));
+  }
+});
+
+// DELETE /api/v1/versions/:id/events/:eventId — Delete a manual note
+router.delete('/:id/events/:eventId', (req: Request, res: Response) => {
+  const { id: versionId, eventId } = req.params;
+
+  const event = db.prepare(
+    'SELECT id, event_type FROM version_change_events WHERE id = ? AND version_id = ?'
+  ).get(eventId, versionId) as { id: string; event_type: string } | undefined;
+  if (!event) {
+    res.status(404).json(error(404, 'Event not found'));
+    return;
+  }
+
+  if (event.event_type !== 'manual_note') {
+    res.status(403).json(error(403, 'Only manual notes can be deleted'));
+    return;
+  }
+
+  try {
+    db.prepare('DELETE FROM version_change_events WHERE id = ?').run(eventId);
+    res.json(success({ eventId }));
+  } catch (err) {
+    console.error('[version] Delete event error:', err);
+    res.status(500).json(error(500, 'Failed to delete event'));
+  }
+});
+
 router.post('/', (req: Request, res: Response) => {
   const { version, title, description, status, tags, branch, projectPath } = req.body as {
     version: string;

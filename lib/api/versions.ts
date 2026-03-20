@@ -2887,6 +2887,64 @@ export function useVersionTimeline(versionId: string | null) {
   });
 }
 
+export interface AddTimelineEventRequest {
+  note: string;
+  actor?: string;
+  actorId?: string;
+}
+
+export async function addTimelineEvent(
+  versionId: string,
+  data: AddTimelineEventRequest
+): Promise<{ eventId: string }> {
+  const res = await fetch(`${API_BASE}/versions/${versionId}/events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) {
+    return json.data;
+  }
+  throw new Error(json.message || '添加时间线事件失败');
+}
+
+export function useAddTimelineEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ versionId, data }: { versionId: string; data: AddTimelineEventRequest }) =>
+      addTimelineEvent(versionId, data),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['versionTimeline', variables.versionId] });
+    },
+  });
+}
+
+export async function deleteTimelineEvent(
+  versionId: string,
+  eventId: string
+): Promise<{ eventId: string }> {
+  const res = await fetch(`${API_BASE}/versions/${versionId}/events/${eventId}`, {
+    method: 'DELETE',
+  });
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) {
+    return json.data;
+  }
+  throw new Error(json.message || '删除时间线事件失败');
+}
+
+export function useDeleteTimelineEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ versionId, eventId }: { versionId: string; eventId: string }) =>
+      deleteTimelineEvent(versionId, eventId),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['versionTimeline', variables.versionId] });
+    },
+  });
+}
+
 // ========== ChromaDB Vector Store API ==========
 
 export interface VersionChromaEntry {
