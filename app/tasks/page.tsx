@@ -23,7 +23,8 @@ import {
   Download,
   LayoutGrid,
   Clock,
-  Target
+  Target,
+  Loader2
 } from "lucide-react";
 
 // CSV 导出函数
@@ -475,7 +476,7 @@ function TasksContent() {
   }), [search, status, priority, page]);
   
   // 使用 React Query 获取数据
-  const { data, isLoading, error } = useTaskList(filters);
+  const { data, isLoading, error, refetch } = useTaskList(filters);
   
   // Mutations
   const deleteTask = useDeleteTask();
@@ -853,9 +854,22 @@ function TasksContent() {
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200">任务时间线</h3>
             {isLoading ? (
-              <Card><CardContent className="py-12 text-center text-gray-500 dark:text-gray-400">加载中...</CardContent></Card>
+              <Card><CardContent className="page-loading"><Loader2 className="w-5 h-5 animate-spin" /><span>加载中...</span></CardContent></Card>
             ) : error ? (
-              <Card><CardContent className="py-12 text-center text-red-500">加载失败</CardContent></Card>
+              <Card><CardContent className="py-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-red-500 text-sm">
+                    <p className="font-medium">加载失败</p>
+                    <p className="text-xs opacity-75 mt-0.5">{(error as Error).message}</p>
+                  </div>
+                  <button
+                    onClick={() => refetch()}
+                    className="px-3 py-1.5 bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 text-xs font-medium rounded transition-colors shrink-0"
+                  >
+                    重试
+                  </button>
+                </div>
+              </CardContent></Card>
             ) : data?.data.length === 0 ? (
               <Card>
                 <CardContent className="py-12 text-center text-gray-500 dark:text-gray-400">
@@ -943,14 +957,26 @@ function TasksContent() {
           <div className="space-y-3">
           {isLoading ? (
             <Card>
-              <CardContent className="py-12 text-center text-gray-500 dark:text-gray-400">
-                加载中...
+              <CardContent className="page-loading">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>加载中...</span>
               </CardContent>
             </Card>
           ) : error ? (
             <Card>
-              <CardContent className="py-12 text-center text-red-500">
-                加载失败，请稍后重试
+              <CardContent className="py-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-red-500 text-sm">
+                    <p className="font-medium">加载失败</p>
+                    <p className="text-xs opacity-75 mt-0.5">{(error as Error).message}</p>
+                  </div>
+                  <button
+                    onClick={() => refetch()}
+                    className="px-3 py-1.5 bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 text-xs font-medium rounded transition-colors shrink-0"
+                  >
+                    重试
+                  </button>
+                </div>
               </CardContent>
             </Card>
           ) : data?.data.length === 0 ? (
