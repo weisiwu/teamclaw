@@ -161,6 +161,18 @@ export async function setBranchProtectionAPI(request: BranchProtectionRequest): 
   return json.data;
 }
 
+// 检出（切换到）分支
+export async function checkoutBranchAPI(id: string): Promise<GitBranch> {
+  const res = await fetch(`${API_BASE}/branches/${encodeURIComponent(id)}/checkout`, {
+    method: 'PUT',
+  });
+  const json = await res.json();
+  if (!res.ok || (json.code !== 200 && json.code !== 0)) {
+    throw new Error(json.message || 'Failed to checkout branch');
+  }
+  return json.data;
+}
+
 // ========== React Query Hooks ==========
 
 export function useBranches() {
@@ -246,6 +258,17 @@ export function useSetBranchProtection() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['branches'] });
       queryClient.invalidateQueries({ queryKey: ['branchStats'] });
+    },
+  });
+}
+
+export function useCheckoutBranch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => checkoutBranchAPI(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['branches'] });
+      queryClient.invalidateQueries({ queryKey: ['currentBranch'] });
     },
   });
 }

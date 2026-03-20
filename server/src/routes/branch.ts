@@ -17,6 +17,7 @@ import {
   getBranchConfig,
   updateBranchConfig,
   getBranchStats,
+  checkoutBranch,
 } from '../services/branchService.js';
 
 const router = Router();
@@ -224,6 +225,23 @@ router.put('/:id/rename', (req: Request, res: Response) => {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to rename branch';
     res.status(403).json(error(403, message));
+  }
+});
+
+// PUT /api/v1/branches/:id/checkout — 检出（切换到）分支
+router.put('/:id/checkout', (req: Request, res: Response) => {
+  const branch = getBranch(req.params.id);
+  if (!branch) {
+    res.status(404).json(error(404, 'Branch not found'));
+    return;
+  }
+
+  try {
+    const updated = checkoutBranch(req.params.id);
+    res.json(success(updated));
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to checkout branch';
+    res.status(400).json(error(400, message));
   }
 });
 

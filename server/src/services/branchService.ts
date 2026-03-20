@@ -193,6 +193,20 @@ export function updateBranchConfig(updates: Partial<BranchConfig>): BranchConfig
   return { ...config };
 }
 
+// 检出分支（切换到指定分支）
+export function checkoutBranch(id: string): BranchRecord | undefined {
+  const branch = branches.get(id);
+  if (!branch) return undefined;
+
+  if (branch.isProtected || branch.isMain) {
+    // 保护分支和主分支可以直接 checkout
+    return branch;
+  }
+
+  // 更新 lastCommitAt 为当前时间，表示最近操作过
+  return updateBranch(id, { lastCommitAt: new Date().toISOString() });
+}
+
 // 获取分支统计
 export function getBranchStats(): {
   total: number;
