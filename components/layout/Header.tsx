@@ -18,9 +18,9 @@ export function Header({ onMenuClick }: HeaderProps) {
         <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">TeamClaw</h1>
       </div>
       <div className="flex items-center gap-4">
-        <button className="p-2 hover:bg-gray-100 rounded-lg relative">
-          <Bell className="w-5 h-5 text-gray-600" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+        <button className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg relative transition-colors duration-150">
+          <Bell className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse-dot"></span>
         </button>
         <div className="flex items-center gap-2 pl-4 border-l">
           <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">

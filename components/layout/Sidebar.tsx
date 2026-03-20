@@ -56,13 +56,13 @@ export function Sidebar({ onNavigate }: SidebarProps) {
               href={item.href}
               onClick={handleLinkClick}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
                 isActive
-                  ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-                  : "text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700"
+                  ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 shadow-sm"
+                  : "text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 hover:translate-x-0.5"
               )}
             >
-              <item.icon className={cn("w-5 h-5 flex-shrink-0", isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-slate-400")} />
+              <item.icon className={cn("w-5 h-5 flex-shrink-0 transition-colors duration-200", isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-slate-400")} />
               {item.label}
             </Link>
           );

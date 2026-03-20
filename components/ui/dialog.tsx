@@ -19,12 +19,12 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
 
   return (
     <DialogContext.Provider value={{ onOpenChange }}>
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">
         <div
-          className="fixed inset-0 bg-black/50 transition-opacity"
+          className="fixed inset-0 bg-black/50 animate-fade-in"
           onClick={() => onOpenChange(false)}
         />
-        <div className="relative z-50">
+        <div className="relative z-50 animate-scale-in">
           {children}
         </div>
       </div>
