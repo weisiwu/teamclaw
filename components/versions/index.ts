@@ -64,3 +64,8 @@ export { VersionSummaryPanel } from "./VersionSummaryPanel";
  * Version Git Tag exports
  */
 export { VersionGitTagPanel } from "./VersionGitTagPanel";
+
+/**
+ * Task Auto-Bump exports
+ */
+export { TaskBumpPanel } from "./TaskBumpPanel";

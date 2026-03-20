@@ -3,8 +3,9 @@
 import { useState, useMemo } from "react";
 import { GitTag, Version } from "@/lib/api/types";
 import { useTags } from "@/lib/api/tags";
-import { Tag } from "lucide-react";
+import { Tag, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { VersionTagsSearchBar } from "./VersionTagsSearchBar";
 import { VersionSortToggle } from "./VersionSortToggle";
 import { VersionTagsListItem } from "./VersionTagsListItem";
@@ -13,6 +14,7 @@ import { VersionTagsEmptyState } from "./VersionTagsEmptyState";
 import { VersionTagsSkeleton } from "./VersionTagsSkeleton";
 import { CopyToast } from "./CopyToast";
 import { RollbackDialog } from "./RollbackDialog";
+import { TaskBumpPanel } from "./TaskBumpPanel";
 
 type SortOrder = "asc" | "desc";
 
@@ -24,6 +26,9 @@ export function VersionTagsPanel() {
   const [toastVisible, setToastVisible] = useState(false);
   const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false);
   const [rollbackVersion, setRollbackVersion] = useState<Version | null>(null);
+  const [bumpExpanded, setBumpExpanded] = useState(false);
+  const [bumpTaskId, setBumpTaskId] = useState<string>("");
+  const [bumpVersionId, setBumpVersionId] = useState<string>("");
 
   const tags = useMemo(() => data?.data || [], [data]);
 
@@ -115,7 +120,53 @@ export function VersionTagsPanel() {
             className="flex-1 min-w-[240px]"
           />
           <VersionSortToggle order={sortOrder} onChange={setSortOrder} />
+          <Button
+            size="sm"
+            variant={bumpExpanded ? "default" : "outline"}
+            className="gap-1.5"
+            onClick={() => setBumpExpanded(v => !v)}
+          >
+            <Zap className="w-3.5 h-3.5" />
+            快速升级
+          </Button>
         </div>
+
+        {/* Auto-Bump expanded section */}
+        {bumpExpanded && (
+          <div className="mt-3 p-4 bg-amber-50 rounded-lg border border-amber-100">
+            <p className="text-sm text-amber-700 mb-3">
+              输入任务 ID 和版本 ID，触发版本自动升级
+            </p>
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                placeholder="任务 ID (task_xxx)"
+                value={bumpTaskId}
+                onChange={e => setBumpTaskId(e.target.value)}
+                className="flex-1 px-3 py-1.5 text-sm border rounded-md"
+              />
+              <input
+                type="text"
+                placeholder="版本 ID (v_xxx)"
+                value={bumpVersionId}
+                onChange={e => setBumpVersionId(e.target.value)}
+                className="flex-1 px-3 py-1.5 text-sm border rounded-md"
+              />
+            </div>
+            {bumpTaskId && bumpVersionId && (
+              <TaskBumpPanel
+                taskId={bumpTaskId}
+                versionId={bumpVersionId}
+                currentVersion={tags.find(t => t.name.includes("."))?.version}
+              />
+            )}
+            {(!bumpTaskId || !bumpVersionId) && (
+              <p className="text-xs text-amber-500">
+                请在上方输入任务 ID 和版本 ID
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Content */}

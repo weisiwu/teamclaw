@@ -3054,3 +3054,15 @@ export async function triggerTaskBump(taskId: string): Promise<{
   if (json.success) return json.data;
   throw new Error(json.error || '触发 bump 失败');
 }
+
+export function useTriggerTaskBump() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (taskId: string) => triggerTaskBump(taskId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['versions'] });
+      queryClient.invalidateQueries({ queryKey: ['versionSettings'] });
+      queryClient.invalidateQueries({ queryKey: ['versionBumpHistory'] });
+    },
+  });
+}
