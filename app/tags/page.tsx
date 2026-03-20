@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Plus, Search, Tag, Lock, Trash2, Loader2, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 
@@ -137,13 +138,17 @@ export default function TagsPage() {
           <span className="ml-2 text-gray-500">加载中...</span>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-20 text-gray-500 bg-white rounded-xl border">
-          <Tag className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-          <p>暂无 Tag 记录</p>
-          <Link href="/tags/new">
-            <Button variant="ghost" className="mt-2">创建第一个 Tag</Button>
-          </Link>
-        </div>
+        <EmptyState
+          icon={Tag}
+          title="暂无 Tag 记录"
+          description="创建第一个 Tag 开始管理版本标签"
+          action={
+            <Link href="/tags/new">
+              <Button>创建 Tag</Button>
+            </Link>
+          }
+          className="bg-white rounded-xl border"
+        />
       ) : (
         <>
           <div className="bg-white rounded-xl border overflow-hidden mb-6">
