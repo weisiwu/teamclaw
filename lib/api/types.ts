@@ -338,7 +338,7 @@ export interface UpdateCapabilityRequest {
 
 // ========== 版本管理类型 ==========
 
-export type VersionStatus = "draft" | "published" | "archived";
+export type VersionStatus = "draft" | "published" | "archived" | "rolled_back";
 export type BuildStatus = "pending" | "building" | "success" | "failed";
 
 // 预设标签
@@ -407,6 +407,10 @@ export interface Version {
   // 变更追踪指标
   hasScreenshot?: boolean;
   hasSummary?: boolean;
+  // 回退追踪字段 (iter75)
+  commitHash?: string;
+  rollbackCount?: number;
+  lastRollbackAt?: string;
 }
 
 // 版本摘要结构
@@ -464,12 +468,14 @@ export const VERSION_STATUS_LABELS: Record<VersionStatus, string> = {
   draft: "草稿",
   published: "已发布",
   archived: "已归档",
+  rolled_back: "已回退",
 };
 
 export const VERSION_STATUS_BADGE_VARIANT: Record<VersionStatus, "default" | "success" | "warning"> = {
   draft: "default",
   published: "success",
   archived: "warning",
+  rolled_back: "warning",
 };
 
 export const BUILD_STATUS_LABELS: Record<BuildStatus, string> = {
