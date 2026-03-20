@@ -77,7 +77,7 @@ export function compareVersions(a: string, b: string): number {
   if (pa.prerelease.length > 0 && pb.prerelease.length === 0) return -1;
   if (pa.prerelease.length > 0 && pb.prerelease.length > 0) {
     const preCompare = pa.prerelease
-      .map((p, i) => (pb.prerelease[i] || '').localeCompare(p))
+      .map((p, i) => p.localeCompare(pb.prerelease[i] || ''))
       .find(c => c !== 0) ?? 0;
     if (preCompare !== 0) return preCompare;
   }
