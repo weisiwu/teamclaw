@@ -97,7 +97,7 @@ export default function TaskDetailPage({
 
   if (isLoading) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <Link href="/tasks">
           <Button variant="ghost" className="mb-4">
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -116,7 +116,7 @@ export default function TaskDetailPage({
 
   if (error || !task) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <Link href="/tasks">
           <Button variant="ghost" className="mb-4">
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -133,7 +133,7 @@ export default function TaskDetailPage({
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="page-container">
       {/* 返回按钮 */}
       <Link href="/tasks">
         <Button variant="ghost">

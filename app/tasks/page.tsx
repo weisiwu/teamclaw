@@ -587,7 +587,7 @@ function TasksContent() {
 
   return (
     <>
-      <div className="p-6 space-y-6">
+      <div className="page-container">
         {/* 页面标题 */}
         <div className="flex items-center justify-between">
           <div>
@@ -1009,7 +1009,7 @@ function TasksContent() {
 // 加载中占位组件
 function TasksLoading() {
   return (
-    <div className="p-6 space-y-6">
+    <div className="page-container">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">任务管理</h1>

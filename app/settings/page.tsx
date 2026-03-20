@@ -20,7 +20,7 @@ export default function Settings() {
 
   if (!mounted) {
     return (
-      <div className="p-6 space-y-6">
+      <div className="page-container">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">设置</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">系统配置与管理</p>

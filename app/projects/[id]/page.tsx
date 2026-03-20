@@ -305,7 +305,7 @@ export default function ProjectDetailPage({ params }: Props) {
 
   if (isLoading) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <div className="text-center py-12 text-gray-500">加载中...</div>
       </div>
     );
@@ -313,7 +313,7 @@ export default function ProjectDetailPage({ params }: Props) {
 
   if (error || !data || !project) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
           加载失败：{(error as Error).message}
         </div>
@@ -327,7 +327,7 @@ export default function ProjectDetailPage({ params }: Props) {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {/* 顶部导航 */}
       <div className="mb-6">
         <Link href="/projects" className="text-blue-600 hover:underline text-sm">

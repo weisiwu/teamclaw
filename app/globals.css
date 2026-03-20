@@ -95,6 +95,11 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+
+  /* 响应式页面容器 */
+  .page-container {
+    @apply p-4 sm:p-6 space-y-6;
+  }
 }
 
 /* 全局过渡效果 */

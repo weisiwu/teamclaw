@@ -54,7 +54,7 @@ function QueuePageContent() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6">
+      <div className="page-container">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">消息队列</h1>
@@ -72,7 +72,7 @@ function QueuePageContent() {
 
   if (error) {
     return (
-      <div className="p-6 space-y-6">
+      <div className="page-container">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">消息队列</h1>
@@ -98,7 +98,7 @@ function QueuePageContent() {
     : null;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="page-container">
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
         <div>
