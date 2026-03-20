@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { History, MessageSquare, FileText, Search, Filter, Download, ChevronDown, ChevronRight, MessageSquarePlus, Trash2 } from "lucide-react";
+import { History, MessageSquare, FileText, Search, Filter, Download, ChevronDown, ChevronRight, MessageSquarePlus, Trash2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { VersionMessageScreenshot, VersionChangelog, TimelineEvent as ApiTimelineEvent } from "@/lib/api/types";
-import { useVersionTimeline, useAddTimelineEvent, useDeleteTimelineEvent } from "@/lib/api/versions";
+import { useVersionTimeline, useAddTimelineEvent, useDeleteTimelineEvent, useUpdateTimelineEvent } from "@/lib/api/versions";
 
 interface VersionTimelineProps {
   screenshots?: VersionMessageScreenshot[];
@@ -58,6 +58,12 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
   const addNoteMutation = useAddTimelineEvent();
   const deleteEventMutation = useDeleteTimelineEvent();
 
+  // Edit note dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<{ id: string; description: string } | null>(null);
+  const [editNoteText, setEditNoteText] = useState("");
+  const updateEventMutation = useUpdateTimelineEvent();
+
   const handleAddNote = async () => {
     if (!noteText.trim() || !versionId) return;
     try {
@@ -77,6 +83,29 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
       queryClient.invalidateQueries({ queryKey: ["versionTimeline", versionId] });
     } catch (err) {
       console.error("[VersionTimeline] Failed to delete event:", err);
+    }
+  };
+
+  const handleEditEvent = (event: TimelineEvent) => {
+    setEditingEvent({ id: event.id, description: event.description });
+    setEditNoteText(event.description);
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdateNote = async () => {
+    if (!editingEvent || !versionId || !editNoteText.trim()) return;
+    try {
+      await updateEventMutation.mutateAsync({
+        versionId,
+        eventId: editingEvent.id,
+        data: { note: editNoteText.trim() }
+      });
+      queryClient.invalidateQueries({ queryKey: ["versionTimeline", versionId] });
+      setEditDialogOpen(false);
+      setEditingEvent(null);
+      setEditNoteText("");
+    } catch (err) {
+      console.error("[VersionTimeline] Failed to update note:", err);
     }
   };
 
@@ -319,16 +348,27 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
                         {new Date(event.timestamp).toLocaleString("zh-CN")}
                       </span>
                       {event.type === "manual_note" && versionId && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs h-6 px-1 text-muted-foreground hover:text-red-500"
-                          onClick={() => handleDeleteEvent(event.id)}
-                          disabled={deleteEventMutation.isPending}
-                          title="删除备注"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs h-6 px-1 text-muted-foreground hover:text-primary"
+                            onClick={() => handleEditEvent(event)}
+                            title="编辑备注"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs h-6 px-1 text-muted-foreground hover:text-red-500"
+                            onClick={() => handleDeleteEvent(event.id)}
+                            disabled={deleteEventMutation.isPending}
+                            title="删除备注"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </>
                       )}
                     </div>
 
@@ -418,6 +458,39 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
               disabled={!noteText.trim() || addNoteMutation.isPending}
             >
               {addNoteMutation.isPending ? "添加中..." : "添加"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 编辑备注对话框 */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>编辑备注</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <textarea
+              className="w-full min-h-[100px] px-3 py-2 border rounded-md text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary"
+              placeholder="输入备注内容..."
+              value={editNoteText}
+              onChange={(e) => setEditNoteText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  handleUpdateNote();
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              取消
+            </Button>
+            <Button
+              onClick={handleUpdateNote}
+              disabled={!editNoteText.trim() || updateEventMutation.isPending}
+            >
+              {updateEventMutation.isPending ? "保存中..." : "保存"}
             </Button>
           </DialogFooter>
         </DialogContent>

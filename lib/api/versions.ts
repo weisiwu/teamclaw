@@ -2949,6 +2949,34 @@ export function useDeleteTimelineEvent() {
   });
 }
 
+export async function updateTimelineEvent(
+  versionId: string,
+  eventId: string,
+  data: { note: string }
+): Promise<{ eventId: string }> {
+  const res = await fetch(`${API_BASE}/versions/${versionId}/events/${eventId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) {
+    return json.data;
+  }
+  throw new Error(json.message || '更新时间线事件失败');
+}
+
+export function useUpdateTimelineEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ versionId, eventId, data }: { versionId: string; eventId: string; data: { note: string } }) =>
+      updateTimelineEvent(versionId, eventId, data),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['versionTimeline', variables.versionId] });
+    },
+  });
+}
+
 // ========== ChromaDB Vector Store API ==========
 
 export interface VersionChromaEntry {
