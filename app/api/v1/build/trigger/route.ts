@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
+/** Allowed env values for build triggers */
+const VALID_ENVS = new Set(["production", "staging", "development", "test"]);
+
 /**
  * POST /api/v1/build/trigger
  * 触发构建任务
@@ -38,9 +41,9 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  if (!env || typeof env !== "string") {
+  if (!env || typeof env !== "string" || !VALID_ENVS.has(env)) {
     return NextResponse.json(
-      { code: 400, message: "Missing or invalid env" },
+      { code: 400, message: `Missing or invalid env. Must be one of: ${[...VALID_ENVS].join(", ")}` },
       { status: 400 }
     );
   }

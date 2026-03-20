@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 const SERVER_URL = process.env.SERVER_URL || "http://localhost:9700";
 
+/** Allowed env values for build triggers */
+const VALID_ENVS = new Set(["production", "staging", "development", "test"]);
+
 /**
  * GET /api/v1/build/artifacts/[versionId]
  * Proxy to Express server artifact API: GET /api/v1/artifacts/:versionId
@@ -42,7 +45,6 @@ export async function GET(
     return NextResponse.json({ code: 0, data });
   } catch (error: unknown) {
     const err = error as { name?: string; message?: string };
-    // 区分超时错误和网络错误，提供更精确的错误信息
     if (err.name === "TimeoutError" || err.message?.includes("timeout")) {
       console.error(`[ArtifactsProxy] Timeout reaching ${SERVER_URL}:`, error);
       return NextResponse.json(
@@ -51,6 +53,66 @@ export async function GET(
       );
     }
     console.error("[ArtifactsProxy] Error:", error);
+    return NextResponse.json(
+      { code: 503, message: "Artifact server unreachable" },
+      { status: 503 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/v1/build/artifacts/[versionId]
+ * Delete all artifacts for a specific version (proxies to server)
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ versionId: string }> }
+) {
+  const { versionId } = await params;
+
+  if (!versionId) {
+    return NextResponse.json(
+      { code: 400, message: "Missing versionId parameter" },
+      { status: 400 }
+    );
+  }
+
+  // Only allow alphanumeric, dash, underscore, dot (prevent path traversal)
+  if (!/^[a-zA-Z0-9_.-]+$/.test(versionId)) {
+    return NextResponse.json(
+      { code: 400, message: "Invalid versionId format" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const url = `${SERVER_URL}/api/v1/artifacts/${encodeURIComponent(versionId)}`;
+    const response = await fetch(url, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      return NextResponse.json(
+        { code: response.status, message: errData.message || "Failed to delete artifacts" },
+        { status: response.status }
+      );
+    }
+
+    const data = await response.json();
+    return NextResponse.json({ code: 0, data });
+  } catch (error: unknown) {
+    const err = error as { name?: string; message?: string };
+    if (err.name === "TimeoutError" || err.message?.includes("timeout")) {
+      console.error(`[ArtifactsProxy] DELETE timeout reaching ${SERVER_URL}:`, error);
+      return NextResponse.json(
+        { code: 504, message: "Artifact server timeout, please retry later" },
+        { status: 504 }
+      );
+    }
+    console.error("[ArtifactsProxy] DELETE Error:", error);
     return NextResponse.json(
       { code: 503, message: "Artifact server unreachable" },
       { status: 503 }
