@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { DownloadProgressEvent } from '../api/types';
 import { subscribeDownloadProgress } from '../api/download';
 
@@ -20,6 +20,10 @@ export function useDownloadProgress(
   const [eta, setEta] = useState<number>(0);
   const [error, setError] = useState<Error | null>(null);
   const [isComplete, setIsComplete] = useState(false);
+
+  // Keep callback refs up to date without causing effect re-runs
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
   const reset = useCallback(() => {
     setProgress(0);
@@ -45,23 +49,23 @@ export function useDownloadProgress(
         setStatus(event.status);
         setSpeed(event.speed);
         setEta(event.eta);
-        options.onProgress?.(event);
+        optionsRef.current.onProgress?.(event);
 
         if (event.status === 'completed') {
           setIsComplete(true);
-          options.onComplete?.();
+          optionsRef.current.onComplete?.();
         }
       },
       (err) => {
         setError(err);
-        options.onError?.(err);
+        optionsRef.current.onError?.(err);
       }
     );
 
     return () => {
       unsubscribe();
     };
-  }, [taskId, options.onProgress, options.onComplete, options.onError, reset]);
+  }, [taskId, reset]);
 
   return {
     progress,

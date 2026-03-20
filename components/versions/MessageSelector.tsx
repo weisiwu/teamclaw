@@ -123,7 +123,7 @@ export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }:
     };
 
     loadChats();
-  }, [open]);
+  }, [open, selectedChatId]);
 
   // Load messages when chat is selected or dialog opens
   const loadMessages = useCallback(async (chatId: string, token?: string, append = false) => {

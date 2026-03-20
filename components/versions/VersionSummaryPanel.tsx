@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Sparkles, Edit2, X, Check } from "lucide-react";
@@ -31,7 +31,7 @@ export function VersionSummaryPanel({
   const [editChanges, setEditChanges] = useState<string[]>([]);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const loadSummary = async () => {
+  const loadSummary = useCallback(async () => {
     setLoading(true);
     try {
       const data = await getVersionSummary(versionId);
@@ -41,11 +41,11 @@ export function VersionSummaryPanel({
     } finally {
       setLoading(false);
     }
-  };
+  }, [versionId]);
 
   useEffect(() => {
     loadSummary();
-  }, [versionId]);
+  }, [loadSummary]);
 
   const handleGenerate = async () => {
     setGenerating(true);

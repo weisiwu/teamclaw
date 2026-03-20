@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { EnhancedSearchResult, SearchFilter } from '@/lib/api/types';
+import { EnhancedSearchResult } from '@/lib/api/types';
 
 function getFileIcon(type: string) {
   switch (type?.toLowerCase()) {
@@ -69,7 +69,7 @@ export default function DocsPage() {
   };
 
   // Handle filter change
-  const handleFilterChange = (_filter: SearchFilter) => {
+  const handleFilterChange = () => {
     // Filter changes are handled internally by DocSearchBox
   };
 

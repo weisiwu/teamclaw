@@ -510,9 +510,7 @@ export default function VersionDetailPage() {
         onClose={() => setUpgradeConfigOpen(false)}
         versionId={id}
         versionName={version.version}
-        onSave={async (_config) => {
-          setUpgradeConfigOpen(false);
-        }}
+        onSave={async (_config: unknown) => { void _config; setUpgradeConfigOpen(false); }}
         onPreview={() => {
           // Preview is handled by the dialog itself
         }}
