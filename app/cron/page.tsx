@@ -443,7 +443,7 @@ export default function CronPage() {
           <select
             value={filterStatus}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterStatus(e.target.value as "all" | "running" | "stopped")}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            className="px-3 py-2 border border-gray-300 dark:border-slate-500 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
           >
             <option value="all">全部状态</option>
             <option value="running">运行中</option>

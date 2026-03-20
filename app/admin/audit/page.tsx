@@ -89,11 +89,11 @@ export default function AuditLogPage() {
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-lg shadow p-4 mb-6 flex flex-wrap gap-3 items-end">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 mb-6 flex flex-wrap gap-3 items-end">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">操作类型</label>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">操作类型</label>
             <select value={action} onChange={e => { setAction(e.target.value); setOffset(0); }}
-              className="border rounded px-2 py-1.5 text-sm">
+              className="border border-gray-300 dark:border-slate-500 rounded px-2 py-1.5 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400">
               <option value="">全部</option>
               {Object.entries(ACTION_LABELS).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
@@ -101,24 +101,24 @@ export default function AuditLogPage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">操作者</label>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">操作者</label>
             <input value={actor} onChange={e => { setActor(e.target.value); setOffset(0); }}
-              className="border rounded px-2 py-1.5 text-sm" placeholder="搜索操作者" />
+              className="border border-gray-300 dark:border-slate-500 rounded px-2 py-1.5 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 placeholder:text-gray-400 dark:placeholder:text-slate-500" placeholder="搜索操作者" />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">关键词</label>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">关键词</label>
             <input value={keyword} onChange={e => { setKeyword(e.target.value); setOffset(0); }}
-              className="border rounded px-2 py-1.5 text-sm" placeholder="搜索详情" />
+              className="border border-gray-300 dark:border-slate-500 rounded px-2 py-1.5 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 placeholder:text-gray-400 dark:placeholder:text-slate-500" placeholder="搜索详情" />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">开始日期</label>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">开始日期</label>
             <input type="date" value={startDate} onChange={e => { setStartDate(e.target.value); setOffset(0); }}
-              className="border rounded px-2 py-1.5 text-sm" />
+              className="border border-gray-300 dark:border-slate-500 rounded px-2 py-1.5 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400" />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">结束日期</label>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">结束日期</label>
             <input type="date" value={endDate} onChange={e => { setEndDate(e.target.value); setOffset(0); }}
-              className="border rounded px-2 py-1.5 text-sm" />
+              className="border border-gray-300 dark:border-slate-500 rounded px-2 py-1.5 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400" />
           </div>
           <button onClick={fetchLogs} className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
             搜索

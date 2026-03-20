@@ -170,7 +170,7 @@ export function BranchPanel({
           <select
             value={filterProtected}
             onChange={(e) => setFilterProtected(e.target.value as "all" | "protected" | "unprotected")}
-            className="px-3 py-2 border rounded-md text-sm bg-white dark:bg-slate-800"
+            className="px-3 py-2 border border-gray-300 dark:border-slate-500 rounded-md text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
           >
             <option value="all">全部</option>
             <option value="protected">已保护</option>
@@ -198,7 +198,7 @@ export function BranchPanel({
               <select
                 value={selectedBaseBranch}
                 onChange={(e) => setSelectedBaseBranch(e.target.value)}
-                className="px-3 py-2 border rounded-md text-sm bg-white dark:bg-slate-800"
+                className="px-3 py-2 border border-gray-300 dark:border-slate-500 rounded-md text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
               >
                 <option value="">基于分支...</option>
                 {baseBranches.map((b) => (
