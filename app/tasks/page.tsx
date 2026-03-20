@@ -797,6 +797,12 @@ function TasksContent() {
                   <Target className="w-10 h-10 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
                   <p className="text-base">暂无任务</p>
                   <p className="text-sm mt-1 text-gray-400 dark:text-gray-500">创建第一个任务开始使用</p>
+                  <button
+                    onClick={() => router.push(`${pathname}?create=true`)}
+                    className="mt-4 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+                  >
+                    + 创建任务
+                  </button>
                 </CardContent>
               </Card>
             ) : (
@@ -888,6 +894,12 @@ function TasksContent() {
                 <Target className="w-10 h-10 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
                 <p className="text-base">暂无任务</p>
                 <p className="text-sm mt-1 text-gray-400 dark:text-gray-500">创建第一个任务开始使用</p>
+                <button
+                  onClick={() => router.push(`${pathname}?create=true`)}
+                  className="mt-4 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+                >
+                  + 创建任务
+                </button>
               </CardContent>
             </Card>
           ) : (
