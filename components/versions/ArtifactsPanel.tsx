@@ -18,9 +18,13 @@ import {
   AlertCircle,
   ExternalLink,
   FileSymlink,
+  Clock,
+  Trash2,
+  History,
 } from "lucide-react";
 import { useTriggerBuild, useRebuildVersion } from "@/lib/api/versions";
 import type { ArtifactInfo } from "@/lib/api/artifacts";
+import { useDownloadHistory } from "@/lib/hooks/useDownloadHistory";
 
 interface ArtifactsPanelProps {
   versionId: string;
@@ -52,6 +56,7 @@ export function ArtifactsPanel({ versionId, versionName }: ArtifactsPanelProps) 
 
   const triggerBuild = useTriggerBuild();
   const rebuildVersion = useRebuildVersion();
+  const { records, addRecord, removeRecord, clearHistory } = useDownloadHistory();
 
   const isBuilding = triggerBuild.isPending || rebuildVersion.isPending;
 
@@ -108,6 +113,14 @@ export function ArtifactsPanel({ versionId, versionName }: ArtifactsPanelProps) 
       document.body.removeChild(link);
       URL.revokeObjectURL(blobUrl);
       setDownloadMessage({ type: "success", text: `「${artifact.name}」下载已开始` });
+      // Record download history
+      addRecord({
+        versionId,
+        versionName: versionName || versionId,
+        artifactName: artifact.name,
+        artifactPath: artifact.path,
+        fileSize: artifactData?.size ?? 0,
+      });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setDownloadMessage({ type: "error", text: `下载失败: ${msg}` });
@@ -396,6 +409,56 @@ export function ArtifactsPanel({ versionId, versionName }: ArtifactsPanelProps) 
                     下载
                   </Button>
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Download history section */}
+      {records.length > 0 && (
+        <div className="border rounded-lg overflow-hidden">
+          <div className="bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
+            <span className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+              <History className="w-3.5 h-3.5" />
+              下载历史
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs text-gray-400 hover:text-red-500 hover:bg-red-50 gap-1"
+              onClick={clearHistory}
+            >
+              <Trash2 className="w-3 h-3" />
+              清空
+            </Button>
+          </div>
+          <div className="divide-y max-h-48 overflow-y-auto">
+            {records.slice(0, 10).map((record) => (
+              <div
+                key={record.id}
+                className="flex items-center gap-2 px-4 py-2 hover:bg-gray-50 transition-colors group"
+              >
+                <Clock className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-gray-800 truncate">
+                    <span className="font-medium">{record.versionName}</span>
+                    {' — '}
+                    <span className="text-gray-600">{record.artifactName}</span>
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    {record.fileSizeFormatted} · {new Date(record.downloadedAt).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => removeRecord(record.id)}
+                  title="删除记录"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
               </div>
             ))}
           </div>
