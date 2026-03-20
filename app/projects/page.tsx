@@ -1,12 +1,39 @@
 'use client';
 
 import Link from 'next/link';
+import { useState, useRef, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useProjects, useDeleteProject } from '../../hooks/useProjects';
 
 export default function ProjectsPage() {
   const { data, isLoading, error, refetch } = useProjects();
   const deleteMutation = useDeleteProject();
+  const [focusedIndex, setFocusedIndex] = useState<number>(-1);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  const handleGridKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!data?.projects.length) return;
+    const cols = window.innerWidth >= 1024 ? 3 : window.innerWidth >= 768 ? 2 : 1;
+    const len = data.projects.length;
+    let next = focusedIndex;
+
+    if (e.key === 'ArrowRight') { next = (focusedIndex + 1) % len; e.preventDefault(); }
+    else if (e.key === 'ArrowLeft') { next = (focusedIndex - 1 + len) % len; e.preventDefault(); }
+    else if (e.key === 'ArrowDown') { next = Math.min(focusedIndex + cols, len - 1); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { next = Math.max(focusedIndex - cols, 0); e.preventDefault(); }
+    else if (e.key === 'Enter' && focusedIndex >= 0) {
+      const pid = data.projects[focusedIndex].id;
+      window.location.href = `/projects/${pid}`;
+      return;
+    } else return;
+
+    setFocusedIndex(next);
+    // scroll focused card into view
+    setTimeout(() => {
+      const cards = gridRef.current?.querySelectorAll('[data-project-card]');
+      cards?.[next]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }, 0);
+  }, [focusedIndex, data]);
 
   return (
     <div className="page-container">
@@ -64,11 +91,22 @@ export default function ProjectsPage() {
       )}
 
       {data && data.projects.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {data.projects.map((project) => (
+        <div
+          ref={gridRef}
+          tabIndex={0}
+          onKeyDown={handleGridKeyDown}
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 outline-none"
+        >
+          {data.projects.map((project, i) => (
             <div
               key={project.id}
-              className="page-section hover:shadow-md transition-shadow"
+              data-project-card
+              onClick={() => setFocusedIndex(i)}
+              className={`page-section transition-shadow cursor-pointer ${
+                focusedIndex === i
+                  ? 'ring-2 ring-blue-500 dark:ring-blue-400 shadow-md'
+                  : 'hover:shadow-md'
+              }`}
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1 min-w-0">
@@ -125,7 +163,8 @@ export default function ProjectsPage() {
                   查看详情
                 </Link>
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     if (confirm(`确定删除项目 "${project.name}" 吗？`)) {
                       deleteMutation.mutate(project.id);
                     }
