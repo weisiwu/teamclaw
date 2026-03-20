@@ -1,15 +1,19 @@
 "use client";
 
 import { GitTag } from "@/lib/api/types";
-import { X, Tag, Copy, Check } from "lucide-react";
+import { X, Tag, Copy, Check, Link2, FileText, Plus, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { VersionMessageScreenshot } from "@/lib/api/types";
 
 interface VersionTagsDetailDrawerProps {
   tag: GitTag | null;
+  screenshots?: VersionMessageScreenshot[];
   onClose: () => void;
+  onLinkScreenshot?: (tagName: string) => void;
+  onUnlinkScreenshot?: (screenshotId: string) => void;
 }
 
 const statusConfig = {
@@ -18,12 +22,67 @@ const statusConfig = {
   protected: { label: "保护", variant: "info" as const },
 };
 
-export function VersionTagsDetailDrawer({ tag, onClose }: VersionTagsDetailDrawerProps) {
+// Conventional commit type detection
+const commitTypeConfig: Record<string, { label: string; bgClass: string; textClass: string }> = {
+  feat:    { label: "新功能",   bgClass: "bg-emerald-50",  textClass: "text-emerald-700" },
+  fix:     { label: "Bug修复",  bgClass: "bg-red-50",      textClass: "text-red-700" },
+  docs:    { label: "文档",     bgClass: "bg-blue-50",     textClass: "text-blue-700" },
+  style:   { label: "样式",    bgClass: "bg-purple-50",   textClass: "text-purple-700" },
+  refactor:{ label: "重构",     bgClass: "bg-orange-50",   textClass: "text-orange-700" },
+  perf:    { label: "性能",    bgClass: "bg-yellow-50",   textClass: "text-yellow-700" },
+  ci:      { label: "CI/CD",   bgClass: "bg-slate-50",    textClass: "text-slate-700" },
+  test:    { label: "测试",    bgClass: "bg-pink-50",     textClass: "text-pink-700" },
+  chore:   { label: "构建",    bgClass: "bg-gray-50",     textClass: "text-gray-600" },
+};
+
+function detectCommitType(subject: string): string | null {
+  const match = subject.match(/^(\w+)[\(:]/);
+  if (!match) return null;
+  return match[1].toLowerCase();
+}
+
+function getChangeTypes(subject: string): Array<{ label: string; bgClass: string; textClass: string }> {
+  const types: Array<{ label: string; bgClass: string; textClass: string }> = [];
+  const type = detectCommitType(subject);
+  if (type && commitTypeConfig[type]) {
+    types.push(commitTypeConfig[type]);
+  }
+  return types;
+}
+
+function SectionHeader({
+  icon: Icon,
+  title,
+  action,
+}: {
+  icon: React.ElementType;
+  title: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center gap-2">
+        <Icon className="w-4 h-4 text-gray-400" />
+        <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+export function VersionTagsDetailDrawer({
+  tag,
+  screenshots = [],
+  onClose,
+  onLinkScreenshot,
+  onUnlinkScreenshot,
+}: VersionTagsDetailDrawerProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   if (!tag) return null;
 
   const status = statusConfig[tag.status];
+  const changeTypes = getChangeTypes(tag.subject);
   const date = new Date(tag.taggerDate).toLocaleDateString("zh-CN", {
     year: "numeric",
     month: "long",
@@ -45,10 +104,7 @@ export function VersionTagsDetailDrawer({ tag, onClose }: VersionTagsDetailDrawe
   return (
     <>
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/30 z-40"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
 
       {/* Drawer */}
       <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-50 flex flex-col animate-in slide-in-from-right duration-300">
@@ -68,12 +124,20 @@ export function VersionTagsDetailDrawer({ tag, onClose }: VersionTagsDetailDrawe
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-          {/* Tag name + status */}
-          <div className="flex items-center gap-3">
+          {/* Tag name + status + change type */}
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono text-2xl font-bold text-gray-900">
               {tag.name}
             </span>
             <Badge variant={status.variant}>{status.label}</Badge>
+            {changeTypes.map((ct) => (
+              <span
+                key={ct.label}
+                className={cn("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium", ct.bgClass, ct.textClass)}
+              >
+                {ct.label}
+              </span>
+            ))}
           </div>
 
           {/* Version */}
@@ -95,45 +159,174 @@ export function VersionTagsDetailDrawer({ tag, onClose }: VersionTagsDetailDrawe
             isMonospace
           />
 
-          {/* Short commit */}
-          <DetailItem
-            label="Short Hash"
-            value={tag.commit}
-            copyValue={tag.commit}
-            onCopy={handleCopy}
-            copied={copiedField === "commit"}
-            isMonospace
-          />
-
           {/* Commit message */}
-          <DetailItem
-            label="提交信息"
-            value={tag.subject}
-          />
+          <DetailItem label="提交信息" value={tag.subject} />
 
           {/* Author */}
-          <DetailItem
-            label="作者"
-            value={tag.author}
-          />
+          <DetailItem label="作者" value={tag.author} />
 
           {/* Email */}
-          <DetailItem
-            label="邮箱"
-            value={tag.authorEmail}
-          />
+          <DetailItem label="邮箱" value={tag.authorEmail} />
 
           {/* Date */}
-          <DetailItem
-            label="创建时间"
-            value={date}
-          />
+          <DetailItem label="创建时间" value={date} />
 
           {/* Project */}
-          <DetailItem
-            label="项目"
-            value={tag.projectName}
-          />
+          <DetailItem label="项目" value={tag.projectName} />
+
+          {/* ========== 变更摘要 Section ========== */}
+          <div className="border-t pt-5">
+            <SectionHeader
+              icon={FileText}
+              title="变更摘要"
+            />
+            <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+              {/* Commit type breakdown */}
+              {changeTypes.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="text-xs text-gray-500 font-medium">变更类型</div>
+                  <div className="flex flex-wrap gap-2">
+                    {changeTypes.map((ct) => (
+                      <span
+                        key={ct.label}
+                        className={cn(
+                          "inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border",
+                          ct.bgClass,
+                          ct.textClass,
+                          "border-opacity-50"
+                        )}
+                        style={{ borderColor: 'currentColor', opacity: 0.8 }}
+                      >
+                        {ct.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Zap className="w-4 h-4 text-yellow-500" />
+                  <span>无明确类型标注（建议使用 conventional commits）</span>
+                </div>
+              )}
+
+              {/* Summary note */}
+              <div className="text-xs text-gray-400 leading-relaxed">
+                查看完整变更历史，请访问「版本面板」查看该版本的详细文件变更和 commit 记录。
+              </div>
+
+              {/* Quick links */}
+              <div className="flex gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 text-xs h-7"
+                  onClick={() => {
+                    const panelUrl = `/versions/panel?tag=${encodeURIComponent(tag.name)}`;
+                    window.open(panelUrl, '_blank');
+                  }}
+                >
+                  <FileText className="w-3 h-3 mr-1" />
+                  查看完整变更
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* ========== 消息截图 Section ========== */}
+          <div className="border-t pt-5">
+            <SectionHeader
+              icon={Link2}
+              title="消息截图"
+              action={
+                onLinkScreenshot && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                    onClick={() => onLinkScreenshot(tag.name)}
+                  >
+                    <Plus className="w-3 h-3 mr-0.5" />
+                    关联截图
+                  </Button>
+                )
+              }
+            />
+            {screenshots.length === 0 ? (
+              <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center">
+                <div className="text-gray-400 text-sm">暂无关联截图</div>
+                <div className="text-xs text-gray-300 mt-1">关联飞书消息截图，让版本历史更完整</div>
+                {onLinkScreenshot && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 h-8 text-xs"
+                    onClick={() => onLinkScreenshot(tag.name)}
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    关联截图
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {screenshots.map((screenshot) => (
+                  <div
+                    key={screenshot.id}
+                    className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100"
+                  >
+                    <div className="w-16 h-10 rounded bg-gray-200 flex-shrink-0 overflow-hidden">
+                      <img
+                        src={screenshot.thumbnailUrl || screenshot.screenshotUrl}
+                        alt="screenshot"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-gray-700 truncate">
+                        {screenshot.messageContent || '消息截图'}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {new Date(screenshot.createdAt).toLocaleDateString('zh-CN')}
+                      </div>
+                    </div>
+                    {onUnlinkScreenshot && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-gray-400 hover:text-red-500"
+                        onClick={() => onUnlinkScreenshot(screenshot.id)}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                {/* Thumbnail grid for multiple screenshots */}
+                {screenshots.length > 1 && (
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    {screenshots.slice(0, 6).map((screenshot) => (
+                      <div
+                        key={screenshot.id}
+                        className="aspect-video rounded overflow-hidden bg-gray-100 border border-gray-200"
+                      >
+                        <img
+                          src={screenshot.thumbnailUrl || screenshot.screenshotUrl}
+                          alt="screenshot"
+                          className="w-full h-full object-cover hover:opacity-80 cursor-pointer transition-opacity"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Footer */}

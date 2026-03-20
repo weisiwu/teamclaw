@@ -18,8 +18,29 @@ const statusConfig = {
   protected: { label: "保护", variant: "info" as const },
 };
 
+// Conventional commit type detection
+const commitTypeConfig: Record<string, { label: string; className: string; icon: string }> = {
+  feat:    { label: "feat",  className: "bg-emerald-100 text-emerald-700 border-emerald-200", icon: "✨" },
+  fix:     { label: "fix",   className: "bg-red-100 text-red-700 border-red-200",           icon: "🐛" },
+  docs:    { label: "docs",  className: "bg-blue-100 text-blue-700 border-blue-200",         icon: "📖" },
+  style:   { label: "style", className: "bg-purple-100 text-purple-700 border-purple-200",   icon: "💄" },
+  refactor:{ label: "ref",   className: "bg-orange-100 text-orange-700 border-orange-200",    icon: "♻️" },
+  perf:    { label: "perf",  className: "bg-yellow-100 text-yellow-700 border-yellow-200",    icon: "⚡" },
+  ci:      { label: "ci",    className: "bg-slate-100 text-slate-700 border-slate-200",      icon: "🔧" },
+  test:    { label: "test",  className: "bg-pink-100 text-pink-700 border-pink-200",          icon: "🧪" },
+  chore:   { label: "chore", className: "bg-gray-100 text-gray-600 border-gray-200",          icon: "🔩" },
+};
+
+function detectCommitType(subject: string): { label: string; className: string; icon: string } | null {
+  const match = subject.match(/^(\w+)[\(:]/);
+  if (!match) return null;
+  const type = match[1].toLowerCase();
+  return commitTypeConfig[type] || null;
+}
+
 export function VersionTagsListItem({ tag, onClick, onRollbackClick }: VersionTagsListItemProps) {
   const status = statusConfig[tag.status];
+  const commitType = detectCommitType(tag.subject);
   const date = new Date(tag.taggerDate).toLocaleDateString("zh-CN", {
     year: "numeric",
     month: "short",
@@ -40,9 +61,19 @@ export function VersionTagsListItem({ tag, onClick, onRollbackClick }: VersionTa
           <div className="font-mono font-semibold text-gray-900 text-sm">
             {tag.name}
           </div>
-          <Badge variant={status.variant} className="text-[10px] mt-0.5">
-            {status.label}
-          </Badge>
+          <div className="flex items-center gap-1 flex-wrap">
+            <Badge variant={status.variant} className="text-[10px]">
+              {status.label}
+            </Badge>
+            {commitType && (
+              <span
+                className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded border font-mono font-medium ${commitType.className}`}
+                title={tag.subject}
+              >
+                {commitType.icon} {commitType.label}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

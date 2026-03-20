@@ -3066,3 +3066,46 @@ export function useTriggerTaskBump() {
     },
   });
 }
+
+// ========== Version Change Stats API ==========
+
+export interface ChangeStats {
+  tagName: string;
+  commitCount: number;
+  fileCount: number;
+  totalAdditions: number;
+  totalDeletions: number;
+  changeTypes: {
+    feat: number;
+    fix: number;
+    docs: number;
+    style: number;
+    refactor: number;
+    perf: number;
+    ci: number;
+    test: number;
+    chore: number;
+    other: number;
+  };
+  topFiles: Array<{ path: string; additions: number; deletions: number }>;
+}
+
+export async function getVersionChangeStats(tagName: string): Promise<ChangeStats | null> {
+  try {
+    const res = await fetch(`${API_BASE}/versions/change-stats?tag=${encodeURIComponent(tagName)}`);
+    const json = await res.json();
+    if ((json.code === 200 || json.code === 0) && json.data) return json.data;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function useVersionChangeStats(tagName: string | null) {
+  return useQuery({
+    queryKey: ['versionChangeStats', tagName],
+    queryFn: () => getVersionChangeStats(tagName!),
+    enabled: Boolean(tagName),
+    staleTime: 5 * 60 * 1000, // 5 min cache
+  });
+}

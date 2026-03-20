@@ -17,6 +17,7 @@ import { runMigrations } from '../db/migrations/run.js';
 import { executeAutoBump, getBumpHistory } from '../services/autoBump.js';
 import path from 'path';
 import os from 'os';
+import { execSync } from 'child_process';
 
 const router = Router();
 
@@ -1783,5 +1784,83 @@ router.get('/:id/file-changes', (req: Request, res: Response) => {
   } catch (err) {
     console.error('[file-changes] Error:', err);
     res.status(500).json(error(500, '文件变更获取失败'));
+  }
+});
+
+// GET /api/v1/versions/change-stats — Get change stats summary for a tag
+router.get('/change-stats', (req: Request, res: Response) => {
+  try {
+    const { tag } = req.query as { tag?: string };
+    if (!tag) {
+      res.status(400).json(error(400, 'tag parameter required'));
+      return;
+    }
+
+    const projectPath = process.env.TEAMCLAW_PROJECT_PATH || '';
+
+    // Get commits between this tag and previous tag
+    let commitCount = 0;
+    let changeTypes = { feat: 0, fix: 0, docs: 0, style: 0, refactor: 0, perf: 0, ci: 0, test: 0, chore: 0, other: 0 };
+    let totalAdditions = 0;
+    let totalDeletions = 0;
+    const topFiles: Array<{ path: string; additions: number; deletions: number }> = [];
+
+    try {
+      // Get commits for this tag
+      const logOutput = execSync(
+        `git log ${tag}~10..${tag} --pretty=format:"%s" 2>/dev/null`,
+        { cwd: projectPath, encoding: 'utf-8', timeout: 10000 }
+      ) as string;
+
+      const subjects = (logOutput || '').split('\n').filter(Boolean);
+      commitCount = subjects.length;
+
+      for (const subject of subjects) {
+        const m = subject.match(/^(\w+)[\(:]/);
+        const type = m ? m[1].toLowerCase() : null;
+        if (type && type in changeTypes) {
+          (changeTypes as Record<string, number>)[type]++;
+        } else {
+          changeTypes.other++;
+        }
+      }
+
+      // Get file changes summary
+      const diffOutput = execSync(
+        `git diff --numstat ${tag}~10..${tag} 2>/dev/null`,
+        { cwd: projectPath, encoding: 'utf-8', timeout: 10000 }
+      ) as string;
+
+      const lines = (diffOutput || '').trim().split('\n').filter(Boolean);
+      for (const line of lines) {
+        const parts = line.split('\t');
+        if (parts.length >= 3) {
+          const adds = parseInt(parts[0], 10) || 0;
+          const dels = parseInt(parts[1], 10) || 0;
+          totalAdditions += adds;
+          totalDeletions += dels;
+          topFiles.push({ path: parts.slice(2).join('\t'), additions: adds, deletions: dels });
+        }
+      }
+
+      // Sort by total changes and take top 5
+      topFiles.sort((a, b) => (b.additions + b.deletions) - (a.additions + a.deletions));
+      topFiles.splice(5);
+    } catch {
+      // Git operations may fail for some tags - return partial data
+    }
+
+    res.json(success({
+      tagName: tag,
+      commitCount,
+      fileCount: topFiles.length,
+      totalAdditions,
+      totalDeletions,
+      changeTypes,
+      topFiles,
+    }));
+  } catch (err) {
+    console.error('[change-stats] Error:', err);
+    res.status(500).json(error(500, '获取变更统计失败'));
   }
 });
