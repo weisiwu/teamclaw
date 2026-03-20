@@ -26,6 +26,7 @@ import artifactRouter from './routes/artifact.js';
 import branchRouter from './routes/branch.js';
 import llmRouter from './routes/llm.js';
 import downloadRouter from './routes/download.js';
+import feishuRouter from './routes/feishu.js';
 import { getArtifactsRootDir } from './services/artifactStore.js';
 import './services/taskInit.js'; // 初始化任务机制钩子
 import { registerAutoBumpHook } from './hooks/autoBumpOnTaskDone.js';
@@ -72,6 +73,7 @@ app.use('/api/v1/search', searchRouter);
 app.use('/api/v1/cron-jobs', cronJobRouter);
 app.use('/api/v1/token-stats', tokenStatsRouter);
 app.use('/api/v1/dashboard', dashboardRouter);
+app.use('/api/v1/feishu', feishuRouter);
 // Admin routes — all protected by requireAdmin middleware
 const adminRouter = Router();
 adminRouter.use(requireAdmin);
