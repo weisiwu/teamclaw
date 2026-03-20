@@ -792,7 +792,13 @@ function TasksContent() {
             ) : error ? (
               <Card><CardContent className="py-12 text-center text-red-500">加载失败</CardContent></Card>
             ) : data?.data.length === 0 ? (
-              <Card><CardContent className="py-12 text-center text-gray-500 dark:text-gray-400">暂无任务</CardContent></Card>
+              <Card>
+                <CardContent className="py-12 text-center text-gray-500 dark:text-gray-400">
+                  <Target className="w-10 h-10 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+                  <p className="text-base">暂无任务</p>
+                  <p className="text-sm mt-1 text-gray-400 dark:text-gray-500">创建第一个任务开始使用</p>
+                </CardContent>
+              </Card>
             ) : (
               <div className="relative">
                 {/* 时间线竖线 */}
@@ -879,7 +885,9 @@ function TasksContent() {
           ) : data?.data.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center text-gray-500 dark:text-gray-400">
-                暂无任务
+                <Target className="w-10 h-10 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+                <p className="text-base">暂无任务</p>
+                <p className="text-sm mt-1 text-gray-400 dark:text-gray-500">创建第一个任务开始使用</p>
               </CardContent>
             </Card>
           ) : (
