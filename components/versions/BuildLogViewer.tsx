@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { RotateCcw } from 'lucide-react';
 
 interface BuildLog {
@@ -21,6 +21,24 @@ interface BuildLogViewerProps {
 export function BuildLogViewer({ buildLogs, onClear }: BuildLogViewerProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'success' | 'failed'>('all');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // 键盘快捷键：Escape 折叠当前展开项
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && expandedId) {
+        setExpandedId(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [expandedId]);
+
+  const handleCopy = (logs: string[], id: string) => {
+    navigator.clipboard.writeText(logs.join('\n'));
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const filteredLogs = buildLogs.filter((log) => {
     if (filter === 'all') return true;
@@ -33,9 +51,7 @@ export function BuildLogViewer({ buildLogs, onClear }: BuildLogViewerProps) {
     return `${(ms / 1000).toFixed(1)}s`;
   };
 
-  const copyToClipboard = (logs: string[]) => {
-    navigator.clipboard.writeText(logs.join('\n'));
-  };
+
 
   if (buildLogs.length === 0) {
     return (
@@ -121,11 +137,12 @@ export function BuildLogViewer({ buildLogs, onClear }: BuildLogViewerProps) {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      copyToClipboard(log.logs);
+                      handleCopy(log.logs, log.id);
                     }}
-                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                    className="text-xs flex items-center gap-1"
+                    style={{ color: copiedId === log.id ? '#22c55e' : undefined }}
                   >
-                    📋 复制日志
+                    {copiedId === log.id ? '✅ 已复制' : '📋 复制日志'}
                   </button>
                   <button
                     onClick={(e) => {
