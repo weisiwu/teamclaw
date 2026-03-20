@@ -68,7 +68,7 @@ const buildStatOptions: {
   {
     key: "hasScreenshot",
     label: "有截图",
-    icon: <Image className="w-3.5 h-3.5" />,
+    icon: <Image className="w-3.5 h-3.5" aria-hidden="true" />,
     className: "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100",
     getCount: (tags) => tags.filter((t) => t.hasScreenshot === true).length,
   },

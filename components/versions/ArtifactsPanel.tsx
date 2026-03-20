@@ -36,7 +36,7 @@ function getFileIcon(fileName: string) {
   if (["js", "ts", "jsx", "tsx", "css", "html"].includes(ext))
     return <Code className="w-4 h-4 text-blue-500" />;
   if (["png", "jpg", "jpeg", "gif", "svg", "ico", "webp"].includes(ext))
-    return <Image className="w-4 h-4 text-purple-500" />;
+    return <Image className="w-4 h-4 text-purple-500" aria-label="Image file" />;
   if (["zip", "tar", "gz", "tgz"].includes(ext))
     return <Archive className="w-4 h-4 text-amber-500" />;
   if (["json", "xml", "yaml", "yml", "txt", "md", "csv"].includes(ext))
