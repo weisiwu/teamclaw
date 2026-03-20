@@ -276,3 +276,194 @@ export function loadChangelog(versionTag: string): string | null {
   }
   return null;
 }
+
+// =============================================================================
+// Version Change Events — event tracking for the version timeline
+// =============================================================================
+
+import { getDb } from '../db/sqlite.js';
+import type { ChangeEventType } from '../models/versionChangeEvent.js';
+
+export interface TimelineEvent {
+  id: string;
+  type: ChangeEventType;
+  title: string;
+  description?: string;
+  actor: string;
+  timestamp: string;
+  screenshotId?: string;
+  screenshot?: {
+    id: string;
+    url: string;
+    thumbnailUrl?: string;
+    messageContent?: string;
+    senderName?: string;
+  };
+  changelog?: {
+    features: string[];
+    fixes: string[];
+    improvements: string[];
+    breaking: string[];
+    docs: string[];
+  };
+}
+
+function makeEventId(): string {
+  return `evt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/**
+ * Record a version change event
+ */
+export function recordChangeEvent(data: {
+  versionId: string;
+  type: ChangeEventType;
+  title: string;
+  description?: string;
+  actor?: string;
+  actorId?: string;
+  screenshotId?: string;
+  changelogId?: string;
+  buildId?: string;
+  taskId?: string;
+  metadata?: Record<string, unknown>;
+}): string {
+  const db = getDb();
+  const id = makeEventId();
+  db.prepare(`
+    INSERT INTO version_change_events (
+      id, version_id, event_type, title, description,
+      actor, actor_id, screenshot_id, changelog_id, build_id, task_id, metadata
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    data.versionId,
+    data.type,
+    data.title,
+    data.description ?? null,
+    data.actor ?? 'system',
+    data.actorId ?? null,
+    data.screenshotId ?? null,
+    data.changelogId ?? null,
+    data.buildId ?? null,
+    data.taskId ?? null,
+    data.metadata ? JSON.stringify(data.metadata) : null
+  );
+  return id;
+}
+
+/**
+ * Get the full timeline for a version
+ */
+export function getVersionTimeline(versionId: string): TimelineEvent[] {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT e.*, s.screenshot_url, s.message_content, s.sender_name, s.thumbnail_url
+    FROM version_change_events e
+    LEFT JOIN screenshots s ON e.screenshot_id = s.id
+    WHERE e.version_id = ?
+    ORDER BY e.created_at DESC
+  `).all(versionId) as Array<{
+    id: string;
+    event_type: string;
+    title: string;
+    description: string | null;
+    actor: string;
+    created_at: string;
+    screenshot_id: string | null;
+    screenshot_url: string | null;
+    message_content: string | null;
+    sender_name: string | null;
+    thumbnail_url: string | null;
+    metadata: string | null;
+  }>;
+
+  return rows.map(row => ({
+    id: row.id,
+    type: row.event_type as ChangeEventType,
+    title: row.title,
+    description: row.description ?? undefined,
+    actor: row.actor,
+    timestamp: row.created_at,
+    screenshotId: row.screenshot_id ?? undefined,
+    screenshot: row.screenshot_id ? {
+      id: row.screenshot_id,
+      url: row.screenshot_url!,
+      thumbnailUrl: row.thumbnail_url ?? undefined,
+      messageContent: row.message_content ?? undefined,
+      senderName: row.sender_name ?? undefined,
+    } : undefined,
+  }));
+}
+
+/**
+ * Hook: called when a version is created
+ */
+export function onVersionCreated(versionId: string, actor: string, actorId?: string): string {
+  return recordChangeEvent({
+    versionId,
+    type: 'version_created',
+    title: '版本创建',
+    description: `版本已创建`,
+    actor,
+    actorId,
+  });
+}
+
+/**
+ * Hook: called when a screenshot is linked to a version
+ */
+export function onScreenshotLinked(
+  versionId: string,
+  screenshotId: string,
+  actor: string,
+  actorId?: string
+): string {
+  return recordChangeEvent({
+    versionId,
+    type: 'screenshot_linked',
+    title: '关联消息截图',
+    description: '关联消息截图记录',
+    actor,
+    actorId,
+    screenshotId,
+  });
+}
+
+/**
+ * Hook: called when a changelog is generated
+ */
+export function onChangelogGenerated(
+  versionId: string,
+  changelogId: string,
+  entryCount: number,
+  actor: string = 'ai'
+): string {
+  return recordChangeEvent({
+    versionId,
+    type: 'changelog_generated',
+    title: '变更摘要生成',
+    description: `基于 ${entryCount} 个条目生成变更摘要`,
+    actor,
+    changelogId,
+  });
+}
+
+/**
+ * Hook: called when a manual note is added
+ */
+export function onManualNote(
+  versionId: string,
+  note: string,
+  actor: string,
+  actorId?: string
+): string {
+  return recordChangeEvent({
+    versionId,
+    type: 'manual_note',
+    title: '添加备注',
+    description: note,
+    actor,
+    actorId,
+  });
+}

@@ -4,6 +4,7 @@ import { ScreenshotModel } from '../models/screenshot.js';
 import { VersionSummaryModel } from '../models/versionSummary.js';
 import { saveScreenshot, deleteScreenshotFile } from '../services/fileStorage.js';
 import { generateChangelogFromCommits } from '../services/changelogGenerator.js';
+import { onVersionCreated, onScreenshotLinked, onChangelogGenerated } from '../services/changeTracker.js';
 import { getGitLog, getTags, createTag, getBranches, getCurrentBranch, createBranch, tagExists } from '../services/gitService.js';
 import { runBuild, getBuildConfig } from '../services/buildService.js';
 import { listArtifacts, deleteArtifacts, getArtifactInfo, getArtifactStream, importArtifactsFromDir, getArtifactsTotalSize } from '../services/artifactStore.js';
@@ -253,7 +254,28 @@ router.get('/:id', (req: Request, res: Response) => {
   }));
 });
 
-// POST /api/v1/versions — 创建版本
+// GET /api/v1/versions/:id/timeline — get full change timeline for a version
+router.get('/:id/timeline', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const row = db.prepare('SELECT id, version FROM versions WHERE id = ?').get(id) as { id: string; version: string } | undefined;
+  if (!row) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+  try {
+    const { getVersionTimeline } = require('../services/changeTracker.js');
+    const events = getVersionTimeline(id);
+    res.json(success({
+      versionId: id,
+      version: row.version,
+      events,
+    }));
+  } catch (err) {
+    console.error('[version] Timeline fetch error:', err);
+    res.status(500).json(error(500, 'Failed to fetch timeline'));
+  }
+});
+
 router.post('/', (req: Request, res: Response) => {
   const { version, title, description, status, tags, branch, projectPath } = req.body as {
     version: string;
@@ -332,6 +354,13 @@ router.post('/', (req: Request, res: Response) => {
     });
   } catch (err) {
     console.warn('[version] Auto summary generation failed:', err);
+  }
+
+  // Record version creation event
+  try {
+    onVersionCreated(id, 'system');
+  } catch (err) {
+    console.warn('[version] Failed to record creation event:', err);
   }
 
   res.status(201).json(success({
@@ -1121,6 +1150,13 @@ router.post('/:id/screenshots', async (req: Request, res: Response) => {
       branchName,
     });
 
+    // Record screenshot linked event
+    try {
+      onScreenshotLinked(id, screenshot.id, senderName || 'system');
+    } catch (err) {
+      console.warn('[version] Failed to record screenshot event:', err);
+    }
+
     res.status(201).json(success(screenshot));
   } catch (err) {
     console.error('Screenshot upload error:', err);
@@ -1267,6 +1303,14 @@ router.post('/:id/summary/generate', async (req: Request, res: Response) => {
 
     // Also sync summary to versions DB table
     db.prepare('UPDATE versions SET summary = ? WHERE id = ?').run(generated.content, id);
+
+    // Record changelog generated event
+    try {
+      const entryCount = (generated.features?.length || 0) + (generated.fixes?.length || 0) + (generated.improvements?.length || 0);
+      onChangelogGenerated(id, summary.id, entryCount);
+    } catch (err) {
+      console.warn('[version] Failed to record changelog event:', err);
+    }
 
     res.json(success(summary));
   } catch (err) {
