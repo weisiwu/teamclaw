@@ -33,7 +33,7 @@ const DEFAULT_PROJECT_PATH = process.env.TEAMCLAW_PROJECT_PATH || '';
 
 // GET /api/v1/tags — 获取所有标签记录（从 git + DB 合并）
 router.get('/', (req: Request, res: Response) => {
-  const { versionId, archived, protected: isProtected, page, pageSize, projectPath: reqProjectPath } = req.query;
+  const { versionId, archived, protected: isProtected, source, page, pageSize, projectPath: reqProjectPath } = req.query;
 
   // Get git tags from project path
   const projectPath = (reqProjectPath as string) || DEFAULT_PROJECT_PATH;
@@ -42,11 +42,13 @@ router.get('/', (req: Request, res: Response) => {
     gitTags = gitGetTags(projectPath);
   }
 
-  // Get DB tag records for protected marks
+  // Get DB tag records for protected marks and source info
   const dbTags = getAllTagRecords();
   const protectedMap = new Map<string, boolean>();
+  const sourceMap = new Map<string, 'auto' | 'manual'>();
   for (const t of dbTags) {
     protectedMap.set(t.name, t.protected);
+    sourceMap.set(t.name, t.source);
   }
 
   // Merge: git tags + protected from DB
@@ -57,6 +59,7 @@ router.get('/', (req: Request, res: Response) => {
     annotation: t.message,
     hasRecord: protectedMap.has(t.name),
     protected: protectedMap.get(t.name) || false,
+    source: sourceMap.get(t.name) || 'manual' as 'auto' | 'manual',
   }));
 
   // Apply filters
@@ -65,6 +68,10 @@ router.get('/', (req: Request, res: Response) => {
   if (isProtected !== undefined) {
     const isProt = isProtected === 'true';
     tags = tags.filter(t => t.protected === isProt);
+  }
+
+  if (source !== undefined && source !== 'all') {
+    tags = tags.filter(t => t.source === source);
   }
 
   const total = tags.length;
@@ -120,6 +127,7 @@ router.get('/:tagName', (req: Request, res: Response) => {
     hasRecord: !!dbRecord,
     protected: dbRecord?.protected || false,
     annotation: tagInfo?.message || dbRecord?.annotation || '',
+    source: dbRecord?.source || 'manual',
   }));
 });
 

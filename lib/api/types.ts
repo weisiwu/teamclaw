@@ -880,6 +880,7 @@ export interface TagRecord {
   protected: boolean;
   createdAt: string;
   archivedAt?: string;
+  source?: 'auto' | 'manual';
 }
 
 export interface CreateTagRequest {

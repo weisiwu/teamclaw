@@ -31,11 +31,12 @@ export function createTagRecord(data: Omit<TagRecord, 'id' | 'createdAt' | 'arch
   const id = `tag_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
   const protected_ = isProtectedTag(data.name) ? 1 : 0;
   const now = new Date().toISOString();
+  const source = data.source || 'manual';
 
   db.prepare(`
-    INSERT INTO tags (id, name, version_id, commit_hash, annotation, protected, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, data.name, data.versionId, data.commitHash || null, data.annotation || data.message || null, protected_, now);
+    INSERT INTO tags (id, name, version_id, commit_hash, annotation, protected, created_at, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, data.name, data.versionId, data.commitHash || null, data.annotation || data.message || null, protected_, now, source);
 
   return {
     id,
@@ -49,6 +50,7 @@ export function createTagRecord(data: Omit<TagRecord, 'id' | 'createdAt' | 'arch
     protected: protected_ === 1,
     createdAt: now,
     createdBy: data.createdBy,
+    source: source as 'auto' | 'manual',
   };
 }
 
@@ -92,6 +94,7 @@ function rowToRecord(row: Record<string, unknown>): TagRecord {
     createdAt: row.created_at as string,
     createdBy: undefined,
     archivedAt: undefined,
+    source: (row.source as 'auto' | 'manual') || 'manual',
   };
 }
 
@@ -203,6 +206,7 @@ export function autoCreateTagForVersion(
     commitHash: options?.commitHash,
     createdBy: options?.createdBy,
     annotation: options?.message || `Version ${versionName} released`,
+    source: 'auto',
   });
 
   // 如果提供了项目路径，同时创建实际的 git tag

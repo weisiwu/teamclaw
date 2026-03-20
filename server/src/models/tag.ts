@@ -18,6 +18,7 @@ export interface TagRecord {
   createdBy?: string;  // 创建人
   commitHash?: string; // 对应的 commit hash
   annotation?: string; // Tag annotation（版本摘要等）
+  source: 'auto' | 'manual'; // Tag 创建方式：auto=系统自动创建，manual=手动创建
 }
 
 // Tag 配置（与 VersionSettings 中的 tag 配置对应）
