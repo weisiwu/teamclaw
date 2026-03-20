@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, RefreshCw, Image as ImageIcon, FileText } from "lucide-react";
 import { ChangeTimeline } from "./ChangeTimeline";
 import { ScreenshotGallery } from "./ScreenshotGallery";
+import { MessageSelector, MessageItem } from "./MessageSelector";
 import {
   VersionChangelog,
   VersionMessageScreenshot,
@@ -41,6 +42,7 @@ export function VersionChangeLogPanel({
   const [loadingScreenshots, setLoadingScreenshots] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [linkLoading, setLinkLoading] = useState(false);
+  const [messageSelectorOpen, setMessageSelectorOpen] = useState(false);
 
   const loadChangelog = async () => {
     setLoadingChangelog(true);
@@ -79,21 +81,21 @@ export function VersionChangeLogPanel({
   };
 
   const handleLinkScreenshot = async () => {
+    setMessageSelectorOpen(true);
+  };
+
+  const handleMessageSelected = async (message: MessageItem) => {
     setLinkLoading(true);
     try {
-      const url = window.prompt(
-        "请输入截图 URL（支持 http(s):// 或 /screenshots/ 路径）："
-      );
-      if (!url) {
-        setLinkLoading(false);
-        return;
-      }
-      const messageContent = window.prompt("请输入关联的消息内容（可选）：") || "";
+      // 构建截图请求：消息内容作为关联说明，截图 URL 由后端从飞书消息获取
       const req: LinkScreenshotRequest = {
-        screenshotUrl: url,
-        messageContent,
-        messageId: `manual-${Date.now()}`,
-        senderName: "手动添加",
+        messageId: message.id,
+        messageContent: message.content,
+        senderName: message.senderName,
+        senderAvatar: message.senderAvatar,
+        // screenshotUrl 由后端通过飞书 API 获取，此处传 messageId 供后端查询
+        screenshotUrl: `feishu://message/${message.id}/screenshot`,
+        thumbnailUrl: message.senderAvatar,
       };
       await linkScreenshot(versionId, req);
       await loadScreenshots();
@@ -257,6 +259,13 @@ export function VersionChangeLogPanel({
           )}
         </div>
       )}
+
+      {/* 消息选择器 Dialog */}
+      <MessageSelector
+        open={messageSelectorOpen}
+        onOpenChange={setMessageSelectorOpen}
+        onSelect={handleMessageSelected}
+      />
     </div>
   );
 }
