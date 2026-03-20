@@ -29,6 +29,16 @@ import {
   TaskStatus
 } from "@/lib/api/types";
 
+// 优先级选项（与列表页保持一致）
+const PRIORITY_OPTIONS = [
+  { value: "10", text: "紧急" },
+  { value: "8", text: "高" },
+  { value: "7", text: "中" },
+  { value: "3", text: "低" },
+];
+
+const getPriorityText = (value: string | number) => PRIORITY_OPTIONS.find(o => o.value === String(value))?.text ?? String(value);
+
 // 状态图标组件
 const getStatusIcon = (status: TaskStatus) => {
   switch (status) {
@@ -154,7 +164,7 @@ export default function TaskDetailPage({
                   <span className="ml-1">{STATUS_LABELS[task.status]}</span>
                 </Badge>
                 <span className="text-sm text-orange-600 font-medium">
-                  优先级：{task.priority}
+                  优先级：{getPriorityText(task.priority)}
                 </span>
               </div>
               <CardTitle className="text-xl">{task.title}</CardTitle>

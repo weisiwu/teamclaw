@@ -75,6 +75,20 @@ import {
   CreateTaskRequest
 } from "@/lib/api/types";
 
+// 优先级选项（与详情页、批量操作保持一致）
+const PRIORITY_OPTIONS = [
+  { value: "10", label: "紧急 (10)", text: "紧急" },
+  { value: "8", label: "高 (8-9)", text: "高" },
+  { value: "7", label: "中 (5-7)", text: "中" },
+  { value: "3", label: "低 (1-4)", text: "低" },
+];
+
+const PRIORITY_LABEL_MAP: Record<string, string> = {
+  "10": "紧急 (10)", "8": "高 (8-9)", "7": "中 (5-7)", "3": "低 (1-4)",
+};
+
+const getPriorityText = (value: string | number) => PRIORITY_OPTIONS.find(o => o.value === String(value))?.text ?? String(value);
+
 // 状态图标组件
 const getStatusIcon = (status: TaskStatus) => {
   switch (status) {
@@ -399,12 +413,7 @@ function CreateTaskModal({
               优先级
             </label>
             <Select
-              options={[
-                { value: "10", label: "紧急 (10)" },
-                { value: "8", label: "高 (8)" },
-                { value: "7", label: "中 (7)" },
-                { value: "5", label: "低 (5)" },
-              ]}
+              options={PRIORITY_OPTIONS}
               value={String(formData.priority)}
               onChange={(e) => setFormData({ ...formData, priority: Number(e.target.value) as TaskPriority })}
               disabled={isCreating}
@@ -597,7 +606,7 @@ function TasksContent() {
       }
       setSelectedTaskIds(new Set());
       setBatchPriority("");
-      const label = { "10": "紧急 (10)", "8": "高 (8-9)", "7": "中 (5-7)", "3": "低 (1-4)" }[batchPriority] || batchPriority;
+      const label = PRIORITY_LABEL_MAP[batchPriority] || batchPriority;
       setBatchToast(`已更新 ${selectedTaskIds.size} 个任务为 ${label}`);
       setTimeout(() => setBatchToast(""), 3000);
     } catch (err) {
@@ -802,13 +811,7 @@ function TasksContent() {
                 {/* 批量修改优先级 */}
                 <div className="flex items-center gap-1">
                   <Select
-                    options={[
-                      { value: "", label: "修改优先级" },
-                      { value: "10", label: "紧急 (10)" },
-                      { value: "8", label: "高 (8-9)" },
-                      { value: "7", label: "中 (5-7)" },
-                      { value: "3", label: "低 (1-4)" },
-                    ]}
+                    options={[{ value: "", label: "修改优先级" }, ...PRIORITY_OPTIONS]}
                     value={batchPriority}
                     onChange={(e) => setBatchPriority(e.target.value)}
                     className="w-36 h-8 text-sm"
@@ -904,7 +907,7 @@ function TasksContent() {
                                 <Badge variant={STATUS_BADGE_VARIANT[task.status]}>
                                   {STATUS_LABELS[task.status]}
                                 </Badge>
-                                <span className="text-xs text-orange-600">P{task.priority}</span>
+                                <span className="text-xs text-orange-600">{getPriorityText(task.priority)}</span>
                               </div>
                               <h3 className="font-semibold">{task.title}</h3>
                               <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
