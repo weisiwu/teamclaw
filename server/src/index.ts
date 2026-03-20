@@ -3,6 +3,7 @@ import { join } from 'path';
 import cors from 'cors';
 import { success } from './utils/response.js';
 import { requireAdmin } from './middleware/auth.js';
+import { globalErrorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import healthRouter from './routes/health.js';
 import projectRouter from './routes/project.js';
 import userRouter from './routes/user.js';
@@ -89,6 +90,10 @@ app.use('/api/v1/llm', llmRouter);
 app.get('/', (req, res) => {
   res.json(success({ service: 'TeamClaw Server', version: '0.1.0' }));
 });
+
+// Global error handlers — must be after all routes
+app.use(notFoundHandler);
+app.use(globalErrorHandler);
 
 app.listen(PORT, () => {
   console.log(`TeamClaw server running on port ${PORT}`);

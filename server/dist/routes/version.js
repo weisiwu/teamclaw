@@ -4,6 +4,7 @@ import { ScreenshotModel } from '../models/screenshot.js';
 import { VersionSummaryModel } from '../models/versionSummary.js';
 import { saveScreenshot, deleteScreenshotFile } from '../services/fileStorage.js';
 import { generateChangelogFromCommits } from '../services/changelogGenerator.js';
+import { onVersionCreated, onScreenshotLinked, onChangelogGenerated } from '../services/changeTracker.js';
 import { getGitLog, getTags, createTag, getBranches, getCurrentBranch, createBranch, tagExists } from '../services/gitService.js';
 import { runBuild, getBuildConfig } from '../services/buildService.js';
 import { listArtifacts, deleteArtifacts, getArtifactInfo, getArtifactStream, importArtifactsFromDir, getArtifactsTotalSize } from '../services/artifactStore.js';
@@ -199,7 +200,28 @@ router.get('/:id', (req, res) => {
         summaryGeneratedBy: summaryRecord?.generatedBy || undefined,
     }));
 });
-// POST /api/v1/versions — 创建版本
+// GET /api/v1/versions/:id/timeline — get full change timeline for a version
+router.get('/:id/timeline', (req, res) => {
+    const { id } = req.params;
+    const row = db.prepare('SELECT id, version FROM versions WHERE id = ?').get(id);
+    if (!row) {
+        res.status(404).json(error(404, 'Version not found'));
+        return;
+    }
+    try {
+        const { getVersionTimeline } = require('../services/changeTracker.js');
+        const events = getVersionTimeline(id);
+        res.json(success({
+            versionId: id,
+            version: row.version,
+            events,
+        }));
+    }
+    catch (err) {
+        console.error('[version] Timeline fetch error:', err);
+        res.status(500).json(error(500, 'Failed to fetch timeline'));
+    }
+});
 router.post('/', (req, res) => {
     const { version, title, description, status, tags, branch, projectPath } = req.body;
     if (!version || !title) {
@@ -264,6 +286,13 @@ router.post('/', (req, res) => {
     }
     catch (err) {
         console.warn('[version] Auto summary generation failed:', err);
+    }
+    // Record version creation event
+    try {
+        onVersionCreated(id, 'system');
+    }
+    catch (err) {
+        console.warn('[version] Failed to record creation event:', err);
     }
     res.status(201).json(success({
         id,
@@ -795,6 +824,14 @@ router.post('/:id/rollback', async (req, res) => {
         performedBy: 'developer',
         performedAt: new Date().toISOString(),
     });
+    // Update version rollback tracking fields (iter75)
+    const now = new Date().toISOString();
+    db.prepare(`
+    UPDATE versions
+    SET rollback_count = COALESCE(rollback_count, 0) + 1,
+        last_rollback_at = ?
+    WHERE id = ?
+  `).run(now, req.params.id);
     // Auto-generate version summary on rollback
     try {
         const rollbackMsg = `Rollback to ${target} (${type || 'tag'})`;
@@ -815,7 +852,13 @@ router.post('/:id/rollback', async (req, res) => {
     catch (err) {
         console.warn('[rollback] Auto summary generation failed:', err);
     }
-    res.json(success(result));
+    // Return enriched response with rollback tracking info (iter75)
+    const updated = db.prepare('SELECT rollback_count, last_rollback_at FROM versions WHERE id = ?').get(req.params.id);
+    res.json(success({
+        ...result,
+        rollbackCount: updated?.rollback_count ?? 1,
+        lastRollbackAt: updated?.last_rollback_at ?? now,
+    }));
 });
 // ========== Branch Routes (top-level) ==========
 // GET /api/v1/branches — List branches for a project version
@@ -905,6 +948,13 @@ router.post('/:id/screenshots', async (req, res) => {
             thumbnailUrl: savedUrl,
             branchName,
         });
+        // Record screenshot linked event
+        try {
+            onScreenshotLinked(id, screenshot.id, senderName || 'system');
+        }
+        catch (err) {
+            console.warn('[version] Failed to record screenshot event:', err);
+        }
         res.status(201).json(success(screenshot));
     }
     catch (err) {
@@ -1019,6 +1069,14 @@ router.post('/:id/summary/generate', async (req, res) => {
         });
         // Also sync summary to versions DB table
         db.prepare('UPDATE versions SET summary = ? WHERE id = ?').run(generated.content, id);
+        // Record changelog generated event
+        try {
+            const entryCount = (generated.features?.length || 0) + (generated.fixes?.length || 0) + (generated.improvements?.length || 0);
+            onChangelogGenerated(id, summary.id, entryCount);
+        }
+        catch (err) {
+            console.warn('[version] Failed to record changelog event:', err);
+        }
         res.json(success(summary));
     }
     catch (err) {

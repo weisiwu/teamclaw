@@ -118,5 +118,18 @@ export function runMigrations() {
     catch (e) {
         // Column may already exist in newer dbs, ignore
     }
+    // Add rollback tracking fields to versions (iter75-version-rollback)
+    try {
+        db.prepare("ALTER TABLE versions ADD COLUMN rollback_count INTEGER DEFAULT 0").run();
+    }
+    catch (e) {
+        // Column may already exist, ignore
+    }
+    try {
+        db.prepare("ALTER TABLE versions ADD COLUMN last_rollback_at TEXT").run();
+    }
+    catch (e) {
+        // Column may already exist, ignore
+    }
     console.log('[migrations] Database migrations completed');
 }
