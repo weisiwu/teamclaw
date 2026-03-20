@@ -147,6 +147,58 @@ export async function GET(request: NextRequest) {
 }
 
 /**
+ * Delete a build artifact
+ * DELETE /api/v1/build/artifacts?filename=teamclaw-v1.0.0-darwin-arm64.tar.gz&versionName=v1.0.0
+ */
+export async function DELETE(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const filename = searchParams.get('filename');
+  const versionName = searchParams.get('versionName');
+
+  if (!filename || !versionName) {
+    return NextResponse.json(
+      { code: 400, message: 'Missing filename or versionName' },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const versionDir = getVersionArtifactDir(versionName);
+    const filePath = path.join(versionDir, filename);
+
+    try {
+      await fs.unlink(filePath);
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        return NextResponse.json(
+          { code: 404, message: 'Artifact not found' },
+          { status: 404 }
+        );
+      }
+      throw err;
+    }
+
+    // 检查版本目录是否为空，空则删除目录
+    const remaining = await fs.readdir(versionDir);
+    if (remaining.length === 0) {
+      await fs.rmdir(versionDir);
+    }
+
+    return NextResponse.json({
+      code: 0,
+      message: 'ok',
+      data: { filename, versionName },
+    });
+  } catch (error) {
+    console.error('[BuildArtifacts] Delete error:', error);
+    return NextResponse.json(
+      { code: 500, message: 'Failed to delete artifact' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
  * Upload a build artifact
  * POST /api/v1/build/artifacts
  * Body: FormData with file, versionName, env, platform, arch
