@@ -477,6 +477,7 @@ function TasksContent() {
   
   // 批量操作状态
   const [batchPriority, setBatchPriority] = useState<string>("");
+  const [batchToast, setBatchToast] = useState<string>("");
   
   // 任务统计
   const taskStats = useMemo(() => {
@@ -596,6 +597,9 @@ function TasksContent() {
       }
       setSelectedTaskIds(new Set());
       setBatchPriority("");
+      const label = { "10": "紧急 (P10)", "8": "高 (P8)", "7": "中 (P7)", "5": "低 (P5)" }[batchPriority] || batchPriority;
+      setBatchToast(`已更新 ${selectedTaskIds.size} 个任务为 ${label}`);
+      setTimeout(() => setBatchToast(""), 3000);
     } catch (err) {
       console.error("Failed to batch update priority:", err);
     }
@@ -789,6 +793,11 @@ function TasksContent() {
               <span className="text-sm text-blue-700">
                 已选择 {selectedTaskIds.size} 个任务
               </span>
+              {batchToast && (
+                <span className="text-sm text-green-600 font-medium animate-pulse">
+                  ✓ {batchToast}
+                </span>
+              )}
               <div className="flex gap-2 flex-wrap">
                 {/* 批量修改优先级 */}
                 <div className="flex items-center gap-1">
