@@ -1,8 +1,9 @@
 import { DailyTokenUsage } from "@/lib/api/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, BarChart3 } from "lucide-react";
 import { useMemo } from "react";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface TokenDailyTableProps {
   data?: DailyTokenUsage[];
@@ -64,7 +65,11 @@ export function TokenDailyTable({ data, isLoading }: TokenDailyTableProps) {
           <CardTitle>每日消耗明细</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-center text-gray-500 py-8">暂无数据</div>
+          <EmptyState
+            icon={BarChart3}
+            title="暂无消耗数据"
+            description="开始使用 AI 功能后，将在这里看到每日 Token 消耗明细"
+          />
         </CardContent>
       </Card>
     );
