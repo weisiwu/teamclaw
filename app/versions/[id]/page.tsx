@@ -6,7 +6,7 @@ import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT, VERSION_STATU
 import { getVersion, bumpVersion, getVersionScreenshots, getVersionChangelog } from "@/lib/api/versions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Tag, Calendar, Clock, GitBranch, FileText, Star, History, Download, RotateCcw, Zap, Settings } from "lucide-react";
+import { Loader2, ArrowLeft, Tag, Calendar, Clock, GitBranch, FileText, Star, History, Download, RotateCcw, Zap, Settings, Image as ImageIcon } from "lucide-react";
 import Link from "next/link";
 import { BumpHistoryPanel } from "@/components/versions/BumpHistoryPanel";
 import { ArtifactsPanel } from "@/components/versions/ArtifactsPanel";
@@ -17,6 +17,9 @@ import { VersionChangeLogPanel } from "@/components/versions/VersionChangeLogPan
 import { VersionSummaryPanel } from "@/components/versions/VersionSummaryPanel";
 import { VersionGitTagPanel } from "@/components/versions/VersionGitTagPanel";
 import { VersionTimeline } from "@/components/versions/VersionTimeline";
+import { ScreenshotGallery } from "@/components/versions/ScreenshotGallery";
+import { MessageSelector, MessageItem } from "@/components/versions/MessageSelector";
+import { linkScreenshot } from "@/lib/api/versions";
 
 export default function VersionDetailPage() {
   const params = useParams();
@@ -27,11 +30,13 @@ export default function VersionDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [screenshots, setScreenshots] = useState<import("@/lib/api/types").VersionMessageScreenshot[]>([]);
   const [changelog, setChangelog] = useState<import("@/lib/api/types").VersionChangelog | null>(null);
-  const [activeTab, setActiveTab] = useState<"details" | "bumpHistory" | "artifacts" | "rollback" | "changelog" | "versionSummary" | "gitTag" | "timeline">("details");
+  const [activeTab, setActiveTab] = useState<"details" | "bumpHistory" | "artifacts" | "rollback" | "changelog" | "versionSummary" | "gitTag" | "screenshots" | "timeline">("details");
   const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false);
   const [upgradeConfigOpen, setUpgradeConfigOpen] = useState(false);
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
+  const [messageSelectorOpen, setMessageSelectorOpen] = useState(false);
+  const [linkingScreenshot, setLinkingScreenshot] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -49,6 +54,51 @@ export default function VersionDetailPage() {
       .catch(console.error)
       .finally(() => setIsLoading(false));
   }, [id]);
+
+  const handleLinkScreenshot = async (message: MessageItem) => {
+    setMessageSelectorOpen(false);
+    setLinkingScreenshot(true);
+    try {
+      // Try to extract screenshot URL from message content (for image messages)
+      let screenshotUrl = "";
+      try {
+        const parsed = JSON.parse(message.content);
+        if (parsed.image_key) {
+          // This is an image message - would need Feishu image download token
+          // Use a placeholder for now; in production you'd call /im/v1/images/{image_key}
+          screenshotUrl = `https://open.feishu.cn/open-apis/im/v1/images/${parsed.image_key}`;
+        }
+      } catch {
+        // Not JSON, content is plain text - no screenshot URL
+        screenshotUrl = "";
+      }
+
+      const newScreenshot = await linkScreenshot(id, {
+        messageId: message.id,
+        messageContent: message.content,
+        senderName: message.senderName,
+        senderAvatar: message.senderAvatar,
+        screenshotUrl,
+        thumbnailUrl: screenshotUrl,
+      });
+      setScreenshots((prev) => [newScreenshot, ...prev]);
+    } catch (err) {
+      console.error("[VersionDetail] Failed to link screenshot:", err);
+      alert(`关联截图失败: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setLinkingScreenshot(false);
+    }
+  };
+
+  const handleUnlinkScreenshot = async (screenshotId: string) => {
+    try {
+      const { unlinkScreenshot: unlink } = await import("@/lib/api/versions");
+      await unlink(screenshotId);
+      setScreenshots((prev) => prev.filter((s) => s.id !== screenshotId));
+    } catch (err) {
+      console.error("[VersionDetail] Failed to unlink screenshot:", err);
+    }
+  };
 
   const handleManualUpgrade = async (bumpType?: "major" | "minor" | "patch") => {
     setIsUpgrading(true);
@@ -203,6 +253,17 @@ export default function VersionDetailPage() {
             <Clock className="w-4 h-4" />
             变更时间线
           </button>
+          <button
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+              activeTab === "screenshots"
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-500 hover:bg-gray-100"
+            }`}
+            onClick={() => setActiveTab("screenshots")}
+          >
+            <ImageIcon className="w-4 h-4" />
+            截图 {screenshots.length > 0 && `(${screenshots.length})`}
+          </button>
         </div>
       </div>
 
@@ -290,6 +351,15 @@ export default function VersionDetailPage() {
             isOpen={true}
             onClose={() => setActiveTab("details")}
             versionId={id}
+          />
+        </div>
+      ) : activeTab === "screenshots" ? (
+        <div className="bg-white rounded-xl border p-5">
+          <ScreenshotGallery
+            screenshots={screenshots}
+            onLink={() => setMessageSelectorOpen(true)}
+            onUnlink={handleUnlinkScreenshot}
+            loading={linkingScreenshot}
           />
         </div>
       ) : (
@@ -449,6 +519,12 @@ export default function VersionDetailPage() {
         }}
         isSaving={false}
         isLoading={false}
+      />
+
+      <MessageSelector
+        open={messageSelectorOpen}
+        onOpenChange={setMessageSelectorOpen}
+        onSelect={handleLinkScreenshot}
       />
     </div>
   );
