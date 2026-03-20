@@ -1,16 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { History, MessageSquare, FileText, Search, Filter, Download, ChevronDown, ChevronRight } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { History, MessageSquare, FileText, Search, Filter, Download, ChevronDown, ChevronRight, MessageSquarePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { VersionMessageScreenshot, VersionChangelog, TimelineEvent as ApiTimelineEvent } from "@/lib/api/types";
-import { useVersionTimeline } from "@/lib/api/versions";
+import { useVersionTimeline, useAddTimelineEvent } from "@/lib/api/versions";
 
 interface VersionTimelineProps {
   screenshots?: VersionMessageScreenshot[];
@@ -46,6 +50,24 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
 
   // API-based timeline (when versionId is provided)
   const { data: apiEvents } = useVersionTimeline(versionId ?? null);
+  const queryClient = useQueryClient();
+
+  // Add note dialog state
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false);
+  const [noteText, setNoteText] = useState("");
+  const addNoteMutation = useAddTimelineEvent();
+
+  const handleAddNote = async () => {
+    if (!noteText.trim() || !versionId) return;
+    try {
+      await addNoteMutation.mutateAsync({ versionId, data: { note: noteText.trim() } });
+      queryClient.invalidateQueries({ queryKey: ["versionTimeline", versionId] });
+      setNoteText("");
+      setNoteDialogOpen(false);
+    } catch (err) {
+      console.error("[VersionTimeline] Failed to add note:", err);
+    }
+  };
 
   // 构建时间线事件
   const events: TimelineEvent[] = versionId && apiEvents && apiEvents.length > 0
@@ -243,6 +265,12 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
             <Download className="h-4 w-4 mr-1" />
             导出
           </Button>
+          {versionId && (
+            <Button variant="outline" size="sm" onClick={() => setNoteDialogOpen(true)}>
+              <MessageSquarePlus className="h-4 w-4 mr-1" />
+              添加备注
+            </Button>
+          )}
         </div>
 
         {/* 时间线 */}
@@ -338,6 +366,39 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
           )}
         </div>
       </DialogContent>
+
+      {/* 添加备注对话框 */}
+      <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>添加备注</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <textarea
+              className="w-full min-h-[100px] px-3 py-2 border rounded-md text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary"
+              placeholder="输入备注内容..."
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  handleAddNote();
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNoteDialogOpen(false)}>
+              取消
+            </Button>
+            <Button
+              onClick={handleAddNote}
+              disabled={!noteText.trim() || addNoteMutation.isPending}
+            >
+              {addNoteMutation.isPending ? "添加中..." : "添加"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
