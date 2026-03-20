@@ -1,6 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Loader2, RefreshCw, AlertCircle, ShieldOff } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 
 interface Ability {
   id: string;
@@ -19,6 +23,7 @@ export default function CapabilitiesPage() {
 
   const fetchAbilities = async () => {
     try {
+      setLoading(true);
       const res = await fetch('/api/v1/abilities');
       const data = await res.json();
       setAbilities(data.data?.list || []);
@@ -67,8 +72,19 @@ export default function CapabilitiesPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-muted-foreground">加载中...</div>
+      <div className="page-container">
+        <div className="page-header mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">辅助能力管理</h1>
+            <p className="page-header-subtitle">配置系统辅助能力的启用/禁用状态</p>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-20 gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-base text-muted-foreground">正在加载能力列表...</p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -84,12 +100,40 @@ export default function CapabilitiesPage() {
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-            {error}
-          </div>
+          <Card className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/10 mb-6">
+            <CardContent className="py-6 flex flex-col items-center gap-3">
+              <div className="p-3 rounded-full bg-red-100 dark:bg-red-900/30">
+                <AlertCircle className="w-8 h-8 text-red-500" />
+              </div>
+              <div className="text-center">
+                <p className="font-medium text-red-700 dark:text-red-400">加载失败</p>
+                <p className="text-sm text-red-600 dark:text-red-500 mt-1">{error}</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchAbilities}
+                className="gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                重试
+              </Button>
+            </CardContent>
+          </Card>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {abilities.length === 0 && !error ? (
+          <Card>
+            <CardContent className="py-0">
+              <EmptyState
+                icon={ShieldOff}
+                title="暂无辅助能力"
+                description="系统尚未配置任何辅助能力，请联系管理员"
+              />
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {abilities.map(ability => (
             <div
               key={ability.id}
@@ -134,6 +178,7 @@ export default function CapabilitiesPage() {
             </div>
           ))}
         </div>
+        )}
 
         {(userRole !== 'admin' && userRole !== 'sub_admin') && (
           <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-700 text-sm">
