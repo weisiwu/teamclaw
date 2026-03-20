@@ -126,6 +126,8 @@ router.get('/', (req, res) => {
     const pageSize = parseInt(req.query.pageSize) || 10;
     const status = req.query.status;
     const branch = req.query.branch;
+    const hasScreenshot = req.query.hasScreenshot;
+    const hasSummary = req.query.hasSummary;
     let sql = 'SELECT * FROM versions WHERE 1=1';
     const params = {};
     if (status && status !== 'all') {
@@ -137,12 +139,38 @@ router.get('/', (req, res) => {
         params.branch = branch;
     }
     sql += ' ORDER BY created_at DESC';
-    const totalRow = db.prepare(sql.replace('SELECT *', 'SELECT COUNT(*) as cnt')).get(params);
-    const total = totalRow.cnt;
-    sql += ' LIMIT @limit OFFSET @offset';
+    // Fetch all rows for in-memory filtering (versions table is typically small)
+    const allRows = db.prepare(sql).all(params);
+    // Build screenshot index for hasScreenshot filtering
+    const screenshotIndex = new Map();
+    const screenshotData = ScreenshotModel.getAllScreenshots();
+    for (const shot of screenshotData) {
+        screenshotIndex.set(shot.versionId, true);
+    }
+    // Build summary index for hasSummary filtering (SQLite)
+    const summaryIndex = new Set();
+    const summaryRows = db.prepare('SELECT version_id FROM version_summaries').all();
+    for (const row of summaryRows) {
+        summaryIndex.add(row.version_id);
+    }
+    // Apply in-memory filters
+    let filteredRows = allRows;
+    if (hasScreenshot === 'true') {
+        filteredRows = filteredRows.filter(r => screenshotIndex.get(r.id));
+    }
+    else if (hasScreenshot === 'false') {
+        filteredRows = filteredRows.filter(r => !screenshotIndex.get(r.id));
+    }
+    if (hasSummary === 'true') {
+        filteredRows = filteredRows.filter(r => summaryIndex.has(r.id));
+    }
+    else if (hasSummary === 'false') {
+        filteredRows = filteredRows.filter(r => !summaryIndex.has(r.id));
+    }
+    const total = filteredRows.length;
     const offset = (page - 1) * pageSize;
-    const rows = db.prepare(sql).all({ ...params, limit: pageSize, offset });
-    const data = rows.map(row => {
+    const paginatedRows = filteredRows.slice(offset, offset + pageSize);
+    const data = paginatedRows.map(row => {
         const summaryRecord = VersionSummaryModel.findByVersionId(row.id);
         return {
             id: row.id,
@@ -158,8 +186,8 @@ router.get('/', (req, res) => {
             tag_created: row.tag_created === 1,
             gitTag: row.git_tag || undefined,
             gitTagCreatedAt: row.git_tag_created_at || undefined,
-            hasScreenshot: ScreenshotModel.findByVersionId(row.id).length > 0,
-            hasSummary: !!summaryRecord,
+            hasScreenshot: !!screenshotIndex.get(row.id),
+            hasSummary: summaryIndex.has(row.id),
         };
     });
     res.json(success({
@@ -220,6 +248,50 @@ router.get('/:id/timeline', (req, res) => {
     catch (err) {
         console.error('[version] Timeline fetch error:', err);
         res.status(500).json(error(500, 'Failed to fetch timeline'));
+    }
+});
+// POST /api/v1/versions/:id/events — Add a manual note to the timeline
+router.post('/:id/events', (req, res) => {
+    const { id: versionId } = req.params;
+    const { note, actor, actorId } = req.body;
+    if (!note || typeof note !== 'string') {
+        res.status(400).json(error(400, 'note is required and must be a string'));
+        return;
+    }
+    const row = db.prepare('SELECT id FROM versions WHERE id = ?').get(versionId);
+    if (!row) {
+        res.status(404).json(error(404, 'Version not found'));
+        return;
+    }
+    try {
+        const { onManualNote } = require('../services/changeTracker.js');
+        const eventId = onManualNote(versionId, note, actor || 'user', actorId);
+        res.json(success({ eventId }));
+    }
+    catch (err) {
+        console.error('[version] Add manual note error:', err);
+        res.status(500).json(error(500, 'Failed to add manual note'));
+    }
+});
+// DELETE /api/v1/versions/:id/events/:eventId — Delete a manual note
+router.delete('/:id/events/:eventId', (req, res) => {
+    const { id: versionId, eventId } = req.params;
+    const event = db.prepare('SELECT id, event_type FROM version_change_events WHERE id = ? AND version_id = ?').get(eventId, versionId);
+    if (!event) {
+        res.status(404).json(error(404, 'Event not found'));
+        return;
+    }
+    if (event.event_type !== 'manual_note') {
+        res.status(403).json(error(403, 'Only manual notes can be deleted'));
+        return;
+    }
+    try {
+        db.prepare('DELETE FROM version_change_events WHERE id = ?').run(eventId);
+        res.json(success({ eventId }));
+    }
+    catch (err) {
+        console.error('[version] Delete event error:', err);
+        res.status(500).json(error(500, 'Failed to delete event'));
     }
 });
 router.post('/', (req, res) => {

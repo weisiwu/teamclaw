@@ -92,4 +92,7 @@ export const ScreenshotModel = {
         persist();
         return count;
     },
+    getAllScreenshots() {
+        return Array.from(screenshots.values());
+    },
 };

@@ -22,10 +22,11 @@ export function createTagRecord(data) {
     const id = `tag_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const protected_ = isProtectedTag(data.name) ? 1 : 0;
     const now = new Date().toISOString();
+    const source = data.source || 'manual';
     db.prepare(`
-    INSERT INTO tags (id, name, version_id, commit_hash, annotation, protected, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, data.name, data.versionId, data.commitHash || null, data.annotation || data.message || null, protected_, now);
+    INSERT INTO tags (id, name, version_id, commit_hash, annotation, protected, created_at, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, data.name, data.versionId, data.commitHash || null, data.annotation || data.message || null, protected_, now, source);
     return {
         id,
         name: data.name,
@@ -38,6 +39,7 @@ export function createTagRecord(data) {
         protected: protected_ === 1,
         createdAt: now,
         createdBy: data.createdBy,
+        source: source,
     };
 }
 export function getTagRecord(id) {
@@ -78,6 +80,7 @@ function rowToRecord(row) {
         createdAt: row.created_at,
         createdBy: undefined,
         archivedAt: undefined,
+        source: row.source || 'manual',
     };
 }
 export function updateTagRecord(id, updates) {
@@ -170,6 +173,7 @@ export function autoCreateTagForVersion(versionId, versionName, options) {
         commitHash: options?.commitHash,
         createdBy: options?.createdBy,
         annotation: options?.message || `Version ${versionName} released`,
+        source: 'auto',
     });
     // 如果提供了项目路径，同时创建实际的 git tag
     if (options?.projectPath) {

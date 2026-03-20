@@ -10,18 +10,20 @@ const DEFAULT_PROJECT_PATH = process.env.TEAMCLAW_PROJECT_PATH || '';
 // ========== Tag 记录 CRUD ==========
 // GET /api/v1/tags — 获取所有标签记录（从 git + DB 合并）
 router.get('/', (req, res) => {
-    const { versionId, archived, protected: isProtected, page, pageSize, projectPath: reqProjectPath } = req.query;
+    const { versionId, archived, protected: isProtected, source, page, pageSize, projectPath: reqProjectPath } = req.query;
     // Get git tags from project path
     const projectPath = reqProjectPath || DEFAULT_PROJECT_PATH;
     let gitTags = [];
     if (projectPath) {
         gitTags = gitGetTags(projectPath);
     }
-    // Get DB tag records for protected marks
+    // Get DB tag records for protected marks and source info
     const dbTags = getAllTagRecords();
     const protectedMap = new Map();
+    const sourceMap = new Map();
     for (const t of dbTags) {
         protectedMap.set(t.name, t.protected);
+        sourceMap.set(t.name, t.source);
     }
     // Merge: git tags + protected from DB
     const mergedTags = gitTags.map(t => ({
@@ -31,12 +33,16 @@ router.get('/', (req, res) => {
         annotation: t.message,
         hasRecord: protectedMap.has(t.name),
         protected: protectedMap.get(t.name) || false,
+        source: sourceMap.get(t.name) || 'manual',
     }));
     // Apply filters
     let tags = mergedTags;
     if (isProtected !== undefined) {
         const isProt = isProtected === 'true';
         tags = tags.filter(t => t.protected === isProt);
+    }
+    if (source !== undefined && source !== 'all') {
+        tags = tags.filter(t => t.source === source);
     }
     const total = tags.length;
     // 分页
@@ -82,6 +88,7 @@ router.get('/:tagName', (req, res) => {
         hasRecord: !!dbRecord,
         protected: dbRecord?.protected || false,
         annotation: tagInfo?.message || dbRecord?.annotation || '',
+        source: dbRecord?.source || 'manual',
     }));
 });
 // POST /api/v1/tags — 手动创建标签（创建 git tag + DB 记录）

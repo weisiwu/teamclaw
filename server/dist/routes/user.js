@@ -7,21 +7,8 @@ import { listUsers, getUserById, getUserByExternalId, createUser, updateUser, de
 import { checkPermission } from "../services/permissionService.js";
 import { recordRoleChange, getRoleHistory, getRecentRoleChanges, getRoleChangeStats, grantDelegation, revokeDelegation, getDelegationsForUser, getDelegationsByUser, } from "../services/roleMemory.js";
 import { getUserPermissionMap, } from "../services/permissionFineGrained.js";
+import { success, error } from "../utils/response.js";
 const router = Router();
-// ============ 辅助函数 ============
-function ok(data) {
-    return { code: 0, data, message: "ok" };
-}
-function paginated(list, total, page, pageSize) {
-    return {
-        code: 0,
-        data: { list, total, page, pageSize },
-        message: "ok",
-    };
-}
-function error(code, message) {
-    return { code, data: null, message };
-}
 // ============ GET /api/v1/users ============
 // 获取用户列表（支持分页、角色筛选）
 router.get("/", async (req, res) => {
@@ -30,7 +17,7 @@ router.get("/", async (req, res) => {
         const pageSize = parseInt(req.query.pageSize) || 20;
         const role = req.query.role;
         const result = await listUsers({ page, pageSize, role });
-        res.json(paginated(result.list, result.total, page, pageSize));
+        res.json(success({ list: result.list, total: result.total, page, pageSize }));
     }
     catch (e) {
         console.error("[GET /api/v1/users] error:", e);
@@ -53,10 +40,10 @@ router.get("/me", async (req, res) => {
         const user = await getUserByExternalId(wechatId, feishuId);
         if (!user) {
             // 如果找不到，返回基本信息
-            res.json(ok({ userId, role, isRegistered: false }));
+            res.json(success({ userId, role, isRegistered: false }));
             return;
         }
-        res.json(ok({ ...user, isRegistered: true }));
+        res.json(success({ ...user, isRegistered: true }));
     }
     catch (e) {
         console.error("[GET /api/v1/users/me] error:", e);
@@ -72,7 +59,7 @@ router.get("/:userId", async (req, res) => {
             res.status(404).json(error(404, "用户不存在"));
             return;
         }
-        res.json(ok(user));
+        res.json(success(user));
     }
     catch (e) {
         console.error("[GET /api/v1/users/:userId] error:", e);
@@ -95,7 +82,7 @@ router.post("/", async (req, res) => {
         const user = await createUser({ name, role, wechatId, feishuId, remark });
         // 记录角色变更历史
         await recordRoleChange(user.id, null, role, changedBy || "system", reason || "新建用户");
-        res.status(201).json(ok(user));
+        res.status(201).json(success(user));
     }
     catch (e) {
         console.error("[POST /api/v1/users] error:", e);
@@ -128,7 +115,7 @@ router.put("/:userId", async (req, res) => {
         if (role && oldUser && oldUser.role !== role) {
             await recordRoleChange(user.id, oldUser.role, role, changedBy || "system", reason || "角色变更");
         }
-        res.json(ok(user));
+        res.json(success(user));
     }
     catch (e) {
         console.error("[PUT /api/v1/users/:userId] error:", e);
@@ -144,7 +131,7 @@ router.delete("/:userId", async (req, res) => {
             res.status(404).json(error(404, "用户不存在"));
             return;
         }
-        res.json(ok({ deleted: true }));
+        res.json(success({ deleted: true }));
     }
     catch (e) {
         console.error("[DELETE /api/v1/users/:userId] error:", e);
@@ -157,7 +144,7 @@ router.get("/:userId/role-history", async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 20;
         const history = await getRoleHistory(req.params.userId, limit);
-        res.json(ok({ list: history, total: history.length }));
+        res.json(success({ list: history, total: history.length }));
     }
     catch (e) {
         console.error("[GET /:userId/role-history] error:", e);
@@ -170,7 +157,7 @@ router.get("/role-changes", async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 50;
         const changes = await getRecentRoleChanges(limit);
-        res.json(ok({ list: changes, total: changes.length }));
+        res.json(success({ list: changes, total: changes.length }));
     }
     catch (e) {
         console.error("[GET /role-changes] error:", e);
@@ -183,7 +170,7 @@ router.get("/role-stats", async (req, res) => {
     try {
         const days = parseInt(req.query.days) || 7;
         const stats = await getRoleChangeStats(days);
-        res.json(ok(stats));
+        res.json(success(stats));
     }
     catch (e) {
         console.error("[GET /role-stats] error:", e);
@@ -200,7 +187,7 @@ router.post("/delegations", async (req, res) => {
             return;
         }
         const delegation = await grantDelegation(delegatorId, delegateId, permissions, expiresAt || null);
-        res.status(201).json(ok(delegation));
+        res.status(201).json(success(delegation));
     }
     catch (e) {
         console.error("[POST /delegations] error:", e);
@@ -217,7 +204,7 @@ router.delete("/delegations", async (req, res) => {
             return;
         }
         const revoked = await revokeDelegation(delegatorId, delegateId);
-        res.json(ok({ revoked }));
+        res.json(success({ revoked }));
     }
     catch (e) {
         console.error("[DELETE /delegations] error:", e);
@@ -229,7 +216,7 @@ router.delete("/delegations", async (req, res) => {
 router.get("/:userId/delegations", async (req, res) => {
     try {
         const delegations = await getDelegationsForUser(req.params.userId);
-        res.json(ok({ list: delegations, total: delegations.length }));
+        res.json(success({ list: delegations, total: delegations.length }));
     }
     catch (e) {
         console.error("[GET /:userId/delegations] error:", e);
@@ -241,7 +228,7 @@ router.get("/:userId/delegations", async (req, res) => {
 router.get("/:userId/delegations-by", async (req, res) => {
     try {
         const delegations = await getDelegationsByUser(req.params.userId);
-        res.json(ok({ list: delegations, total: delegations.length }));
+        res.json(success({ list: delegations, total: delegations.length }));
     }
     catch (e) {
         console.error("[GET /:userId/delegations-by] error:", e);
@@ -258,7 +245,7 @@ router.get("/:userId/permissions", async (req, res) => {
             return;
         }
         const permissionMap = getUserPermissionMap(user.role);
-        res.json(ok(permissionMap));
+        res.json(success(permissionMap));
     }
     catch (e) {
         console.error("[GET /:userId/permissions] error:", e);
@@ -281,7 +268,7 @@ router.post("/check", async (req, res) => {
             return;
         }
         const result = checkPermission(user.role, agent);
-        res.json(ok({
+        res.json(success({
             allowed: result.allowed,
             role: result.role,
             capability: result.capability,
