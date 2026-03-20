@@ -1370,11 +1370,11 @@ export async function linkScreenshot(
   }
 }
 
-export async function unlinkScreenshot(screenshotId: string): Promise<boolean> {
+export async function unlinkScreenshot(screenshotId: string): Promise<{ success: boolean; versionId?: string }> {
   try {
     // Find the screenshot first to get versionId
     const screenshot = mockVersionScreenshots.find((s) => s.id === screenshotId);
-    if (!screenshot) return false;
+    if (!screenshot) return { success: false };
 
     const res = await fetch(`${API_BASE}/versions/${screenshot.versionId}/screenshots/${screenshotId}`, {
       method: 'DELETE',
@@ -1383,15 +1383,17 @@ export async function unlinkScreenshot(screenshotId: string): Promise<boolean> {
     if (json.code === 200 || json.code === 0) {
       const index = mockVersionScreenshots.findIndex((s) => s.id === screenshotId);
       if (index !== -1) mockVersionScreenshots.splice(index, 1);
-      return true;
+      return { success: true, versionId: screenshot.versionId };
     }
     throw new Error(json.message || '删除截图失败');
   } catch (err) {
     console.warn('[Screenshot API] Delete failed, using fallback:', err);
+    const screenshot = mockVersionScreenshots.find((s) => s.id === screenshotId);
+    const versionId = screenshot?.versionId;
     const index = mockVersionScreenshots.findIndex((s) => s.id === screenshotId);
-    if (index === -1) return false;
+    if (index === -1) return { success: false };
     mockVersionScreenshots.splice(index, 1);
-    return true;
+    return { success: true, versionId };
   }
 }
 
@@ -1560,10 +1562,12 @@ export function useUnlinkScreenshot() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ screenshotId }: { screenshotId: string; versionId: string }) =>
+    mutationFn: ({ screenshotId }: { screenshotId: string; versionId?: string }) =>
       unlinkScreenshot(screenshotId),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["versionScreenshots", variables.versionId] });
+    onSuccess: (result) => {
+      if (result?.versionId) {
+        queryClient.invalidateQueries({ queryKey: ["versionScreenshots", result.versionId] });
+      }
     },
   });
 }
