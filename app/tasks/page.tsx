@@ -597,7 +597,7 @@ function TasksContent() {
       }
       setSelectedTaskIds(new Set());
       setBatchPriority("");
-      const label = { "10": "紧急 (P10)", "8": "高 (P8)", "7": "中 (P7)", "5": "低 (P5)" }[batchPriority] || batchPriority;
+      const label = { "10": "紧急 (10)", "8": "高 (8-9)", "7": "中 (5-7)", "3": "低 (1-4)" }[batchPriority] || batchPriority;
       setBatchToast(`已更新 ${selectedTaskIds.size} 个任务为 ${label}`);
       setTimeout(() => setBatchToast(""), 3000);
     } catch (err) {
@@ -804,10 +804,10 @@ function TasksContent() {
                   <Select
                     options={[
                       { value: "", label: "修改优先级" },
-                      { value: "10", label: "紧急 (P10)" },
-                      { value: "8", label: "高 (P8)" },
-                      { value: "7", label: "中 (P7)" },
-                      { value: "5", label: "低 (P5)" },
+                      { value: "10", label: "紧急 (10)" },
+                      { value: "8", label: "高 (8-9)" },
+                      { value: "7", label: "中 (5-7)" },
+                      { value: "3", label: "低 (1-4)" },
                     ]}
                     value={batchPriority}
                     onChange={(e) => setBatchPriority(e.target.value)}
