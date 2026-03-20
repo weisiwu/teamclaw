@@ -361,6 +361,38 @@ router.delete('/:id/events/:eventId', (req: Request, res: Response) => {
   }
 });
 
+// PUT /api/v1/versions/:id/events/:eventId — Update a manual note
+router.put('/:id/events/:eventId', (req: Request, res: Response) => {
+  const { id: versionId, eventId } = req.params;
+  const { note } = req.body as { note: string };
+
+  if (!note || typeof note !== 'string') {
+    res.status(400).json(error(400, 'note is required and must be a string'));
+    return;
+  }
+
+  const event = db.prepare(
+    'SELECT id, event_type FROM version_change_events WHERE id = ? AND version_id = ?'
+  ).get(eventId, versionId) as { id: string; event_type: string } | undefined;
+  if (!event) {
+    res.status(404).json(error(404, 'Event not found'));
+    return;
+  }
+
+  if (event.event_type !== 'manual_note') {
+    res.status(403).json(error(403, 'Only manual notes can be edited'));
+    return;
+  }
+
+  try {
+    db.prepare('UPDATE version_change_events SET description = ? WHERE id = ?').run(note, eventId);
+    res.json(success({ eventId }));
+  } catch (err) {
+    console.error('[version] Update event error:', err);
+    res.status(500).json(error(500, 'Failed to update manual note'));
+  }
+});
+
 router.post('/', (req: Request, res: Response) => {
   const { version, title, description, status, tags, branch, projectPath } = req.body as {
     version: string;
