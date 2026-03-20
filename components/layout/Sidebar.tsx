@@ -36,7 +36,7 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 h-[calc(100vh-4rem)] border-r bg-gray-50 hidden lg:flex flex-col">
+    <aside className="w-64 h-[calc(100vh-4rem)] border-r bg-gray-50 dark:bg-slate-800 dark:border-slate-700 hidden lg:flex flex-col">
       <nav className="flex-1 p-4 space-y-1">
         {menuItems.map((item) => {
           const isActive = pathname === item.href || 
@@ -49,11 +49,11 @@ export function Sidebar() {
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-gray-700 hover:bg-gray-100"
+                  ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                  : "text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700"
               )}
             >
-              <item.icon className={cn("w-5 h-5", isActive ? "text-blue-600" : "text-gray-500")} />
+              <item.icon className={cn("w-5 h-5", isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-slate-400")} />
               {item.label}
             </Link>
           );
@@ -62,9 +62,9 @@ export function Sidebar() {
       <div className="p-4 border-t">
         <Link
           href="/settings"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
         >
-          <Settings className="w-5 h-5 text-gray-500" />
+          <Settings className="w-5 h-5 text-gray-500 dark:text-slate-400" />
           设置
         </Link>
       </div>

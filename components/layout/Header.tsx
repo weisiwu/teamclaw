@@ -2,12 +2,12 @@ import { Menu, Bell, User } from "lucide-react";
 
 export function Header() {
   return (
-    <header className="h-16 border-b bg-white flex items-center justify-between px-6">
+    <header className="h-16 border-b bg-white dark:bg-slate-800 dark:border-slate-700 flex items-center justify-between px-6">
       <div className="flex items-center gap-4">
         <button className="lg:hidden p-2 hover:bg-gray-100 rounded-lg">
           <Menu className="w-5 h-5" />
         </button>
-        <h1 className="text-xl font-bold text-gray-900">TeamClaw</h1>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white">TeamClaw</h1>
       </div>
       <div className="flex items-center gap-4">
         <button className="p-2 hover:bg-gray-100 rounded-lg relative">
