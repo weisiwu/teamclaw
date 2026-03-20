@@ -1,19 +1,23 @@
 "use client";
 
-import { RefreshCw, FileText, Sparkles, Loader2, GitCommit } from "lucide-react";
+import { useState } from "react";
+import { RefreshCw, FileText, Sparkles, Loader2, GitCommit, Pencil, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { VersionChangelog, ChangelogChange } from "@/lib/api/types";
+import { saveVersionSummary } from "@/lib/api/versions";
 
 interface ChangelogPanelProps {
   changelog: VersionChangelog | null;
   onGenerate: () => void;
   loading?: boolean;
   generating?: boolean;
-  /** 版本摘要内容（直接存储在 Version 模型中） */
   versionSummary?: string;
   summaryGeneratedAt?: string;
   summaryGeneratedBy?: string;
+  /** 版本 ID，用于保存手动编辑的摘要 */
+  versionId?: string;
+  onSummarySaved?: (savedAt: string) => void;
 }
 
 const changeTypeLabels: Record<ChangelogChange["type"], { label: string; variant: "default" | "success" | "warning" | "error" | "info" }> = {
@@ -26,7 +30,41 @@ const changeTypeLabels: Record<ChangelogChange["type"], { label: string; variant
   other: { label: "其他", variant: "default" },
 };
 
-export function ChangelogPanel({ changelog, onGenerate, loading, generating, versionSummary, summaryGeneratedAt, summaryGeneratedBy }: ChangelogPanelProps) {
+export function ChangelogPanel({ changelog, onGenerate, loading, generating, versionSummary, summaryGeneratedAt, summaryGeneratedBy, versionId, onSummarySaved }: ChangelogPanelProps) {
+  const [editing, setEditing] = useState(false);
+  const [editContent, setEditContent] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+
+  const startEditing = () => {
+    setEditContent(changelog?.content || versionSummary || "");
+    setEditing(true);
+    setSaveSuccess(null);
+  };
+
+  const cancelEditing = () => {
+    setEditing(false);
+    setEditContent("");
+    setSaveSuccess(null);
+  };
+
+  const handleSave = async () => {
+    if (!versionId) return;
+    setSaving(true);
+    try {
+      const result = await saveVersionSummary(versionId, { content: editContent, createdBy: "manual" });
+      if (result) {
+        const savedAt = new Date().toLocaleString("zh-CN");
+        setSaveSuccess(savedAt);
+        setEditing(false);
+        onSummarySaved?.(savedAt);
+      }
+    } catch (e) {
+      console.error("Failed to save changelog:", e);
+    } finally {
+      setSaving(false);
+    }
+  };
   if (loading) {
     return (
       <div className="space-y-4">
@@ -109,59 +147,124 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, ver
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="text-sm font-medium">变更摘要</div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onGenerate}
-          disabled={generating}
-        >
-          {generating ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+        <div className="flex items-center gap-2">
+          {editing ? (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={cancelEditing}
+                disabled={saving}
+              >
+                <X className="h-4 w-4 mr-1" />
+                取消
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4 mr-1" />
+                )}
+                {saving ? "保存中..." : "保存"}
+              </Button>
+            </>
           ) : (
-            <RefreshCw className="h-4 w-4 mr-2" />
+            <>
+              {versionId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={startEditing}
+                >
+                  <Pencil className="h-4 w-4 mr-1" />
+                  编辑
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onGenerate}
+                disabled={generating}
+              >
+                {generating ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                {generating ? "生成中..." : "重新生成"}
+              </Button>
+            </>
           )}
-          {generating ? "生成中..." : "重新生成"}
-        </Button>
-      </div>
-
-      {/* 标题和生成信息 */}
-      <div className="space-y-2">
-        <h3 className="text-lg font-semibold">{changelog.title}</h3>
-        <p className="text-sm text-muted-foreground">{changelog.content}</p>
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <span>
-            生成时间: {new Date(changelog.generatedAt).toLocaleString("zh-CN")}
-          </span>
-          <span>生成者: {changelog.generatedBy}</span>
         </div>
       </div>
 
-      {/* 变更列表 */}
-      <div className="space-y-3">
-        {changelog.changes.map((change, index) => (
-          <div
-            key={index}
-            className="p-3 rounded-lg border bg-card"
-          >
-            <div className="flex items-start gap-2 mb-2">
-              <Badge variant={changeTypeLabels[change.type].variant}>
-                {changeTypeLabels[change.type].label}
-              </Badge>
+      {/* 保存成功提示 */}
+      {saveSuccess && (
+        <div className="text-xs text-green-600 bg-green-50 px-3 py-2 rounded-md">
+          ✅ 变更摘要已保存于 {saveSuccess}
+        </div>
+      )}
+
+      {/* 编辑模式 */}
+      {editing ? (
+        <div className="space-y-3">
+          <textarea
+            className="w-full min-h-[200px] p-3 text-sm border rounded-lg bg-background resize-y font-mono"
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            placeholder="在此编辑变更摘要内容（支持 Markdown）..."
+          />
+          <p className="text-xs text-muted-foreground">
+            支持 Markdown 格式。保存后将覆盖现有变更摘要。
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* 标题和生成信息 */}
+          <div className="space-y-2">
+            <h3 className="text-lg font-semibold">{changelog.title}</h3>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{changelog.content}</p>
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <span>
+                生成时间: {new Date(changelog.generatedAt).toLocaleString("zh-CN")}
+              </span>
+              <span>生成者: {changelog.generatedBy}</span>
             </div>
-            <p className="text-sm">{change.description}</p>
-            {change.files && change.files.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {change.files.map((file, fileIndex) => (
-                  <Badge key={fileIndex} variant="default" className="text-xs bg-transparent border border-gray-300 text-gray-600">
-                    <GitCommit className="h-3 w-3 mr-1" />
-                    {file}
-                  </Badge>
-                ))}
-              </div>
-            )}
           </div>
-        ))}
-      </div>
+
+          {/* 变更列表 */}
+          <div className="space-y-3">
+            {changelog.changes.map((change, index) => (
+              <div
+                key={index}
+                className="p-3 rounded-lg border bg-card"
+              >
+                <div className="flex items-start gap-2 mb-2">
+                  <Badge variant={changeTypeLabels[change.type].variant}>
+                    {changeTypeLabels[change.type].label}
+                  </Badge>
+                </div>
+                <p className="text-sm">{change.description}</p>
+                {change.files && change.files.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {change.files.map((file, fileIndex) => (
+                      <Badge key={fileIndex} variant="default" className="text-xs bg-transparent border border-gray-300 text-gray-600">
+                        <GitCommit className="h-3 w-3 mr-1" />
+                        {file}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
