@@ -49,17 +49,17 @@ export function DialogContent({
 
   return (
     <div className={cn(
-      "bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-md p-6",
+      "bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-200 dark:border-slate-700 w-full max-w-md p-6",
       className
     )} {...props}>
       {(title || dialogContext) && (
         <div className="flex items-center justify-between mb-4">
-          {title && <h2 className="text-lg font-semibold">{title}</h2>}
+          {title && <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h2>}
           <button
             onClick={handleClose}
-            className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 dark:bg-slate-700 rounded-lg ml-auto"
+            className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg ml-auto text-gray-500 dark:text-gray-400"
           >
-            <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+            <X className="w-5 h-5" />
           </button>
         </div>
       )}
@@ -85,6 +85,6 @@ export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLD
 
 export function DialogTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
-    <h2 className={cn("text-lg font-semibold", className)} {...props} />
+    <h2 className={cn("text-lg font-semibold text-gray-900 dark:text-gray-100", className)} {...props} />
   );
 }

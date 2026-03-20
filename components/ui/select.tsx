@@ -24,10 +24,10 @@ interface SelectProps {
 export function Select({ value: controlledValue, defaultValue, onValueChange, children }: SelectProps) {
   const [uncontrolledValue, setUncontrolledValue] = React.useState(defaultValue || '');
   const [open, setOpen] = React.useState(false);
-  
+
   const isControlled = controlledValue !== undefined;
   const value = isControlled ? controlledValue : uncontrolledValue;
-  
+
   const handleValueChange = (newValue: string) => {
     if (!isControlled) {
       setUncontrolledValue(newValue);
@@ -35,7 +35,7 @@ export function Select({ value: controlledValue, defaultValue, onValueChange, ch
     onValueChange?.(newValue);
     setOpen(false);
   };
-  
+
   return (
     <SelectContext.Provider value={{ value, onValueChange: handleValueChange, open, setOpen }}>
       <div className="relative">{children}</div>
@@ -47,19 +47,19 @@ export function Select({ value: controlledValue, defaultValue, onValueChange, ch
 export function SelectTrigger({ className, children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const context = React.useContext(SelectContext);
   if (!context) throw new Error('SelectTrigger must be used within Select');
-  
+
   return (
     <button
       type="button"
       onClick={() => context.setOpen(!context.open)}
       className={cn(
-        "flex h-10 w-full items-center justify-between rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:cursor-not-allowed disabled:opacity-50",
+        "flex h-10 w-full items-center justify-between rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent disabled:cursor-not-allowed disabled:opacity-50",
         className
       )}
       {...props}
     >
       {children}
-      <ChevronDown className="h-4 w-4 text-gray-400 dark:text-gray-500 dark:text-gray-400" />
+      <ChevronDown className="h-4 w-4 text-gray-400 dark:text-slate-400 shrink-0" />
     </button>
   );
 }
@@ -72,8 +72,12 @@ interface SelectValueProps {
 export function SelectValue({ placeholder }: SelectValueProps) {
   const context = React.useContext(SelectContext);
   if (!context) throw new Error('SelectValue must be used within Select');
-  
-  return <span className={!context.value ? 'text-gray-400 dark:text-gray-500 dark:text-gray-400' : ''}>{context.value || placeholder}</span>;
+
+  return (
+    <span className={cn(!context.value && "text-gray-400 dark:text-gray-500")}>
+      {context.value || placeholder}
+    </span>
+  );
 }
 
 // Content
@@ -85,9 +89,9 @@ interface SelectContentProps {
 export function SelectContent({ children, className }: SelectContentProps) {
   const context = React.useContext(SelectContext);
   if (!context) throw new Error('SelectContent must be used within Select');
-  
+
   if (!context.open) return null;
-  
+
   return (
     <>
       <div
@@ -116,16 +120,16 @@ interface SelectItemProps {
 export function SelectItem({ value, children, className }: SelectItemProps) {
   const context = React.useContext(SelectContext);
   if (!context) throw new Error('SelectItem must be used within Select');
-  
+
   const isSelected = context.value === value;
-  
+
   return (
     <button
       type="button"
       onClick={() => context.onValueChange(value)}
       className={cn(
-        "w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-slate-700 dark:bg-slate-700 focus:bg-gray-100 dark:bg-slate-700 focus:outline-none",
-        isSelected && "bg-blue-50 text-blue-600",
+        "w-full px-3 py-2 text-left text-sm text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-slate-700 focus:bg-gray-100 dark:focus:bg-slate-700 focus:outline-none",
+        isSelected && "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400",
         className
       )}
     >
@@ -144,7 +148,7 @@ export function LegacySelect({ className, options, ...props }: LegacySelectProps
     <div className="relative">
       <select
         className={cn(
-          "flex h-10 w-full appearance-none rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:cursor-not-allowed disabled:opacity-50",
+          "flex h-10 w-full appearance-none rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 pr-8 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent disabled:cursor-not-allowed disabled:opacity-50",
           className
         )}
         {...props}
@@ -155,7 +159,7 @@ export function LegacySelect({ className, options, ...props }: LegacySelectProps
           </option>
         ))}
       </select>
-      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500 dark:text-gray-400 pointer-events-none" />
+      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-slate-400 pointer-events-none" />
     </div>
   );
 }
