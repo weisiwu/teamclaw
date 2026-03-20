@@ -289,6 +289,7 @@ export default function VersionDetailPage() {
             }}
             isOpen={true}
             onClose={() => setActiveTab("details")}
+            versionId={id}
           />
         </div>
       ) : (
