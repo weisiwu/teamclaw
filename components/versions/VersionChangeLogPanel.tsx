@@ -22,6 +22,7 @@ import {
   linkScreenshot,
   generateChangelog,
   unlinkScreenshot,
+  useAddTimelineEvent,
 } from "@/lib/api/versions";
 
 interface ChangeLogPanelProps {
@@ -43,6 +44,9 @@ export function VersionChangeLogPanel({
   const [generating, setGenerating] = useState(false);
   const [linkLoading, setLinkLoading] = useState(false);
   const [messageSelectorOpen, setMessageSelectorOpen] = useState(false);
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false);
+  const [noteText, setNoteText] = useState("");
+  const addNoteMutation = useAddTimelineEvent();
 
   const loadChangelog = async () => {
     setLoadingChangelog(true);
@@ -171,6 +175,15 @@ export function VersionChangeLogPanel({
             <div className="flex items-center gap-2">
               <h3 className="font-medium">版本变更摘要</h3>
               {loadingChangelog && <Loader2 className="h-4 w-4 animate-spin" />}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs h-6 px-2"
+                onClick={() => setNoteDialogOpen(!noteDialogOpen)}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                添加备注
+              </Button>
             </div>
             <div className="flex gap-2">
               <Button
@@ -197,6 +210,50 @@ export function VersionChangeLogPanel({
               </Button>
             </div>
           </div>
+
+          {noteDialogOpen && (
+            <div className="border rounded-lg p-3 space-y-2 bg-muted/30">
+              <textarea
+                className="w-full text-sm border rounded-md p-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+                rows={3}
+                placeholder="输入备注内容..."
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+              />
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { setNoteDialogOpen(false); setNoteText(""); }}
+                >
+                  取消
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  disabled={!noteText.trim() || addNoteMutation.isPending}
+                  onClick={async () => {
+                    try {
+                      await addNoteMutation.mutateAsync({
+                        versionId,
+                        data: { note: noteText.trim() },
+                      });
+                      setNoteText("");
+                      setNoteDialogOpen(false);
+                      await loadChangelog();
+                    } catch (e) {
+                      console.error("Failed to add note:", e);
+                    }
+                  }}
+                >
+                  {addNoteMutation.isPending ? (
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  ) : null}
+                  保存备注
+                </Button>
+              </div>
+            </div>
+          )}
 
           {changelog ? (
             <ChangeTimeline
