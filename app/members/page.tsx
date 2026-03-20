@@ -6,9 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { LegacySelect as Select } from "@/components/ui/select";
 import { MemberForm } from "@/components/members";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useMemberList, useCreateMember, useUpdateMember, useDeleteMember, useBatchDeleteMembers } from "@/hooks/useMembers";
 import { Member, ROLE_LABELS, MEMBER_ROLE_OPTIONS, MemberRole, MemberStatus, CreateMemberRequest, UpdateMemberRequest } from "@/lib/api/types";
-import { Pencil, Trash2, UserPlus, Loader2, Search, ArrowUpDown, ArrowUp, ArrowDown, Download, Upload, X, Power, PowerOff, Eye } from "lucide-react";
+import { Pencil, Trash2, UserPlus, Loader2, Search, Users, ArrowUpDown, ArrowUp, ArrowDown, Download, Upload, X, Power, PowerOff, Eye } from "lucide-react";
 import * as XLSX from "xlsx";
 
 type SortField = "name" | "role" | "weight" | "createdAt";
@@ -338,8 +339,20 @@ export default function MembersPage() {
             <span className="ml-2 text-gray-500 dark:text-gray-400">加载中...</span>
           </div>
         ) : filteredMembers.length === 0 ? (
-          <div className="py-12 text-center text-gray-500 dark:text-gray-400">
-            {searchQuery ? "没有匹配的成员" : "暂无成员数据"}
+          <div className="py-6">
+            <EmptyState
+              icon={searchQuery ? Search : Users}
+              title={searchQuery ? "没有匹配的成员" : "暂无成员数据"}
+              description={searchQuery ? "请尝试其他搜索条件或清除筛选" : "点击上方「添加成员」开始添加"}
+              action={
+                !searchQuery && (
+                  <Button onClick={handleAdd}>
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    添加成员
+                  </Button>
+                )
+              }
+            />
           </div>
         ) : (
           <div className="overflow-x-auto">
