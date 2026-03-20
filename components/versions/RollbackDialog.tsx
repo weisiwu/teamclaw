@@ -47,6 +47,8 @@ export function RollbackDialog({
   const [targetType, setTargetType] = useState<"tag" | "branch">("tag");
   const [mode, setMode] = useState<"revert" | "checkout">("revert");
   const [previewCollapsed, setPreviewCollapsed] = useState(false);
+  const [createBackup, setCreateBackup] = useState(true);
+  const [reason, setReason] = useState("");
   const rollbackMutation = useRollbackVersion();
   const { data: targets, isLoading: targetsLoading } = useRollbackTargets(version?.id || "");
 
@@ -71,6 +73,8 @@ export function RollbackDialog({
     if (!open) {
       setTargetRef("");
       setPreviewCollapsed(false);
+      setCreateBackup(true);
+      setReason("");
     }
   }, [open]);
 
@@ -97,8 +101,8 @@ export function RollbackDialog({
         versionId: version.id,
         targetVersion: targetRef,
         mode,
-        createBackup: true,
-        message: `Rollback to ${targetRef}`,
+        createBackup,
+        message: reason || `Rollback to ${targetRef}`,
       });
       alert(`成功回退到 ${targetRef}`);
       onOpenChange(false);
@@ -443,6 +447,36 @@ export function RollbackDialog({
                 </div>
               </div>
             </RadioGroup>
+          </div>
+
+          {/* 备份选项 */}
+          <div className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+            <input
+              type="checkbox"
+              id="create-backup"
+              checked={createBackup}
+              onChange={(e) => setCreateBackup(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+            />
+            <div className="flex-1">
+              <label htmlFor="create-backup" className="text-sm font-medium cursor-pointer">
+                创建备份分支
+              </label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                开启后会在回退前创建备份分支，保留当前状态以便恢复
+              </p>
+            </div>
+          </div>
+
+          {/* 回退原因 */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">回退原因（可选）</label>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="例如：修复线上严重问题、回退有问题的功能..."
+              className="w-full min-h-[60px] px-3 py-2 text-sm rounded-lg border border-border bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+            />
           </div>
         </div>
 
