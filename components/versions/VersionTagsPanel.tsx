@@ -276,7 +276,7 @@ export function VersionTagsPanel() {
         {isLoading ? (
           <VersionTagsSkeleton />
         ) : filteredAndSortedTags.length === 0 ? (
-          <VersionTagsEmptyState hasSearch={!!search.trim()} />
+          <VersionTagsEmptyState hasSearch={!!search.trim() || statusFilter !== "all"} onClear={() => { setSearch("''"); setStatusFilter("all"); setSortOrder("desc"); setSortType("date"); }} />
         ) : (
           <div className="space-y-6">
             {/* Time-grouped rendering */}

@@ -1,12 +1,14 @@
 "use client";
 
-import { Tag } from "lucide-react";
+import { Tag, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface VersionTagsEmptyStateProps {
   hasSearch?: boolean;
+  onClear?: () => void;
 }
 
-export function VersionTagsEmptyState({ hasSearch }: VersionTagsEmptyStateProps) {
+export function VersionTagsEmptyState({ hasSearch, onClear }: VersionTagsEmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-gray-500">
       <Tag className="w-12 h-12 mb-4 text-gray-300" />
@@ -18,6 +20,17 @@ export function VersionTagsEmptyState({ hasSearch }: VersionTagsEmptyStateProps)
           ? "尝试更换搜索关键词"
           : "创建版本后会生成对应的 Git Tag"}
       </p>
+      {onClear && hasSearch && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mt-4 gap-1.5 text-gray-400 hover:text-gray-600"
+          onClick={onClear}
+        >
+          <X className="w-3.5 h-3.5" />
+          清除筛选
+        </Button>
+      )}
     </div>
   );
 }
