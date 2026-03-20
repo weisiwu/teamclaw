@@ -27,26 +27,9 @@ import {
   getUserPermissionMap,
 } from "../services/permissionFineGrained";
 import { AgentName, Role } from "../constants/roles";
+import { success, error } from "../utils/response";
 
 const router = Router();
-
-// ============ 辅助函数 ============
-
-function ok<T>(data: T) {
-  return { code: 0, data, message: "ok" };
-}
-
-function paginated<T>(list: T[], total: number, page: number, pageSize: number) {
-  return {
-    code: 0,
-    data: { list, total, page, pageSize },
-    message: "ok",
-  };
-}
-
-function error(code: number, message: string) {
-  return { code, data: null, message };
-}
 
 // ============ GET /api/v1/users ============
 // 获取用户列表（支持分页、角色筛选）
@@ -57,7 +40,7 @@ router.get("/", async (req: Request, res: Response) => {
     const role = req.query.role as Role | undefined;
 
     const result = await listUsers({ page, pageSize, role });
-    res.json(paginated(result.list, result.total, page, pageSize));
+    res.json(success({ list: result.list, total: result.total, page, pageSize }));
   } catch (e) {
     console.error("[GET /api/v1/users] error:", e);
     res.status(500).json(error(500, "获取用户列表失败"));
@@ -83,11 +66,11 @@ router.get("/me", async (req: Request, res: Response) => {
 
     if (!user) {
       // 如果找不到，返回基本信息
-      res.json(ok({ userId, role, isRegistered: false }));
+      res.json(success({ userId, role, isRegistered: false }));
       return;
     }
 
-    res.json(ok({ ...user, isRegistered: true }));
+    res.json(success({ ...user, isRegistered: true }));
   } catch (e) {
     console.error("[GET /api/v1/users/me] error:", e);
     res.status(500).json(error(500, "获取用户信息失败"));
@@ -103,7 +86,7 @@ router.get("/:userId", async (req: Request, res: Response) => {
       res.status(404).json(error(404, "用户不存在"));
       return;
     }
-    res.json(ok(user));
+    res.json(success(user));
   } catch (e) {
     console.error("[GET /api/v1/users/:userId] error:", e);
     res.status(500).json(error(500, "获取用户详情失败"));
@@ -131,7 +114,7 @@ router.post("/", async (req: Request, res: Response) => {
     // 记录角色变更历史
     await recordRoleChange(user.id, null, role, changedBy || "system", reason || "新建用户");
 
-    res.status(201).json(ok(user));
+    res.status(201).json(success(user));
   } catch (e) {
     console.error("[POST /api/v1/users] error:", e);
     res.status(500).json(error(500, "创建用户失败"));
@@ -170,7 +153,7 @@ router.put("/:userId", async (req: Request, res: Response) => {
       await recordRoleChange(user.id, oldUser.role, role, changedBy || "system", reason || "角色变更");
     }
 
-    res.json(ok(user));
+    res.json(success(user));
   } catch (e) {
     console.error("[PUT /api/v1/users/:userId] error:", e);
     res.status(500).json(error(500, "更新用户失败"));
@@ -186,7 +169,7 @@ router.delete("/:userId", async (req: Request, res: Response) => {
       res.status(404).json(error(404, "用户不存在"));
       return;
     }
-    res.json(ok({ deleted: true }));
+    res.json(success({ deleted: true }));
   } catch (e) {
     console.error("[DELETE /api/v1/users/:userId] error:", e);
     res.status(500).json(error(500, "删除用户失败"));
@@ -199,7 +182,7 @@ router.get("/:userId/role-history", async (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 20;
     const history = await getRoleHistory(req.params.userId, limit);
-    res.json(ok({ list: history, total: history.length }));
+    res.json(success({ list: history, total: history.length }));
   } catch (e) {
     console.error("[GET /:userId/role-history] error:", e);
     res.status(500).json(error(500, "获取角色历史失败"));
@@ -212,7 +195,7 @@ router.get("/role-changes", async (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 50;
     const changes = await getRecentRoleChanges(limit);
-    res.json(ok({ list: changes, total: changes.length }));
+    res.json(success({ list: changes, total: changes.length }));
   } catch (e) {
     console.error("[GET /role-changes] error:", e);
     res.status(500).json(error(500, "获取角色变更记录失败"));
@@ -225,7 +208,7 @@ router.get("/role-stats", async (req: Request, res: Response) => {
   try {
     const days = parseInt(req.query.days as string) || 7;
     const stats = await getRoleChangeStats(days);
-    res.json(ok(stats));
+    res.json(success(stats));
   } catch (e) {
     console.error("[GET /role-stats] error:", e);
     res.status(500).json(error(500, "获取角色变更统计失败"));
@@ -244,7 +227,7 @@ router.post("/delegations", async (req: Request, res: Response) => {
     }
 
     const delegation = await grantDelegation(delegatorId, delegateId, permissions, expiresAt || null);
-    res.status(201).json(ok(delegation));
+    res.status(201).json(success(delegation));
   } catch (e) {
     console.error("[POST /delegations] error:", e);
     res.status(500).json(error(500, "授予委托失败"));
@@ -263,7 +246,7 @@ router.delete("/delegations", async (req: Request, res: Response) => {
     }
 
     const revoked = await revokeDelegation(delegatorId, delegateId);
-    res.json(ok({ revoked }));
+    res.json(success({ revoked }));
   } catch (e) {
     console.error("[DELETE /delegations] error:", e);
     res.status(500).json(error(500, "撤销委托失败"));
@@ -275,7 +258,7 @@ router.delete("/delegations", async (req: Request, res: Response) => {
 router.get("/:userId/delegations", async (req: Request, res: Response) => {
   try {
     const delegations = await getDelegationsForUser(req.params.userId);
-    res.json(ok({ list: delegations, total: delegations.length }));
+    res.json(success({ list: delegations, total: delegations.length }));
   } catch (e) {
     console.error("[GET /:userId/delegations] error:", e);
     res.status(500).json(error(500, "获取委托列表失败"));
@@ -287,7 +270,7 @@ router.get("/:userId/delegations", async (req: Request, res: Response) => {
 router.get("/:userId/delegations-by", async (req: Request, res: Response) => {
   try {
     const delegations = await getDelegationsByUser(req.params.userId);
-    res.json(ok({ list: delegations, total: delegations.length }));
+    res.json(success({ list: delegations, total: delegations.length }));
   } catch (e) {
     console.error("[GET /:userId/delegations-by] error:", e);
     res.status(500).json(error(500, "获取发出的委托列表失败"));
@@ -305,7 +288,7 @@ router.get("/:userId/permissions", async (req: Request, res: Response) => {
     }
 
     const permissionMap = getUserPermissionMap(user.role);
-    res.json(ok(permissionMap));
+    res.json(success(permissionMap));
   } catch (e) {
     console.error("[GET /:userId/permissions] error:", e);
     res.status(500).json(error(500, "获取权限映射失败"));
@@ -335,7 +318,7 @@ router.post("/check", async (req: Request, res: Response) => {
 
     const result = checkPermission(user.role, agent);
     res.json(
-      ok({
+      success({
         allowed: result.allowed,
         role: result.role,
         capability: result.capability,

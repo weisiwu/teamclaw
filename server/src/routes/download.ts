@@ -15,6 +15,7 @@ import {
 } from '../services/downloadService.js';
 import { getDoc } from '../services/docService.js';
 import { getArtifact } from '../services/artifactStore.js';
+import { success, error } from '../utils/response.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -78,10 +79,7 @@ router.post('/', async (req, res) => {
     const filePaths = await resolveFilePaths(fileIds);
     
     if (filePaths.size === 0) {
-      return res.status(404).json({
-        code: 404,
-        message: 'No valid files found',
-      });
+      return res.status(404).json(error(404, 'No valid files found'));
     }
 
     // Create download task
@@ -103,21 +101,15 @@ router.post('/', async (req, res) => {
       }
     }
 
-    return res.status(201).json({
-      code: 0,
-      message: 'success',
-      data: {
+    return res.status(201).json(success({
         taskId: task.id,
         status: task.status,
         estimatedSize,
       },
-    });
+    }));
   } catch (err: any) {
     console.error('[DownloadRoutes] Create task error:', err);
-    return res.status(500).json({
-      code: 500,
-      message: err.message || 'Failed to create download task',
-    });
+    throw err;
   }
 });
 
@@ -130,32 +122,25 @@ router.get('/', async (req, res) => {
     const userId = (req as any).user?.id || 'anonymous';
     const tasks = getUserDownloadTasks(userId);
 
-    return res.json({
-      code: 0,
-      message: 'success',
-      data: {
-        tasks: tasks.map(t => ({
-          id: t.id,
-          type: t.type,
-          status: t.status,
-          progress: t.progress,
-          totalBytes: t.totalBytes,
-          downloadedBytes: t.downloadedBytes,
-          fileCount: t.fileIds.length,
-          zipName: t.zipName,
-          createdAt: t.createdAt,
-          completedAt: t.completedAt,
-          errorMessage: t.errorMessage,
-        })),
-        total: tasks.length,
-      },
-    });
+    return res.json(success({
+      tasks: tasks.map(t => ({
+        id: t.id,
+        type: t.type,
+        status: t.status,
+        progress: t.progress,
+        totalBytes: t.totalBytes,
+        downloadedBytes: t.downloadedBytes,
+        fileCount: t.fileIds.length,
+        zipName: t.zipName,
+        createdAt: t.createdAt,
+        completedAt: t.completedAt,
+        errorMessage: t.errorMessage,
+      })),
+      total: tasks.length,
+    }));
   } catch (err: any) {
     console.error('[DownloadRoutes] Get tasks error:', err);
-    return res.status(500).json({
-      code: 500,
-      message: err.message || 'Failed to get download tasks',
-    });
+    throw err;
   }
 });
 
@@ -169,16 +154,10 @@ router.get('/:taskId', async (req, res) => {
     const task = getDownloadTask(taskId);
 
     if (!task) {
-      return res.status(404).json({
-        code: 404,
-        message: 'Download task not found',
-      });
+      return res.status(404).json(error(404, 'Download task not found'));
     }
 
-    return res.json({
-      code: 0,
-      message: 'success',
-      data: {
+    return res.json(success({
         id: task.id,
         type: task.type,
         status: task.status,
@@ -195,10 +174,7 @@ router.get('/:taskId', async (req, res) => {
     });
   } catch (err: any) {
     console.error('[DownloadRoutes] Get task error:', err);
-    return res.status(500).json({
-      code: 500,
-      message: err.message || 'Failed to get download task',
-    });
+    throw err;
   }
 });
 
@@ -213,18 +189,12 @@ router.get('/:taskId/progress', async (req, res) => {
     const task = getDownloadTask(taskId);
 
     if (!task) {
-      return res.status(404).json({
-        code: 404,
-        message: 'Download task not found',
-      });
+      return res.status(404).json(error(404, 'Download task not found'));
     }
 
     // Verify user owns this task
     if (task.userId !== userId) {
-      return res.status(403).json({
-        code: 403,
-        message: 'Access denied',
-      });
+      return res.status(403).json(error(403, 'Access denied'));
     }
 
     // Set up SSE
@@ -281,10 +251,7 @@ router.get('/:taskId/progress', async (req, res) => {
     });
   } catch (err: any) {
     console.error('[DownloadRoutes] SSE error:', err);
-    res.status(500).json({
-      code: 500,
-      message: err.message || 'Failed to setup progress stream',
-    });
+    res.status(500).json(error(500, err.message || 'Failed to setup progress stream'));
   }
 });
 
@@ -299,34 +266,22 @@ router.get('/:taskId/file', async (req, res) => {
     const task = getDownloadTask(taskId);
 
     if (!task) {
-      return res.status(404).json({
-        code: 404,
-        message: 'Download task not found',
-      });
+      return res.status(404).json(error(404, 'Download task not found'));
     }
 
     // Verify user owns this task
     if (task.userId !== userId) {
-      return res.status(403).json({
-        code: 403,
-        message: 'Access denied',
-      });
+      return res.status(403).json(error(403, 'Access denied'));
     }
 
     // Check if task is completed
     if (task.status !== 'completed') {
-      return res.status(400).json({
-        code: 400,
-        message: `Download not ready, current status: ${task.status}`,
-      });
+      return res.status(400).json(error(400, `Download not ready, current status: ${task.status}`));
     }
 
     const filePath = getDownloadFilePath(taskId);
     if (!filePath || !fs.existsSync(filePath)) {
-      return res.status(404).json({
-        code: 404,
-        message: 'Download file not found',
-      });
+      return res.status(404).json(error(404, 'Download file not found'));
     }
 
     // Set headers for file download
@@ -339,10 +294,7 @@ router.get('/:taskId/file', async (req, res) => {
     stream.pipe(res);
   } catch (err: any) {
     console.error('[DownloadRoutes] Download file error:', err);
-    res.status(500).json({
-      code: 500,
-      message: err.message || 'Failed to download file',
-    });
+    res.status(500).json(error(500, err.message || 'Failed to download file'));
   }
 });
 
@@ -357,45 +309,28 @@ router.delete('/:taskId', async (req, res) => {
     const task = getDownloadTask(taskId);
 
     if (!task) {
-      return res.status(404).json({
-        code: 404,
-        message: 'Download task not found',
-      });
+      return res.status(404).json(error(404, 'Download task not found'));
     }
 
     // Verify user owns this task
     if (task.userId !== userId) {
-      return res.status(403).json({
-        code: 403,
-        message: 'Access denied',
-      });
+      return res.status(403).json(error(403, 'Access denied'));
     }
 
     // Cancel if still pending or downloading
     if (['pending', 'downloading'].includes(task.status)) {
       const cancelled = await cancelDownloadTask(taskId);
       if (cancelled) {
-        return res.json({
-          code: 0,
-          message: 'Download cancelled',
-          data: { taskId, status: 'cancelled' },
-        });
+        return res.json(success({ taskId, status: 'cancelled' }));
       }
     }
 
     // Delete completed/failed/cancelled tasks
     deleteDownloadTask(taskId);
-    return res.json({
-      code: 0,
-      message: 'Download task deleted',
-      data: { taskId },
-    });
+    return res.json(success({ taskId }));
   } catch (err: any) {
     console.error('[DownloadRoutes] Delete task error:', err);
-    res.status(500).json({
-      code: 500,
-      message: err.message || 'Failed to delete download task',
-    });
+    throw err;
   }
 });
 
