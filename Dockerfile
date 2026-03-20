@@ -61,6 +61,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./
 
+# Copy next binary (devDependency in builder, needed for standalone start)
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.bin/next /app/node_modules/.bin/next
+
 # Copy server from server-builder stage
 COPY --from=server-builder --chown=nextjs:nodejs /app/server ./server
 
