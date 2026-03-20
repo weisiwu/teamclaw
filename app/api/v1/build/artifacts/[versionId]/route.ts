@@ -21,6 +21,14 @@ export async function GET(
     );
   }
 
+  // Validate versionId format to prevent path traversal
+  if (!/^[a-zA-Z0-9_.-]+$/.test(versionId)) {
+    return NextResponse.json(
+      { code: 400, message: "Invalid versionId format" },
+      { status: 400 }
+    );
+  }
+
   try {
     const url = buildNumber
       ? `${SERVER_URL}/api/v1/artifacts/${encodeURIComponent(versionId)}/${encodeURIComponent(buildNumber)}`

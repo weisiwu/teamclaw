@@ -61,11 +61,15 @@ function parseArtifactFilename(filename: string): {
 
 /**
  * List all artifacts for a given version
- * GET /api/v1/build/artifacts?versionName=v1.2.0
+ * GET /api/v1/build/artifacts?versionName=v1.2.0&page=1&pageSize=20
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const versionName = searchParams.get("versionName");
+
+  // Pagination: default page=1, pageSize=20
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+  const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "20", 10)));
 
   try {
     await fs.mkdir(ARTIFACTS_DIR, { recursive: true });
@@ -133,9 +137,20 @@ export async function GET(request: NextRequest) {
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
+    // Apply pagination
+    const total = artifacts.length;
+    const startIndex = (page - 1) * pageSize;
+    const paginatedArtifacts = artifacts.slice(startIndex, startIndex + pageSize);
+
     return NextResponse.json({
       code: 0,
-      data: { artifacts, total: artifacts.length },
+      data: {
+        artifacts: paginatedArtifacts,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
     });
   } catch (error) {
     console.error("[BuildArtifacts] Error:", error);
@@ -216,6 +231,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { code: 400, message: "Missing file or versionName" },
         { status: 400 }
+      );
+    }
+
+    // File size limit: 500MB
+    const MAX_FILE_SIZE = 500 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { code: 413, message: `File size exceeds limit of ${MAX_FILE_SIZE / (1024 * 1024)}MB` },
+        { status: 413 }
       );
     }
 
