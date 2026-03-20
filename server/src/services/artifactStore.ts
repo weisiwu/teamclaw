@@ -4,7 +4,7 @@
  * Serves downloads via static file serving
  */
 
-import { existsSync, mkdirSync, writeFileSync, readdirSync, rmSync, statSync, createReadStream } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, readdirSync, rmSync, statSync, createReadStream, copyFileSync } from 'fs';
 import { join, basename, extname, dirname } from 'path';
 
 // Global artifacts root: ~/.openclaw/artifacts
@@ -216,6 +216,14 @@ export function deleteArtifact(projectName: string, version: string, artifactPat
  */
 export function getArtifactsRootDir(): string {
   return getArtifactsRoot();
+}
+
+/**
+ * Get artifact by fileId (stub - artifactStore uses project/version/artifactPath)
+ * Returns null; caller should fall back to uploads directory
+ */
+export async function getArtifact(fileId: string): Promise<{ path: string } | null> {
+  return null;
 }
 
 /**

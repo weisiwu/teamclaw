@@ -221,10 +221,8 @@ const TASK_TYPE_BUMP_MAP: Record<string, SemverLevel> = {
   破坏性: 'major',
   // Hotfix (patch bump)
   hotfix: 'patch',
-  hotfix: 'patch',
   // Documentation
   docs: 'patch',
-  doc: 'patch',
   文档: 'patch',
 };
 

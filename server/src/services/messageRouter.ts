@@ -75,7 +75,7 @@ class MessageRouterService {
   // 系统关键词（直接路由到特定Agent）
   private systemKeywords: Array<{
     keyword: string;
-    agentType: Message['role'];
+    agentType: string;
   }> = [
     { keyword: 'bug', agentType: 'coder' },
     { keyword: '错误', agentType: 'coder' },

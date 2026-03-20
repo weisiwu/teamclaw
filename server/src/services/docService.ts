@@ -55,7 +55,7 @@ function getDocList(search?: string): DocItem[] {
 }
 
 // 获取文档详情
-function getDoc(docId: string): DocItem | null {
+export function getDoc(docId: string): DocItem | null {
   const docs = getDocList();
   const doc = docs.find(d => d.id === docId);
   if (!doc) return null;

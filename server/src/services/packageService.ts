@@ -37,7 +37,7 @@ function getPackageDir(versionId: string): string {
   return dir;
 }
 
-function getPackageFilePath(versionId: string, buildNumber: number, format: PackageFormat): string {
+export function getPackageFilePath(versionId: string, buildNumber: number, format: PackageFormat): string {
   const dir = getPackageDir(versionId);
   const ext = format === 'tar.gz' ? 'tar.gz' : format;
   return join(dir, `build-${buildNumber}.${ext}`);

@@ -136,5 +136,5 @@ export function getAgentCurrentTask(agentName: string): DispatchRequest | null {
 export function selectBestCoder(): string | null {
   const available = getAvailableAgents(1); // level 1 = coder
   if (available.length === 0) return null;
-  return available[0]; // 已按负载排序，低的在前
+  return available[0].name; // 已按负载排序，低的在前
 }

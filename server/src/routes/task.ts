@@ -7,6 +7,10 @@ import { Router } from 'express';
 import { taskLifecycle } from '../services/taskLifecycle.js';
 import { taskFlow } from '../services/taskFlow.js';
 import { taskMemory } from '../services/taskMemory.js';
+import { taskScheduler } from '../services/taskScheduler.js';
+import { taskTimeout } from '../services/taskTimeout.js';
+import { taskStats } from '../services/taskStats.js';
+import { taskCancel } from '../services/taskCancel.js';
 import {
   CreateTaskRequest,
   UpdateTaskRequest,
@@ -166,7 +170,8 @@ router.patch('/:taskId', async (req, res) => {
         // 自动触发版本升级（task_done）
         if (task.versionId) {
           try {
-            const { executeAutoBump, getVersionSettings } = await import('../services/autoBump.js');
+            const { executeAutoBump } = await import('../services/autoBump.js');
+            const { getVersionSettings } = await import('../routes/version.js');
             const { getDb } = await import('../db/sqlite.js');
             const db = getDb();
             const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(task.versionId) as Record<string, unknown> | undefined;

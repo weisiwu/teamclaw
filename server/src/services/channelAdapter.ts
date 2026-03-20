@@ -18,7 +18,7 @@ export function adaptFeishuMessage(raw: Record<string, unknown>): ReceiveMessage
 
   return {
     channel: 'feishu',
-    userId: String(sender?.sender_id?.open_id || sender?.sender_id?.user_id || ''),
+    userId: String((sender?.sender_id as any)?.open_id || (sender?.sender_id as any)?.user_id || ''),
     userName: String(sender?.sender_name || '未知用户'),
     role: detectRoleFromFeishu(sender),
     content: String(content.text || content.content || ''),

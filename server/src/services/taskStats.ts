@@ -153,8 +153,8 @@ class TaskStatsService {
       dailyStats = { date: dateKey, completed: 0, failed: 0, pending: 0, running: 0, avgDurationMs: 0, totalDurationMs: 0 };
       this.dailyStats.set(dateKey, dailyStats);
     }
-    stats.pending = Math.max(0, stats.pending - 1);
-    stats.running++;
+    dailyStats.pending = Math.max(0, dailyStats.pending - 1);
+    dailyStats.running++;
   }
 
   /**
@@ -196,8 +196,9 @@ class TaskStatsService {
     let runningCount = 0;
 
     for (const t of filtered) {
+      let startMs: number | undefined;
       if (t.startedAt) {
-        const startMs = new Date(t.startedAt).getTime();
+        startMs = new Date(t.startedAt).getTime();
         if (t.completedAt) {
           const endMs = new Date(t.completedAt).getTime();
           const duration = endMs - startMs;
@@ -208,7 +209,7 @@ class TaskStatsService {
           runningCount++;
         }
       }
-      if (t.createdAt && t.startedAt) {
+      if (t.createdAt && t.startedAt && startMs !== undefined) {
         totalPendingTime += startMs - new Date(t.createdAt).getTime();
         pendingCount++;
       }

@@ -3,6 +3,8 @@
  * 定义系统中的 Agent 团队、等级矩阵、指派规则
  */
 
+import * as path from 'path';
+
 // ============ Agent 等级定义 ============
 export type AgentLevel = 1 | 2 | 3;
 
@@ -133,4 +135,14 @@ export function getAvailableAgents(level?: AgentLevel): AgentConfig[] {
   const agents = level != null ? getAgentsByLevel(level) : AGENT_TEAM;
   // For now all agents are available (extend with status tracking later)
   return agents;
+}
+
+export function getSharedResources(): { skills: string; workspace: string; memory: string } {
+  const home = process.env.HOME || process.env.USERPROFILE || '/tmp';
+  const base = path.join(home, '.openclaw');
+  return {
+    skills: path.join(base, 'workspace', 'skills'),
+    workspace: path.join(base, 'workspace'),
+    memory: path.join(base, 'memory'),
+  };
 }

@@ -236,7 +236,6 @@ router.get('/:id', (req: Request, res: Response) => {
     id: row.id,
     version: row.version,
     branch: row.branch,
-    summary: row.summary,
     commit_hash: row.commit_hash,
     created_by: row.created_by,
     created_at: row.created_at,

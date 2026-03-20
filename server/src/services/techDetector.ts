@@ -20,7 +20,6 @@ const FRAMEWORKS: Record<string, string[]> = {
   'pyproject.toml': ['Python'],
   'pom.xml': ['Java'],
   'build.gradle': ['Java', 'Kotlin'],
-  'Cargo.toml': ['Rust'],
   'Caddyfile': ['Caddy'],
   'docker-compose.yml': ['Docker'],
   'Dockerfile': ['Docker'],
@@ -60,7 +59,6 @@ const BUILD_TOOLS: Record<string, string> = {
   'build.gradle': 'Gradle',
   'CMakeLists.txt': 'CMake',
   'Makefile': 'Make',
-  'Cargo.toml': 'Cargo',
 };
 
 const UI_FRAMEWORKS: Record<string, string> = {
@@ -169,7 +167,7 @@ export async function detectTechStack(projectPath: string): Promise<TechStack> {
       const deps = { ...pkg.dependencies, ...pkg.devDependencies };
       for (const [key, val] of Object.entries(deps)) {
         const v = val as string;
-        if (ORM[key]) orm.push(ORM[key]);
+        if (ORMS[key]) orm.push(ORMS[key]);
         if (v?.includes('orm') || v?.includes('prisma') || v?.includes('sequi')) {
           const norm = key.replace(/[-_]/g, '').toLowerCase();
           if (norm.includes('prisma')) orm.push('Prisma');
