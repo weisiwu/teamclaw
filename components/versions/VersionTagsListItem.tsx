@@ -38,6 +38,70 @@ const commitTypeConfig: Record<string, { label: string; className: string; icon:
   chore:   { label: "chore", className: "bg-gray-100 text-gray-600 border-gray-200",         icon: "🔩" },
 };
 
+const FILE_TYPE_STYLES: Record<string, { className: string; label: string }> = {
+  component: {
+    className: "bg-indigo-100 text-indigo-700 border-indigo-200",
+    label: "组件",
+  },
+  api: {
+    className: "bg-cyan-100 text-cyan-700 border-cyan-200",
+    label: "API",
+  },
+  hook: {
+    className: "bg-violet-100 text-violet-700 border-violet-200",
+    label: "Hook",
+  },
+  config: {
+    className: "bg-amber-100 text-amber-700 border-amber-200",
+    label: "配置",
+  },
+  styles: {
+    className: "bg-pink-100 text-pink-700 border-pink-200",
+    label: "样式",
+  },
+  types: {
+    className: "bg-teal-100 text-teal-700 border-teal-200",
+    label: "类型",
+  },
+  docs: {
+    className: "bg-sky-100 text-sky-700 border-sky-200",
+    label: "文档",
+  },
+  test: {
+    className: "bg-green-100 text-green-700 border-green-200",
+    label: "测试",
+  },
+};
+
+function getFileTypeStyle(file: string): { className: string; label: string } {
+  const lower = file.toLowerCase();
+  if (/\/(components?|ui|layout|versions?|tokens?|theme|branch|members|messages|team|agent-team|providers)\//.test(lower)) {
+    return FILE_TYPE_STYLES.component;
+  }
+  if (/\/api\//.test(lower) || lower.includes("api")) {
+    return FILE_TYPE_STYLES.api;
+  }
+  if (/\/hooks?\//.test(lower) || /use[A-Z]/.test(file)) {
+    return FILE_TYPE_STYLES.hook;
+  }
+  if (/\.(json|yaml|yml|toml|config|env)/.test(lower) || lower.includes("config")) {
+    return FILE_TYPE_STYLES.config;
+  }
+  if (/\.(css|scss|less|styl)/.test(lower)) {
+    return FILE_TYPE_STYLES.styles;
+  }
+  if (/\.(d\.)?tsx?/.test(lower) && (lower.includes("types") || lower.includes("interface") || lower.includes("type "))) {
+    return FILE_TYPE_STYLES.types;
+  }
+  if (/\.(md|mdx|txt)/.test(lower)) {
+    return FILE_TYPE_STYLES.docs;
+  }
+  if (/[.\-_](test|spec|stories)\./.test(lower) || lower.includes("__tests__")) {
+    return FILE_TYPE_STYLES.test;
+  }
+  return FILE_TYPE_STYLES.component;
+}
+
 function detectCommitType(subject: string): { label: string; className: string; icon: string } | null {
   const match = subject.match(/^(\w+)[\(:]/);
   if (!match) return null;
@@ -186,11 +250,18 @@ export function VersionTagsListItem({ tag, onClick, onRollbackClick }: VersionTa
             {changedFiles.length > 0 && (
               <div className="flex items-center gap-1.5 flex-wrap">
                 <FileText className="w-3 h-3 text-gray-400" />
-                {changedFiles.map((f, i) => (
-                  <span key={i} className="font-mono text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">
-                    {f}
-                  </span>
-                ))}
+                {changedFiles.map((f, i) => {
+                  const ft = getFileTypeStyle(f);
+                  return (
+                    <span
+                      key={i}
+                      className={`inline-flex items-center gap-0.5 font-mono text-xs px-1.5 py-0.5 rounded border ${ft.className}`}
+                      title={`${ft.label}: ${f}`}
+                    >
+                      {f}
+                    </span>
+                  );
+                })}
                 <span className="text-gray-400">等文件</span>
               </div>
             )}
