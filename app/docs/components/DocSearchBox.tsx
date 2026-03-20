@@ -131,7 +131,7 @@ export function DocSearchBox({ onSearch, onFilterChange, className = '' }: DocSe
       <div className="relative">
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -147,7 +147,7 @@ export function DocSearchBox({ onSearch, onFilterChange, className = '' }: DocSe
                 onClick={() => setQuery('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2"
               >
-                <X className="w-4 h-4 text-gray-400" />
+                <X className="w-4 h-4 text-gray-400 dark:text-gray-500" />
               </button>
             )}
 
@@ -156,7 +156,7 @@ export function DocSearchBox({ onSearch, onFilterChange, className = '' }: DocSe
               <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg z-50">
                 {suggestions.length > 0 && (
                   <div className="p-2">
-                    <p className="text-xs text-gray-500 mb-2 px-2">搜索建议</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 px-2">搜索建议</p>
                     {suggestions.map((s, i) => (
                       <button
                         key={i}
@@ -165,7 +165,7 @@ export function DocSearchBox({ onSearch, onFilterChange, className = '' }: DocSe
                           setShowSuggestions(false);
                           handleSearch();
                         }}
-                        className="w-full text-left px-2 py-1.5 hover:bg-gray-100 rounded text-sm"
+                        className="w-full text-left px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded text-sm"
                       >
                         {s}
                       </button>
@@ -175,7 +175,7 @@ export function DocSearchBox({ onSearch, onFilterChange, className = '' }: DocSe
 
                 {history.length > 0 && (
                   <div className="border-t p-2">
-                    <p className="text-xs text-gray-500 mb-2 px-2 flex items-center gap-1">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 px-2 flex items-center gap-1">
                       <History className="w-3 h-3" /> 搜索历史
                     </p>
                     {history.slice(0, 5).map((h) => (
@@ -188,7 +188,7 @@ export function DocSearchBox({ onSearch, onFilterChange, className = '' }: DocSe
                         className="w-full text-left px-2 py-1.5 hover:bg-gray-100 rounded text-sm flex items-center justify-between"
                       >
                         <span>{h.query}</span>
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
                           {h.type === 'semantic' ? '语义' : '关键词'}
                         </span>
                       </button>

@@ -115,9 +115,9 @@ function BranchesPanel() {
       )}
 
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">🌿 分支管理</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">🌿 分支管理</h2>
         <div className="flex gap-2">
-          <button onClick={loadBranches} className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+          <button onClick={loadBranches} className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors">
             🔄 刷新
           </button>
           <button onClick={() => setShowCreate(true)} className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
@@ -127,17 +127,17 @@ function BranchesPanel() {
       </div>
 
       {showCreate && (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">创建新分支</h3>
+        <div className="bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-4">
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3">创建新分支</h3>
           <div className="flex gap-2 mb-3">
             <input
               value={newBranchName}
               onChange={e => setNewBranchName(e.target.value)}
               placeholder="feature/xxx 或 release/xxx"
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:bg-slate-700 dark:text-white"
               onKeyDown={e => e.key === 'Enter' && createBranch()}
             />
-            <select value={baseBranch} onChange={e => setBaseBranch(e.target.value)} className="px-2 py-2 border border-gray-300 rounded-lg text-sm">
+            <select value={baseBranch} onChange={e => setBaseBranch(e.target.value)} className="px-2 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:bg-slate-700 dark:text-white">
               {branches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
             </select>
           </div>
@@ -145,20 +145,20 @@ function BranchesPanel() {
             <button onClick={createBranch} disabled={creating} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50">
               {creating ? '创建中...' : '确认创建'}
             </button>
-            <button onClick={() => { setShowCreate(false); setNewBranchName(''); }} className="px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300">
+            <button onClick={() => { setShowCreate(false); setNewBranchName(''); }} className="px-4 py-2 bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-200 text-sm rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500">
               取消
             </button>
           </div>
         </div>
       )}
 
-      {loading && <div className="text-sm text-gray-500">加载中...</div>}
-      {!loading && branches.length === 0 && <div className="text-sm text-gray-400">暂无分支</div>}
+      {loading && <div className="text-sm text-gray-500 dark:text-gray-400">加载中...</div>}
+      {!loading && branches.length === 0 && <div className="text-sm text-gray-400 dark:text-gray-500">暂无分支</div>}
 
       {!loading && branches.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-gray-50 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600">
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">分支</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">状态</th>
@@ -168,7 +168,7 @@ function BranchesPanel() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {branches.map(branch => (
-                <tr key={branch.id} className="hover:bg-gray-50">
+                <tr key={branch.id} className="hover:bg-gray-50 dark:hover:bg-slate-700">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       {branch.isMain && <span className="text-yellow-500" title="主分支">⭐</span>}

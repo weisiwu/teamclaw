@@ -93,16 +93,16 @@ export default function MonitorPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 p-8">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">System Monitor</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">System Monitor</h1>
 
         {/* Overall Status */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-700">Overall Status</h2>
-              <p className="text-sm text-gray-500">
+              <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200">Overall Status</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 Last updated: {health?.timestamp}
               </p>
             </div>
@@ -111,7 +111,7 @@ export default function MonitorPage() {
             </div>
           </div>
           <div className="mt-4 pt-4 border-t">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-gray-300">
               Uptime: <span className="font-mono">{formatUptime(health?.uptime || 0)}</span>
             </p>
           </div>
@@ -122,21 +122,21 @@ export default function MonitorPage() {
           {health?.services && Object.entries(health.services).map(([name, service]) => (
             <div key={name} className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-700 capitalize">{name}</h3>
+                <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 capitalize">{name}</h3>
                 <span className={`text-2xl ${getStatusColor(service.status)}`}>
                   {getStatusIcon(service.status)}
                 </span>
               </div>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Status:</span>
+                  <span className="text-gray-500 dark:text-gray-400">Status:</span>
                   <span className={`font-medium ${getStatusColor(service.status)}`}>
                     {service.status.toUpperCase()}
                   </span>
                 </div>
                 {service.latency !== undefined && (
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Latency:</span>
+                    <span className="text-gray-500 dark:text-gray-400">Latency:</span>
                     <span className="font-mono">{service.latency}ms</span>
                   </div>
                 )}

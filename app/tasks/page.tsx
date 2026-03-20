@@ -660,7 +660,7 @@ function TasksContent() {
             </Card>
             <Card className="bg-gradient-to-br from-gray-50 dark:from-slate-800 to-gray-100 dark:to-slate-700 border-gray-200 dark:border-slate-700">
               <CardContent className="p-3 flex items-center gap-3">
-                <div className="p-2 bg-gray-400 rounded-lg">
+                <div className="p-2 bg-gray-400 dark:bg-slate-500 rounded-lg">
                   <AlertCircle className="w-4 h-4 text-white" />
                 </div>
                 <div>
@@ -807,7 +807,7 @@ function TasksContent() {
                       <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                         task.status === "completed" ? "bg-green-500" :
                         task.status === "in_progress" ? "bg-blue-500" :
-                        task.status === "cancelled" ? "bg-red-500" : "bg-gray-400"
+                        task.status === "cancelled" ? "bg-red-500" : "bg-gray-400 dark:bg-slate-500"
                       }`}>
                         {task.status === "completed" ? (
                           <CheckCircle className="w-5 h-5 text-white" />

@@ -57,12 +57,12 @@ function QueuePageContent() {
       <div className="page-container">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">消息队列</h1>
-            <p className="text-gray-500 mt-1">实时消息处理状态</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">消息队列</h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">实时消息处理状态</p>
           </div>
         </div>
         <Card>
-          <CardContent className="py-12 text-center text-gray-500">
+          <CardContent className="py-12 text-center text-gray-500 dark:text-gray-400">
             加载中...
           </CardContent>
         </Card>
@@ -75,8 +75,8 @@ function QueuePageContent() {
       <div className="page-container">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">消息队列</h1>
-            <p className="text-gray-500 mt-1">实时消息处理状态</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">消息队列</h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">实时消息处理状态</p>
           </div>
         </div>
         <Card className="border-red-200 bg-red-50">
@@ -103,7 +103,7 @@ function QueuePageContent() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">消息队列</h1>
-          <p className="text-gray-500 mt-1">实时消息处理状态 · 每5秒自动刷新</p>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">实时消息处理状态 · 每5秒自动刷新</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => refetch()}>
           <RefreshCw className="w-4 h-4 mr-2" />
@@ -178,13 +178,13 @@ function QueuePageContent() {
           <CardContent>
             <div className="flex items-center gap-4 flex-wrap">
               <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-gray-400" />
+                <User className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                 <span className="font-medium">{currentMsg.userName}</span>
                 <RoleBadge role={currentMsg.role} />
               </div>
               <PriorityBadge priority={currentMsg.priority} />
               <StatusBadge status={currentMsg.status} />
-              <span className="text-sm text-gray-500">{currentMsg.content}</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400">{currentMsg.content}</span>
             </div>
           </CardContent>
         </Card>
@@ -202,7 +202,7 @@ function QueuePageContent() {
           </CardHeader>
           <CardContent>
             {!queue?.list || queue.list.length === 0 ? (
-              <div className="py-8 text-center text-gray-400">
+              <div className="py-8 text-center text-gray-400 dark:text-gray-500">
                 <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p>队列空闲，暂无待处理消息</p>
               </div>
@@ -217,7 +217,7 @@ function QueuePageContent() {
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <User className="w-3 h-3 text-gray-400" />
+                          <User className="w-3 h-3 text-gray-400 dark:text-gray-500" />
                           <span className="text-sm font-medium">{msg.userName}</span>
                           <RoleBadge role={msg.role} />
                           <StatusBadge status={msg.status} />
@@ -235,8 +235,8 @@ function QueuePageContent() {
                           </Button>
                         </div>
                       </div>
-                      <p className="text-sm text-gray-600 line-clamp-2">{msg.content}</p>
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">{msg.content}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                         {new Date(msg.timestamp).toLocaleString("zh-CN")}
                       </p>
                     </div>
@@ -257,7 +257,7 @@ function QueuePageContent() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">用户名</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">用户名</label>
                 <Input
                   value={testForm.userName}
                   onChange={(e) => setTestForm({ ...testForm, userName: e.target.value })}
@@ -266,7 +266,7 @@ function QueuePageContent() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">角色</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">角色</label>
                 <Select
                   options={[
                     { value: "admin", label: "管理员" },
@@ -282,7 +282,7 @@ function QueuePageContent() {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">消息内容</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">消息内容</label>
               <Input
                 value={testForm.content}
                 onChange={(e) => setTestForm({ ...testForm, content: e.target.value })}
@@ -292,7 +292,7 @@ function QueuePageContent() {
                   if (e.key === "Enter") handleSendTest();
                 }}
               />
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                 提示：输入【紧急修复Bug】可触发抢占（管理员权重10×紧急度3=优先级30）
               </p>
             </div>
@@ -307,11 +307,11 @@ function QueuePageContent() {
 
             {/* 优先级说明 */}
             <div className="border-t pt-4 mt-4">
-              <p className="text-xs font-medium text-gray-600 mb-2 flex items-center gap-1">
+              <p className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2 flex items-center gap-1">
                 <Info className="w-3 h-3" />
                 优先级计算规则
               </p>
-              <div className="space-y-1 text-xs text-gray-500">
+              <div className="space-y-1 text-xs text-gray-500 dark:text-gray-400">
                 <div className="flex items-center gap-2">
                   <Badge variant="error" className="text-xs">P30</Badge>
                   <span>管理员 + 紧急消息 (10×3)</span>
@@ -335,7 +335,7 @@ function QueuePageContent() {
       </div>
 
       {/* 抢占规则说明 */}
-      <Card className="border-gray-200">
+      <Card className="border-gray-200 dark:border-slate-700">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Shield className="w-4 h-4" />
@@ -345,20 +345,20 @@ function QueuePageContent() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div className="space-y-1">
-              <p className="font-medium text-gray-700">抢占条件</p>
-              <p className="text-gray-500">
+              <p className="font-medium text-gray-700 dark:text-gray-200">抢占条件</p>
+              <p className="text-gray-500 dark:text-gray-400">
                 新消息优先级 &gt; 当前任务优先级 × 1.5 时触发抢占
               </p>
             </div>
             <div className="space-y-1">
-              <p className="font-medium text-gray-700">抢占效果</p>
+              <p className="font-medium text-gray-700 dark:text-gray-200">抢占效果</p>
               <p className="text-gray-500">
                 被抢占任务进入<span className="text-orange-600 font-medium">已挂起</span>状态，
                 新任务开始执行
               </p>
             </div>
             <div className="space-y-1">
-              <p className="font-medium text-gray-700">消息合并</p>
+              <p className="font-medium text-gray-700 dark:text-gray-200">消息合并</p>
               <p className="text-gray-500">
                 同一用户<span className="text-blue-600 font-medium">5分钟内</span>的连续消息
                 自动合并为一条

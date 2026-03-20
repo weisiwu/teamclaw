@@ -106,17 +106,17 @@ export default function DocsPageClient({ initialDocs, stats }: DocsPageClientPro
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">文档中心</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">文档中心</h1>
 
       {/* Statistics */}
       <div className="bg-white rounded-xl border p-4 mb-6">
         <div className="flex gap-6">
           <div>
-            <p className="text-sm text-gray-500">文档总数</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">文档总数</p>
             <p className="text-2xl font-bold">{stats.totalDocs}</p>
           </div>
           <div>
-            <p className="text-sm text-gray-500">本周更新</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">本周更新</p>
             <p className="text-2xl font-bold text-green-600">{stats.weeklyUpdates}</p>
           </div>
         </div>
@@ -148,11 +148,11 @@ export default function DocsPageClient({ initialDocs, stats }: DocsPageClientPro
       </div>
 
       {initialDocs.length === 0 ? (
-        <div className="bg-white rounded-xl border p-8 text-center text-gray-500">
+        <div className="bg-white dark:bg-slate-800 rounded-xl border dark:border-slate-700 p-8 text-center text-gray-500 dark:text-gray-400">
           <p>暂无文档</p>
         </div>
       ) : filteredAndSortedDocs.length === 0 ? (
-        <div className="bg-white rounded-xl border p-8 text-center text-gray-500">
+        <div className="bg-white dark:bg-slate-800 rounded-xl border dark:border-slate-700 p-8 text-center text-gray-500 dark:text-gray-400">
           <p>暂无匹配文档</p>
         </div>
       ) : (
@@ -169,11 +169,11 @@ export default function DocsPageClient({ initialDocs, stats }: DocsPageClientPro
                   )}
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-gray-500 line-clamp-2">
+                  <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2">
                     {doc.description || '点击查看详情'}
                   </p>
                   {(doc.created || doc.updated) && (
-                    <p className="text-xs text-gray-400 mt-2">
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
                       {doc.updated ? `更新: ${doc.updated}` : doc.created ? `创建: ${doc.created}` : ''}
                     </p>
                   )}
