@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Trash2, Image as ImageIcon, Plus, ZoomIn, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Trash2, Image as ImageIcon, Plus, ZoomIn, X, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,6 +21,7 @@ export function ScreenshotGallery({ screenshots, onUnlink, onLink, loading }: Sc
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
+  const [lightboxImageLoading, setLightboxImageLoading] = useState(false);
 
   const handleImageError = (id: string) => {
     setImageErrors(prev => new Set(prev).add(id));
@@ -29,19 +30,44 @@ export function ScreenshotGallery({ screenshots, onUnlink, onLink, loading }: Sc
   const openLightbox = (screenshot: VersionMessageScreenshot, index: number) => {
     setSelectedImage(screenshot.screenshotUrl);
     setSelectedIndex(index);
+    setLightboxImageLoading(true);
   };
 
   const closeLightbox = () => {
     setSelectedImage(null);
+    setLightboxImageLoading(false);
   };
 
-  const navigateImage = (direction: "prev" | "next") => {
+  const navigateImage = useCallback((direction: "prev" | "next") => {
+    setLightboxImageLoading(true);
     const newIndex = direction === "prev"
       ? (selectedIndex - 1 + screenshots.length) % screenshots.length
       : (selectedIndex + 1) % screenshots.length;
     setSelectedIndex(newIndex);
     setSelectedImage(screenshots[newIndex].screenshotUrl);
-  };
+  }, [selectedIndex, screenshots]);
+
+  // 键盘导航支持
+  useEffect(() => {
+    if (!selectedImage) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      switch (e.key) {
+        case "Escape":
+          closeLightbox();
+          break;
+        case "ArrowLeft":
+          if (screenshots.length > 1) navigateImage("prev");
+          break;
+        case "ArrowRight":
+          if (screenshots.length > 1) navigateImage("next");
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedImage, screenshots.length, navigateImage]);
 
   if (loading) {
     return (
@@ -216,15 +242,22 @@ export function ScreenshotGallery({ screenshots, onUnlink, onLink, loading }: Sc
               </>
             )}
 
+            {/* 图片加载指示器 */}
+            {lightboxImageLoading && (
+              <div className="absolute inset-0 flex items-center justify-center z-10">
+                <Loader2 className="h-10 w-10 animate-spin text-white/70" />
+              </div>
+            )}
+
             {/* 图片 */}
             {selectedImage && (
               <img
                 src={selectedImage}
                 alt="截图预览"
                 className="max-w-full max-h-[80vh] object-contain"
-                onError={() => {
-                  // 如果图片加载失败，显示占位符
-                }}
+                style={{ visibility: lightboxImageLoading ? "hidden" : "visible" }}
+                onLoad={() => setLightboxImageLoading(false)}
+                onError={() => setLightboxImageLoading(false)}
               />
             )}
 
@@ -266,6 +299,14 @@ export function ScreenshotGallery({ screenshots, onUnlink, onLink, loading }: Sc
             >
               <X className="h-5 w-5" />
             </Button>
+
+            {/* 键盘快捷键提示 */}
+            {screenshots.length > 1 && (
+              <div className="absolute top-4 left-4 text-xs text-white/40 flex gap-3">
+                <span>← → 切换</span>
+                <span>Esc 关闭</span>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
