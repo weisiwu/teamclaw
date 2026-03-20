@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, Suspense } from "react";
+import { useState, useMemo, useCallback, Suspense, useEffect, useRef } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -295,6 +295,7 @@ function CreateTaskModal({
   isOpen: boolean;
   onClose: () => void;
 }) {
+  const titleInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState<CreateTaskRequest>({
     title: "",
     description: "",
@@ -302,7 +303,31 @@ function CreateTaskModal({
   });
 
   const createTask = useCreateTask();
-  
+  const isCreating = createTask.isPending;
+
+  // 弹窗打开时自动聚焦标题输入框
+  useEffect(() => {
+    if (isOpen) {
+      // 等待弹窗动画完成后再聚焦
+      const timer = setTimeout(() => {
+        titleInputRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
+  // Escape 键关闭弹窗
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   const handleCreate = async () => {
     if (!formData.title.trim()) return;
     await createTask.mutateAsync(formData);
@@ -314,9 +339,9 @@ function CreateTaskModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div 
-        className="absolute inset-0 bg-black/50" 
-        onClick={onClose}
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={isCreating ? (e) => { e.preventDefault(); e.stopPropagation(); } : onClose}
       />
       
       <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
@@ -333,11 +358,13 @@ function CreateTaskModal({
               任务标题 <span className="text-red-500">*</span>
             </label>
             <Input
+              ref={titleInputRef}
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               placeholder="请输入任务标题，回车即可提交"
+              disabled={isCreating}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && formData.title.trim()) {
+                if (e.key === "Enter" && formData.title.trim() && !isCreating) {
                   e.preventDefault();
                   handleCreate();
                 }
@@ -353,6 +380,7 @@ function CreateTaskModal({
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="请输入任务描述（可选）"
               rows={3}
+              disabled={isCreating}
               className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
             />
           </div>
@@ -369,19 +397,20 @@ function CreateTaskModal({
               ]}
               value={String(formData.priority)}
               onChange={(e) => setFormData({ ...formData, priority: Number(e.target.value) as TaskPriority })}
+              disabled={isCreating}
             />
           </div>
         </div>
         
         <div className="flex justify-end gap-3 mt-6">
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} disabled={isCreating}>
             取消
           </Button>
-          <Button 
-            onClick={handleCreate} 
-            disabled={!formData.title.trim() || createTask.isPending}
+          <Button
+            onClick={handleCreate}
+            disabled={!formData.title.trim() || isCreating}
           >
-            {createTask.isPending ? "创建中..." : "创建"}
+            {isCreating ? "创建中..." : "创建"}
           </Button>
         </div>
       </div>
