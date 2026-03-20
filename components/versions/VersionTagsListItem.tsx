@@ -1,13 +1,15 @@
 "use client";
 
 import { GitTag } from "@/lib/api/types";
-import { Tag, Calendar, User, GitCommit } from "lucide-react";
+import { Tag, Calendar, User, GitCommit, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { CopyButton } from "./CopyButton";
+import { Button } from "@/components/ui/button";
 
 interface VersionTagsListItemProps {
   tag: GitTag;
   onClick: (tag: GitTag) => void;
+  onRollbackClick?: (tag: GitTag) => void;
 }
 
 const statusConfig = {
@@ -16,7 +18,7 @@ const statusConfig = {
   protected: { label: "保护", variant: "info" as const },
 };
 
-export function VersionTagsListItem({ tag, onClick }: VersionTagsListItemProps) {
+export function VersionTagsListItem({ tag, onClick, onRollbackClick }: VersionTagsListItemProps) {
   const status = statusConfig[tag.status];
   const date = new Date(tag.taggerDate).toLocaleDateString("zh-CN", {
     year: "numeric",
@@ -26,7 +28,7 @@ export function VersionTagsListItem({ tag, onClick }: VersionTagsListItemProps) 
 
   return (
     <div
-      className="flex items-center gap-4 p-4 border border-gray-100 rounded-xl hover:border-gray-200 hover:shadow-sm cursor-pointer transition-all bg-white"
+      className="group flex items-center gap-4 p-4 border border-gray-100 rounded-xl hover:border-gray-200 hover:shadow-sm cursor-pointer transition-all bg-white"
       onClick={() => onClick(tag)}
     >
       {/* Tag icon + version */}
@@ -62,15 +64,35 @@ export function VersionTagsListItem({ tag, onClick }: VersionTagsListItemProps) 
         </div>
       </div>
 
-      {/* Date + copy tag */}
-      <div className="flex-shrink-0 text-right">
-        <div className="flex items-center gap-1 text-xs text-gray-500 justify-end">
-          <Calendar className="w-3 h-3" />
-          {date}
-        </div>
-        <div className="flex items-center justify-end gap-1 mt-1">
-          <span className="text-xs font-mono text-blue-600">{tag.name}</span>
-          <CopyButton text={tag.name} size="sm" />
+      {/* Actions: rollback + date + copy tag */}
+      <div className="flex-shrink-0 flex items-center gap-2">
+        {/* 快速回退按钮 */}
+        {onRollbackClick && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="opacity-0 group-hover:opacity-100 transition-opacity h-8 px-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRollbackClick(tag);
+            }}
+            title="快速回退到此版本"
+          >
+            <RotateCcw className="w-3.5 h-3.5 mr-1" />
+            回退
+          </Button>
+        )}
+
+        {/* Date + copy tag */}
+        <div className="text-right">
+          <div className="flex items-center gap-1 text-xs text-gray-500 justify-end">
+            <Calendar className="w-3 h-3" />
+            {date}
+          </div>
+          <div className="flex items-center justify-end gap-1 mt-1">
+            <span className="text-xs font-mono text-blue-600">{tag.name}</span>
+            <CopyButton text={tag.name} size="sm" />
+          </div>
         </div>
       </div>
     </div>

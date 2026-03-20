@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { GitTag } from "@/lib/api/types";
+import { GitTag, Version } from "@/lib/api/types";
 import { useTags } from "@/lib/api/tags";
 import { Tag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { VersionTagsDetailDrawer } from "./VersionTagsDetailDrawer";
 import { VersionTagsEmptyState } from "./VersionTagsEmptyState";
 import { VersionTagsSkeleton } from "./VersionTagsSkeleton";
 import { CopyToast } from "./CopyToast";
+import { RollbackDialog } from "./RollbackDialog";
 
 type SortOrder = "asc" | "desc";
 
@@ -21,6 +22,8 @@ export function VersionTagsPanel() {
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [selectedTag, setSelectedTag] = useState<GitTag | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
+  const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false);
+  const [rollbackVersion, setRollbackVersion] = useState<Version | null>(null);
 
   const tags = useMemo(() => data?.data || [], [data]);
 
@@ -53,6 +56,28 @@ export function VersionTagsPanel() {
 
   const handleTagClick = (tag: GitTag) => {
     setSelectedTag(tag);
+  };
+
+  const handleRollbackClick = (tag: GitTag) => {
+    // Convert GitTag to a Version-like object for RollbackDialog
+    const versionLike: Version = {
+      id: tag.commitHash || tag.commit || tag.name,
+      version: tag.version || tag.name,
+      title: tag.subject || tag.name,
+      description: "",
+      status: (tag.status === "active" ? "published" : tag.status) as Version["status"],
+      releasedAt: tag.taggerDate,
+      createdAt: tag.taggerDate,
+      changedFiles: [],
+      commitCount: 0,
+      isMain: false,
+      buildStatus: "idle" as Version["buildStatus"],
+      artifactUrl: null,
+      tags: [],
+      gitTag: tag.name,
+    };
+    setRollbackVersion(versionLike);
+    setRollbackDialogOpen(true);
   };
 
   const handleCloseDrawer = () => {
@@ -106,6 +131,7 @@ export function VersionTagsPanel() {
                 key={tag.name}
                 tag={tag}
                 onClick={handleTagClick}
+                onRollbackClick={handleRollbackClick}
               />
             ))}
           </div>
@@ -117,6 +143,21 @@ export function VersionTagsPanel() {
         tag={selectedTag}
         onClose={handleCloseDrawer}
       />
+
+      {/* Rollback Dialog */}
+      {rollbackVersion && (
+        <RollbackDialog
+          version={rollbackVersion}
+          open={rollbackDialogOpen}
+          onOpenChange={(open) => {
+            setRollbackDialogOpen(open);
+            if (!open) setRollbackVersion(null);
+          }}
+          onRollbackComplete={() => {
+            // Refresh tags after rollback
+          }}
+        />
+      )}
 
       {/* Toast */}
       <CopyToast
