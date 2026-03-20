@@ -238,3 +238,24 @@ body {
 .sidebar-active-indicator.active::before {
   height: 60%;
 }
+
+/* Tab 激活下划线动画 */
+@keyframes tab-underline {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.animate-tab-underline {
+  animation: tab-underline 200ms ease-out forwards;
+}
+
+/* 侧边栏折叠动画 */
+@keyframes sidebar-collapse {
+  from { width: 256px; }
+  to { width: 64px; }
+}
+.sidebar-collapsed .sidebar-label {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+  transition: opacity 200ms, width 200ms;
+}

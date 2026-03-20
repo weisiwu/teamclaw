@@ -5,8 +5,13 @@ import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import { X } from "lucide-react";
 
-export function AppLayout({ children }: { children: React.ReactNode }) {
+interface AppLayoutProps {
+  children: React.ReactNode;
+}
+
+export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
@@ -34,9 +39,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex">
         {/* Desktop sidebar - hidden on mobile */}
         <div className="hidden lg:block">
-          <Sidebar />
+          <Sidebar 
+            collapsed={sidebarCollapsed} 
+            onToggleCollapse={() => setSidebarCollapsed(c => !c)} 
+          />
         </div>
-        <main className="flex-1 min-h-[calc(100vh-3.5rem)] sm:min-h-[calc(100vh-4rem)]">
+        <main className="flex-1 min-h-[calc(100vh-3.5rem)] sm:min-h-[calc(100vh-4rem)] transition-all duration-300">
           {children}
         </main>
       </div>

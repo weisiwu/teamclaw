@@ -1,10 +1,14 @@
+"use client";
+
 import { Menu, Bell, User } from "lucide-react";
+import { Breadcrumb } from "./Breadcrumb";
 
 interface HeaderProps {
   onMenuClick?: () => void;
+  showBreadcrumb?: boolean;
 }
 
-export function Header({ onMenuClick }: HeaderProps) {
+export function Header({ onMenuClick, showBreadcrumb = true }: HeaderProps) {
   return (
     <header className="h-14 sm:h-16 border-b bg-white dark:bg-slate-800 dark:border-slate-700 flex items-center justify-between px-4 sm:px-6">
       <div className="flex items-center gap-3 sm:gap-4">
@@ -16,6 +20,11 @@ export function Header({ onMenuClick }: HeaderProps) {
           <Menu className="w-5 h-5 text-gray-700 dark:text-slate-200" />
         </button>
         <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">TeamClaw</h1>
+        {showBreadcrumb && (
+          <div className="hidden md:block ml-4">
+            <Breadcrumb />
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-4">
         <button className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg relative transition-colors duration-150">
@@ -26,7 +35,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
             <User className="w-4 h-4 text-white" />
           </div>
-          <span className="text-sm font-medium">管理员</span>
+          <span className="text-sm font-medium hidden sm:block">管理员</span>
         </div>
       </div>
     </header>

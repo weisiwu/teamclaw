@@ -14,6 +14,8 @@ import {
   Settings,
   FolderPlus,
   Bot,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -34,9 +36,11 @@ const menuItems = [
 
 interface SidebarProps {
   onNavigate?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-export function Sidebar({ onNavigate }: SidebarProps) {
+export function Sidebar({ onNavigate, collapsed = false, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
 
   const handleLinkClick = () => {
@@ -44,8 +48,13 @@ export function Sidebar({ onNavigate }: SidebarProps) {
   };
 
   return (
-    <aside className="w-64 h-[calc(100vh-4rem)] border-r bg-white dark:bg-slate-800 dark:border-slate-700 flex flex-col overflow-y-auto">
-      <nav className="flex-1 p-4 space-y-1">
+    <aside
+      className={cn(
+        "h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)] border-r bg-white dark:bg-slate-800 dark:border-slate-700 flex flex-col overflow-hidden transition-all duration-300",
+        collapsed ? "w-16" : "w-64"
+      )}
+    >
+      <nav className="flex-1 p-2 sm:p-3 space-y-0.5 overflow-y-auto">
         {menuItems.map((item) => {
           const isActive = pathname === item.href || 
             (item.href !== "/" && pathname.startsWith(item.href));
@@ -56,28 +65,73 @@ export function Sidebar({ onNavigate }: SidebarProps) {
               href={item.href}
               onClick={handleLinkClick}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                "group flex items-center gap-3 px-2.5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 relative",
+                collapsed && "justify-center",
                 isActive
                   ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 shadow-sm"
-                  : "text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 hover:translate-x-0.5"
+                  : "text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700"
               )}
+              title={collapsed ? item.label : undefined}
             >
-              <item.icon className={cn("w-5 h-5 flex-shrink-0 transition-colors duration-200", isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-slate-400")} />
-              {item.label}
+              <item.icon 
+                className={cn(
+                  "w-5 h-5 flex-shrink-0 transition-colors duration-200",
+                  isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-slate-400 group-hover:text-gray-700 dark:group-hover:text-slate-200"
+                )} 
+              />
+              <span 
+                className={cn(
+                  "sidebar-label whitespace-nowrap transition-all duration-300",
+                  collapsed && "opacity-0 w-0 overflow-hidden"
+                )}
+              >
+                {item.label}
+              </span>
+              {/* Active indicator dot for collapsed state */}
+              {isActive && collapsed && (
+                <span className="absolute right-1.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-blue-500" />
+              )}
             </Link>
           );
         })}
       </nav>
-      <div className="p-4 border-t border-gray-200 dark:border-slate-700">
-        <Link
-          href="/settings"
-          onClick={handleLinkClick}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-        >
-          <Settings className="w-5 h-5 text-gray-500 dark:text-slate-400" />
-          设置
-        </Link>
-      </div>
+      
+      {/* Collapse toggle button */}
+      {onToggleCollapse && (
+        <div className={cn(
+          "p-2 sm:p-3 border-t border-gray-200 dark:border-slate-700",
+          collapsed && "flex justify-center"
+        )}>
+          {collapsed ? (
+            <button
+              onClick={onToggleCollapse}
+              className="w-full flex justify-center p-2 rounded-lg text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+              title="展开侧边栏"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onToggleCollapse}
+                className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                title="折叠侧边栏"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>折叠</span>
+              </button>
+              <Link
+                href="/settings"
+                onClick={handleLinkClick}
+                className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+              >
+                <Settings className="w-4 h-4 flex-shrink-0" />
+                <span className="whitespace-nowrap">设置</span>
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
     </aside>
   );
 }
