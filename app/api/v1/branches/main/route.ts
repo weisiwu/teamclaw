@@ -45,7 +45,7 @@ export async function OPTIONS(): Promise<NextResponse> {
 export async function GET(): Promise<NextResponse> {
   const requestId = generateRequestId();
   ensureInit();
-  for (const b of branchStore.values()) {
+  for (const b of Array.from(branchStore.values())) {
     if (b.isMain) return jsonSuccess(b, requestId);
   }
   return jsonError("未找到主分支", 404, requestId);

@@ -26,6 +26,7 @@ import {
   Image,
   History,
   RefreshCw,
+  RotateCcw,
 } from "lucide-react";
 import { BuildTriggerDialog } from "./BuildTriggerDialog";
 
@@ -333,6 +334,20 @@ export function VersionDetails(props: VersionDetailsProps) {
                     <span className="text-gray-400">暂无构建记录</span>
                   )}
                 </div>
+                {version.rollbackCount !== undefined && version.rollbackCount > 0 && (
+                  <div>
+                    <label className="text-sm text-gray-500">回退次数</label>
+                    <div className="flex items-center gap-2">
+                      <RotateCcw className="w-4 h-4 text-orange-400" />
+                      <span className="text-orange-600 dark:text-orange-400">已回退 {version.rollbackCount} 次</span>
+                      {version.lastRollbackAt && (
+                        <span className="text-xs text-gray-400">
+                          （{new Date(version.lastRollbackAt).toLocaleString("zh-CN")}）
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-sm text-gray-500">描述</label>

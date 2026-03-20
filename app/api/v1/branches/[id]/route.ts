@@ -17,12 +17,6 @@ function jsonError(message: string, status: number, requestId?: string): NextRes
   return NextResponse.json({ code: status, message, requestId }, { status });
 }
 
-// Shared store — imported from parent route's module scope
-// Each route.ts is a separate module, so we re-declare a shared reference via a helper
-declare const __branchStore: Map<string, unknown>;
-declare const __getBranch: (id: string) => unknown;
-declare const __branchStoreMap: Map<string, unknown>;
-
 export async function OPTIONS(): Promise<NextResponse> {
   return new NextResponse(null, { status: 204, headers: corsHeaders });
 }
@@ -58,7 +52,7 @@ function getBranch(id: string): GitBranch | undefined {
 
 function getBranchByName(name: string): GitBranch | undefined {
   ensureInit();
-  for (const b of branchStore.values()) { if (b.name === name) return b; }
+  for (const b of Array.from(branchStore.values())) { if (b.name === name) return b; }
   return undefined;
 }
 

@@ -57,7 +57,7 @@ export async function PUT(
     ensureInit();
     const branch = getBranch(id);
     if (!branch) return jsonError("分支不存在", 404, requestId);
-    for (const b of branchStore.values()) { b.isMain = false; }
+    for (const b of Array.from(branchStore.values())) { b.isMain = false; }
     branch.isMain = true;
     branchStore.set(branch.id, branch);
     return jsonSuccess(branch, requestId);
