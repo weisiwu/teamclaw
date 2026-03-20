@@ -18,6 +18,7 @@ import {
   Shield,
   User,
   Info,
+  Loader2,
 } from "lucide-react";
 
 function QueuePageContent() {
@@ -62,8 +63,9 @@ function QueuePageContent() {
           </div>
         </div>
         <Card>
-          <CardContent className="py-12 text-center text-gray-500 dark:text-gray-400">
-            加载中...
+          <CardContent className="page-loading py-20">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span>加载中...</span>
           </CardContent>
         </Card>
       </div>
