@@ -492,3 +492,29 @@ export function onManualNote(
     actorId,
   });
 }
+
+/**
+ * Hook: called when a version rollback is performed
+ */
+export function onVersionRollback(
+  versionId: string,
+  targetRef: string,
+  targetType: 'tag' | 'branch' | 'commit',
+  actor: string,
+  actorId?: string,
+  metadata?: Record<string, unknown>
+): string {
+  return recordChangeEvent({
+    versionId,
+    type: 'version_rollback',
+    title: '版本回退',
+    description: `回退到 ${targetType}：${targetRef}`,
+    actor,
+    actorId,
+    metadata: {
+      targetRef,
+      targetType,
+      ...metadata,
+    },
+  });
+}

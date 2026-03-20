@@ -115,6 +115,8 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
     ? apiEvents.map((evt: ApiTimelineEvent) => ({
         id: evt.id,
         type: evt.type === 'version_created' ? 'version' as const
+          : evt.type === 'version_rollback' ? 'version' as const
+          : evt.type === 'bump_executed' ? 'version' as const
           : evt.type === 'changelog_generated' ? 'changelog' as const
           : evt.type === 'manual_note' ? 'manual_note' as const
           : 'screenshot' as const,

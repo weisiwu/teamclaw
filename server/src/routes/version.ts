@@ -4,7 +4,7 @@ import { ScreenshotModel } from '../models/screenshot.js';
 import { VersionSummaryModel } from '../models/versionSummary.js';
 import { saveScreenshot, deleteScreenshotFile } from '../services/fileStorage.js';
 import { generateChangelogFromCommits } from '../services/changelogGenerator.js';
-import { onVersionCreated, onScreenshotLinked, onChangelogGenerated } from '../services/changeTracker.js';
+import { onVersionCreated, onScreenshotLinked, onChangelogGenerated, onVersionRollback } from '../services/changeTracker.js';
 import { getGitLog, getTags, createTag, getBranches, getCurrentBranch, createBranch, tagExists } from '../services/gitService.js';
 import { runBuild, getBuildConfig } from '../services/buildService.js';
 import { listArtifacts, deleteArtifacts, getArtifactInfo, getArtifactStream, importArtifactsFromDir, getArtifactsTotalSize } from '../services/artifactStore.js';
@@ -1084,6 +1084,20 @@ router.post('/:id/rollback', async (req: Request, res: Response) => {
         last_rollback_at = ?
     WHERE id = ?
   `).run(now, req.params.id);
+
+  // Record rollback event in change timeline (iter87)
+  try {
+    onVersionRollback(
+      req.params.id,
+      target,
+      type || 'tag',
+      'developer',
+      undefined,
+      { success: result.success, backupCreated: shouldCreateBranch || false }
+    );
+  } catch (err) {
+    console.warn('[rollback] Failed to record change event:', err);
+  }
 
   // Auto-generate version summary on rollback
   try {

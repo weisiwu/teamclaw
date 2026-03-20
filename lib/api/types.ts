@@ -1067,7 +1067,7 @@ export interface RollbackHistoryRecord {
 // ========== 变更时间线 ==========
 export interface TimelineEvent {
   id: string;
-  type: 'version_created' | 'screenshot_linked' | 'changelog_generated' | 'manual_note';
+  type: 'version_created' | 'screenshot_linked' | 'changelog_generated' | 'manual_note' | 'version_rollback' | 'bump_executed';
   title: string;
   description: string;
   timestamp: string;
