@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -65,6 +65,17 @@ export function BranchPanel({
   const [renameNewName, setRenameNewName] = useState("");
   // Refresh loading state
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Escape key to close panel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen) {
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -187,6 +198,9 @@ export function BranchPanel({
               value={newBranchName}
               onChange={(e) => setNewBranchName(e.target.value)}
               className="flex-1 min-w-[200px]"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleCreate();
+              }}
             />
             <Input
               placeholder="描述（可选）"
@@ -231,12 +245,13 @@ export function BranchPanel({
             </div>
           ) : (
             <div className="space-y-2">
-              {filteredBranches.map((branch) => (
+              {filteredBranches.map((branch, index) => (
                 <div
                   key={branch.id}
-                  className={`p-4 rounded-lg border ${
+                  className={`p-4 rounded-lg border transition-all duration-200 hover:shadow-md ${
                     branch.isMain ? 'bg-blue-50 border-blue-200' : 'bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 dark:bg-slate-800'
-                  } ${branch.isProtected ? 'border-amber-200' : ''}`}
+                  } ${branch.isProtected ? 'border-amber-200' : ''} animate-fade-in`}
+                  style={{ animationDelay: `${Math.min(index * 30, 300)}ms`, animationFillMode: 'both' }}
                 >
                   {/* 重命名编辑模式 */}
                   {renameBranchId === branch.id ? (
