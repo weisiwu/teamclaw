@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import { X } from "lucide-react";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -45,7 +46,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           />
         </div>
         <main className="flex-1 min-h-[calc(100vh-3.5rem)] sm:min-h-[calc(100vh-4rem)] transition-all duration-300">
-          {children}
+          <ErrorBoundary>{children}</ErrorBoundary>
         </main>
       </div>
     </div>
