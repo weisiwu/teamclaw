@@ -330,22 +330,30 @@ function CreateTaskModal({
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-              任务标题 *
+              任务标题 <span className="text-red-500">*</span>
             </label>
             <Input
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              placeholder="请输入任务标题"
+              placeholder="请输入任务标题，回车即可提交"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && formData.title.trim()) {
+                  e.preventDefault();
+                  handleCreate();
+                }
+              }}
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
               任务描述
             </label>
-            <Input
+            <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="请输入任务描述"
+              placeholder="请输入任务描述（可选）"
+              rows={3}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
             />
           </div>
           <div>
