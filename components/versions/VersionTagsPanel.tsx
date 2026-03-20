@@ -19,7 +19,7 @@ import { VersionStatsOverview } from "./VersionStatsOverview";
 
 type SortOrder = "asc" | "desc";
 type SortType = "date" | "semver";
-type StatusFilter = "all" | "active" | "protected" | "archived";
+type StatusFilter = "all" | "active" | "published" | "archived" | "buildSuccess" | "buildFailed";
 
 const NOW = new Date();
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -77,7 +77,15 @@ export function VersionTagsPanel() {
 
     // Status filter
     if (statusFilter !== "all") {
-      result = result.filter((tag) => tag.status === statusFilter);
+      if (statusFilter === "published") {
+        result = result.filter((tag) => tag.status === "active" || tag.status === "protected");
+      } else if (statusFilter === "buildSuccess") {
+        result = result.filter((tag) => tag.buildStatus === "success");
+      } else if (statusFilter === "buildFailed") {
+        result = result.filter((tag) => tag.buildStatus === "failed");
+      } else {
+        result = result.filter((tag) => tag.status === statusFilter);
+      }
     }
 
     // Search filter

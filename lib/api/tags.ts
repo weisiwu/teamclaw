@@ -18,6 +18,7 @@ const mockTags: GitTag[] = [
     taggerDate: "2026-03-15T10:30:00Z",
     projectName: "teamclaw",
     status: "active",
+    buildStatus: "success",
   },
   {
     name: "v2.0.0",
@@ -30,6 +31,7 @@ const mockTags: GitTag[] = [
     taggerDate: "2026-03-01T09:00:00Z",
     projectName: "teamclaw",
     status: "active",
+    buildStatus: "success",
   },
   {
     name: "v1.5.0",
@@ -42,6 +44,7 @@ const mockTags: GitTag[] = [
     taggerDate: "2026-02-20T14:20:00Z",
     projectName: "teamclaw",
     status: "active",
+    buildStatus: "failed",
   },
   {
     name: "v1.4.0",
@@ -54,6 +57,7 @@ const mockTags: GitTag[] = [
     taggerDate: "2026-02-10T11:00:00Z",
     projectName: "teamclaw",
     status: "archived",
+    buildStatus: "success",
   },
   {
     name: "v1.3.0",
@@ -66,6 +70,7 @@ const mockTags: GitTag[] = [
     taggerDate: "2026-01-28T16:45:00Z",
     projectName: "teamclaw",
     status: "active",
+    buildStatus: "building",
   },
   {
     name: "v1.2.0",
@@ -78,6 +83,7 @@ const mockTags: GitTag[] = [
     taggerDate: "2026-01-15T08:30:00Z",
     projectName: "teamclaw",
     status: "archived",
+    buildStatus: "failed",
   },
   {
     name: "v1.1.0",
@@ -90,6 +96,7 @@ const mockTags: GitTag[] = [
     taggerDate: "2026-01-05T10:00:00Z",
     projectName: "teamclaw",
     status: "active",
+    buildStatus: "success",
   },
   {
     name: "v1.0.0",
@@ -102,6 +109,7 @@ const mockTags: GitTag[] = [
     taggerDate: "2025-12-20T09:00:00Z",
     projectName: "teamclaw",
     status: "protected",
+    buildStatus: "success",
   },
 ];
 

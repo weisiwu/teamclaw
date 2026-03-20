@@ -851,6 +851,7 @@ export interface GitTag {
   taggerDate: string;    // Tag 创建时间 (ISO)
   projectName: string;    // 所属项目名
   status: "active" | "archived" | "protected";
+  buildStatus?: BuildStatus; // 构建状态
 }
 
 export interface TagListResponse {

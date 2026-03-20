@@ -1,13 +1,14 @@
 "use client";
 
 import { GitTag } from "@/lib/api/types";
-import { X, Tag, Copy, Check, Link2, FileText, Plus, Zap, RefreshCw, GitCommit, Files, ArrowUp, ArrowDown } from "lucide-react";
+import { X, Tag, Copy, Check, Link2, FileText, Plus, Zap, RefreshCw, GitCommit, Files, ArrowUp, ArrowDown, Play, Package, Loader2, CheckCircle2, XCircle, Clock, RotateCcw, Activity, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { VersionMessageScreenshot } from "@/lib/api/types";
 import { useVersionChangeStats } from "@/lib/api/versions";
+import { useLatestBuild, useBuilds, useTriggerBuild, BuildRecord } from "@/lib/api/builds";
 
 interface VersionTagsDetailDrawerProps {
   tag: GitTag | null;
@@ -15,6 +16,10 @@ interface VersionTagsDetailDrawerProps {
   onClose: () => void;
   onLinkScreenshot?: (tagName: string) => void;
   onUnlinkScreenshot?: (screenshotId: string) => void;
+  /** 触发构建后的回调，可用于刷新构建状态 */
+  onBuildTriggered?: (buildId: string) => void;
+  /** 项目路径（用于触发构建） */
+  buildProjectPath?: string;
 }
 
 const statusConfig = {
@@ -77,10 +82,59 @@ export function VersionTagsDetailDrawer({
   onClose,
   onLinkScreenshot,
   onUnlinkScreenshot,
+  onBuildTriggered,
+  buildProjectPath,
 }: VersionTagsDetailDrawerProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [showBuildHistory, setShowBuildHistory] = useState(false);
 
   const { data: changeStats, isLoading: statsLoading } = useVersionChangeStats(tag?.name ?? null);
+  const { data: latestBuild, isLoading: latestBuildLoading } = useLatestBuild(tag?.name ?? '');
+  const { data: buildListData } = useBuilds(tag?.name ?? '', 5);
+  const triggerBuild = useTriggerBuild();
+
+  const builds = buildListData?.builds || [];
+
+  const handleTriggerBuild = async () => {
+    if (!tag) return;
+    try {
+      const result = await triggerBuild.mutateAsync({
+        versionId: tag.name,
+        versionName: tag.name,
+        versionNumber: tag.version || tag.name,
+        projectPath: buildProjectPath,
+        triggeredBy: 'user',
+        triggerType: 'manual',
+      });
+      onBuildTriggered?.(result.buildId);
+    } catch (err) {
+      console.error('Failed to trigger build:', err);
+      alert('触发构建失败: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  };
+
+  function formatDuration(ms?: number): string {
+    if (!ms) return '-';
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
+  }
+
+  function BuildStatusBadge({ status }: { status: BuildRecord['status'] }) {
+    const configs: Record<string, { icon: React.ReactNode; label: string; cls: string }> = {
+      success:   { icon: <CheckCircle2 className="w-3.5 h-3.5" />, label: '成功', cls: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
+      failed:    { icon: <XCircle className="w-3.5 h-3.5" />, label: '失败', cls: 'text-red-600 bg-red-50 border-red-200' },
+      building:  { icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />, label: '构建中', cls: 'text-blue-600 bg-blue-50 border-blue-200' },
+      pending:   { icon: <Clock className="w-3.5 h-3.5" />, label: '排队中', cls: 'text-yellow-600 bg-yellow-50 border-yellow-200' },
+      cancelled: { icon: <XCircle className="w-3.5 h-3.5" />, label: '已取消', cls: 'text-gray-500 bg-gray-50 border-gray-200' },
+    };
+    const cfg = configs[status] || configs.pending;
+    return (
+      <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded border text-xs font-medium', cfg.cls)}>
+        {cfg.icon}{cfg.label}
+      </span>
+    );
+  }
 
   if (!tag) return null;
 
@@ -354,6 +408,114 @@ export function VersionTagsDetailDrawer({
             )}
           </div>
 
+          {/* ========== 构建 Section ========== */}
+          <div className="border-t pt-5">
+            <SectionHeader
+              icon={Package}
+              title="构建"
+              action={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs text-gray-400 hover:text-gray-600"
+                  onClick={() => setShowBuildHistory(!showBuildHistory)}
+                >
+                  {showBuildHistory ? '收起历史' : '查看历史'}
+                  <ExternalLink className="w-3 h-3 ml-0.5" />
+                </Button>
+              }
+            />
+            {latestBuildLoading ? (
+              <div className="bg-gray-50 rounded-xl p-4 text-center text-xs text-gray-400">
+                <Loader2 className="w-4 h-4 animate-spin mx-auto mb-1" />
+                加载构建状态...
+              </div>
+            ) : latestBuild ? (
+              <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                {/* Latest build row */}
+                <div className="flex items-center gap-3">
+                  <BuildStatusBadge status={latestBuild.status} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-700">
+                      #{latestBuild.buildNumber}
+                      {latestBuild.triggerType === 'rebuild' && (
+                        <Badge variant="default" className="ml-1 text-xs bg-yellow-100 text-yellow-700">重构建</Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
+                      <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{new Date(latestBuild.queuedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                      {latestBuild.duration && (
+                        <span className="flex items-center gap-1"><Activity className="w-3 h-3" />{formatDuration(latestBuild.duration)}</span>
+                      )}
+                      {latestBuild.artifactCount != null && latestBuild.artifactCount > 0 && (
+                        <span className="flex items-center gap-1"><Package className="w-3 h-3" />{latestBuild.artifactCount} 个产物</span>
+                      )}
+                    </div>
+                  </div>
+                  {(latestBuild.status === 'success' || latestBuild.status === 'failed') && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1"
+                      onClick={handleTriggerBuild}
+                      disabled={triggerBuild.isPending}
+                    >
+                      {triggerBuild.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
+                      重新构建
+                    </Button>
+                  )}
+                </div>
+
+                {/* Build history (collapsed) */}
+                {!showBuildHistory && builds.length > 1 && (
+                  <button
+                    className="text-xs text-blue-500 hover:underline flex items-center gap-1"
+                    onClick={() => setShowBuildHistory(true)}
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    查看另外 {builds.length - 1} 次构建历史
+                  </button>
+                )}
+
+                {/* Build history (expanded) */}
+                {showBuildHistory && builds.length > 1 && (
+                  <div className="space-y-2 pt-2 border-t">
+                    <div className="text-xs text-gray-400">构建历史</div>
+                    {builds.slice(0, 5).map((b) => (
+                      <div key={b.id} className="flex items-center gap-2 text-xs">
+                        <BuildStatusBadge status={b.status} />
+                        <span className="text-gray-500">#{b.buildNumber}</span>
+                        <span className="text-gray-400 flex-1 truncate">{new Date(b.queuedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                        {b.duration && <span className="text-gray-400">{formatDuration(b.duration)}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center">
+                <div className="text-gray-400 text-sm">暂无构建记录</div>
+                <div className="text-xs text-gray-300 mt-1">触发构建以生成部署产物</div>
+              </div>
+            )}
+
+            {/* Quick build trigger (always visible) */}
+            <div className="mt-3">
+              <Button
+                className="w-full gap-2"
+                size="sm"
+                onClick={handleTriggerBuild}
+                disabled={triggerBuild.isPending || !tag}
+              >
+                {triggerBuild.isPending ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> 构建中...</>
+                ) : (
+                  <><Play className="w-3.5 h-3.5" /> 一键构建</>
+                )}
+              </Button>
+            </div>
+          </div>
+
           {/* ========== 消息截图 Section ========== */}
           <div className="border-t pt-5">
             <SectionHeader
@@ -453,23 +615,36 @@ export function VersionTagsDetailDrawer({
 
         {/* Footer */}
         <div className="px-6 py-4 border-t bg-gray-50">
-          <Button
-            variant="outline"
-            className="w-full gap-2"
-            onClick={() => handleCopy(tag.commitHash, "commitHash")}
-          >
-            {copiedField === "commitHash" ? (
-              <>
-                <Check className="w-4 h-4 text-green-500" />
-                已复制
-              </>
-            ) : (
-              <>
-                <Copy className="w-4 h-4" />
-                复制 Commit Hash
-              </>
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1 gap-2"
+              onClick={() => handleCopy(tag.commitHash, "commitHash")}
+            >
+              {copiedField === "commitHash" ? (
+                <>
+                  <Check className="w-4 h-4 text-green-500" />
+                  已复制
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  复制 Hash
+                </>
+              )}
+            </Button>
+            <Button
+              className="flex-1 gap-2"
+              onClick={handleTriggerBuild}
+              disabled={triggerBuild.isPending || !tag}
+            >
+              {triggerBuild.isPending ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> 构建中</>
+              ) : (
+                <><Play className="w-4 h-4" /> 构建</>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     </>

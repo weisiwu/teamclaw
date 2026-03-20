@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { GitTag } from "@/lib/api/types";
-import { Tag, Calendar, User, GitCommit, RotateCcw, FileText, Plus, Minus } from "lucide-react";
+import { Tag, Calendar, User, GitCommit, RotateCcw, FileText, Plus, Minus, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { CopyButton } from "./CopyButton";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,14 @@ interface VersionTagsListItemProps {
 const statusConfig = {
   active: { label: "活跃", variant: "success" as const },
   archived: { label: "已归档", variant: "warning" as const },
-  protected: { label: "保护", variant: "info" as const },
+  protected: { label: "已发布", variant: "info" as const },
+};
+
+const buildStatusConfig: Record<string, { icon: React.ReactNode; label: string; className: string }> = {
+  success: { icon: <CheckCircle2 className="w-3 h-3 text-emerald-500" />, label: "构建成功", className: "text-emerald-600 bg-emerald-50 border-emerald-200" },
+  failed:  { icon: <XCircle className="w-3 h-3 text-red-500" />, label: "构建失败", className: "text-red-600 bg-red-50 border-red-200" },
+  building:{ icon: <Loader2 className="w-3 h-3 text-blue-500 animate-spin" />, label: "构建中", className: "text-blue-600 bg-blue-50 border-blue-200" },
+  pending: { icon: <Loader2 className="w-3 h-3 text-gray-400" />, label: "待构建", className: "text-gray-500 bg-gray-50 border-gray-200" },
 };
 
 const commitTypeConfig: Record<string, { label: string; className: string; icon: string }> = {
@@ -166,7 +173,15 @@ export function VersionTagsListItem({ tag, onClick, onRollbackClick }: VersionTa
       {/* Hover preview panel */}
       {hovered && (
         <div className="border border-t-0 border-blue-200 rounded-b-xl bg-blue-50/60 px-4 py-3 space-y-2">
-          <div className="flex items-center gap-4 text-xs text-gray-600">
+          <div className="flex items-center gap-4 text-xs text-gray-600 flex-wrap">
+            {/* Build status badge */}
+            {tag.buildStatus && (
+              <div className={`flex items-center gap-1 px-2 py-0.5 rounded border text-xs font-medium ${buildStatusConfig[tag.buildStatus]?.className || ""}`}>
+                {buildStatusConfig[tag.buildStatus]?.icon || null}
+                <span>{buildStatusConfig[tag.buildStatus]?.label || tag.buildStatus}</span>
+              </div>
+            )}
+
             {/* Changed files preview */}
             {changedFiles.length > 0 && (
               <div className="flex items-center gap-1.5 flex-wrap">
