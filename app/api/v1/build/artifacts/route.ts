@@ -234,6 +234,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate versionName format to prevent path traversal
+    if (!/^[a-zA-Z0-9_.-]+$/.test(versionName)) {
+      return NextResponse.json(
+        { code: 400, message: "Invalid versionName format (only alphanumeric, dash, underscore, dot allowed)" },
+        { status: 400 }
+      );
+    }
+
     // File size limit: 500MB
     const MAX_FILE_SIZE = 500 * 1024 * 1024;
     if (file.size > MAX_FILE_SIZE) {
