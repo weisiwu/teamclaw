@@ -5,41 +5,64 @@ import { NextRequest, NextResponse } from "next/server";
  * 触发构建任务
  */
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { versionId, versionName, env, buildId } = body;
-
-    if (!versionId || !versionName || !env) {
-      return NextResponse.json(
-        { code: 400, message: "Missing required fields: versionId, versionName, env" },
-        { status: 400 }
-      );
-    }
-
-    // 目前是 mock 实现，记录构建任务
-    // 实际实现应该调用 CI/CD 系统（如 GitHub Actions, Jenkins 等）
-    console.log(`[Build Trigger] buildId=${buildId}, version=${versionName}, env=${env}`);
-
-    return NextResponse.json({
-      code: 0,
-      data: {
-        buildId: buildId || `build-${Date.now()}`,
-        versionId,
-        versionName,
-        env,
-        status: "building",
-        startedAt: new Date().toISOString(),
-        // 预留 CI URL 字段
-        ciUrl: null,
-      },
-    });
-  } catch (error) {
-    console.error("[Build Trigger] Error:", error);
+  // 验证 Content-Type
+  const contentType = request.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
     return NextResponse.json(
-      { code: 500, message: "Internal server error" },
-      { status: 500 }
+      { code: 415, message: "Content-Type must be application/json" },
+      { status: 415 }
     );
   }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { code: 400, message: "Invalid JSON body" },
+      { status: 400 }
+    );
+  }
+
+  const { versionId, versionName, env, buildId } = body;
+
+  if (!versionId || typeof versionId !== "string") {
+    return NextResponse.json(
+      { code: 400, message: "Missing or invalid versionId" },
+      { status: 400 }
+    );
+  }
+  if (!versionName || typeof versionName !== "string") {
+    return NextResponse.json(
+      { code: 400, message: "Missing or invalid versionName" },
+      { status: 400 }
+    );
+  }
+  if (!env || typeof env !== "string") {
+    return NextResponse.json(
+      { code: 400, message: "Missing or invalid env" },
+      { status: 400 }
+    );
+  }
+
+  const generatedBuildId = buildId || `build-${Date.now()}`;
+
+  // 目前是 mock 实现，记录构建任务
+  // 实际实现应该调用 CI/CD 系统（如 GitHub Actions, Jenkins 等）
+  console.log(`[Build Trigger] buildId=${generatedBuildId}, version=${versionName}, env=${env}`);
+
+  return NextResponse.json({
+    code: 0,
+    data: {
+      buildId: generatedBuildId,
+      versionId,
+      versionName,
+      env,
+      status: "building",
+      startedAt: new Date().toISOString(),
+      ciUrl: null,
+    },
+  });
 }
 
 /**
