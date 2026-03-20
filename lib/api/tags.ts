@@ -19,6 +19,8 @@ const mockTags: GitTag[] = [
     projectName: "teamclaw",
     status: "active",
     buildStatus: "success",
+    hasScreenshot: true,
+    hasChangelog: true,
   },
   {
     name: "v2.0.0",
@@ -32,6 +34,8 @@ const mockTags: GitTag[] = [
     projectName: "teamclaw",
     status: "active",
     buildStatus: "success",
+    hasScreenshot: true,
+    hasChangelog: false,
   },
   {
     name: "v1.5.0",
@@ -45,6 +49,8 @@ const mockTags: GitTag[] = [
     projectName: "teamclaw",
     status: "active",
     buildStatus: "failed",
+    hasScreenshot: false,
+    hasChangelog: true,
   },
   {
     name: "v1.4.0",
@@ -58,6 +64,8 @@ const mockTags: GitTag[] = [
     projectName: "teamclaw",
     status: "archived",
     buildStatus: "success",
+    hasScreenshot: false,
+    hasChangelog: false,
   },
   {
     name: "v1.3.0",
@@ -71,6 +79,8 @@ const mockTags: GitTag[] = [
     projectName: "teamclaw",
     status: "active",
     buildStatus: "building",
+    hasScreenshot: true,
+    hasChangelog: false,
   },
   {
     name: "v1.2.0",
@@ -84,6 +94,8 @@ const mockTags: GitTag[] = [
     projectName: "teamclaw",
     status: "archived",
     buildStatus: "failed",
+    hasScreenshot: false,
+    hasChangelog: false,
   },
   {
     name: "v1.1.0",
@@ -97,6 +109,8 @@ const mockTags: GitTag[] = [
     projectName: "teamclaw",
     status: "active",
     buildStatus: "success",
+    hasScreenshot: true,
+    hasChangelog: true,
   },
   {
     name: "v1.0.0",
@@ -110,6 +124,8 @@ const mockTags: GitTag[] = [
     projectName: "teamclaw",
     status: "protected",
     buildStatus: "success",
+    hasScreenshot: false,
+    hasChangelog: true,
   },
 ];
 

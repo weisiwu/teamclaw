@@ -852,6 +852,8 @@ export interface GitTag {
   projectName: string;    // 所属项目名
   status: "active" | "archived" | "protected";
   buildStatus?: BuildStatus; // 构建状态
+  hasScreenshot?: boolean; // 是否有关联截图
+  hasChangelog?: boolean; // 是否有变更摘要
 }
 
 export interface TagListResponse {
