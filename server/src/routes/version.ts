@@ -962,6 +962,15 @@ router.post('/:id/rollback', async (req: Request, res: Response) => {
     performedAt: new Date().toISOString(),
   });
 
+  // Update version rollback tracking fields (iter75)
+  const now = new Date().toISOString();
+  db.prepare(`
+    UPDATE versions
+    SET rollback_count = COALESCE(rollback_count, 0) + 1,
+        last_rollback_at = ?
+    WHERE id = ?
+  `).run(now, req.params.id);
+
   // Auto-generate version summary on rollback
   try {
     const rollbackMsg = `Rollback to ${target} (${type || 'tag'})`;
@@ -982,7 +991,13 @@ router.post('/:id/rollback', async (req: Request, res: Response) => {
     console.warn('[rollback] Auto summary generation failed:', err);
   }
 
-  res.json(success(result));
+  // Return enriched response with rollback tracking info (iter75)
+  const updated = db.prepare('SELECT rollback_count, last_rollback_at FROM versions WHERE id = ?').get(req.params.id) as { rollback_count: number; last_rollback_at: string } | undefined;
+  res.json(success({
+    ...result,
+    rollbackCount: updated?.rollback_count ?? 1,
+    lastRollbackAt: updated?.last_rollback_at ?? now,
+  }));
 });
 
 // ========== Branch Routes (top-level) ==========
