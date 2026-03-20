@@ -130,7 +130,7 @@ export function BranchPanel({
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* 面板 */}
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+      <div className="relative bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[80vh] overflow-hidden flex flex-col">
         {/* 标题 */}
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center gap-2">
@@ -157,9 +157,9 @@ export function BranchPanel({
         </div>
 
         {/* 搜索和筛选 */}
-        <div className="p-3 border-b bg-gray-50 flex items-center gap-2 flex-wrap">
+        <div className="p-3 border-b bg-gray-50 dark:border-b dark:bg-slate-800 dark:bg-slate-800 flex items-center gap-2 flex-wrap">
           <div className="relative flex-1 min-w-[180px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 dark:text-gray-400" />
             <Input
               placeholder="搜索分支..."
               value={searchQuery}
@@ -170,7 +170,7 @@ export function BranchPanel({
           <select
             value={filterProtected}
             onChange={(e) => setFilterProtected(e.target.value as "all" | "protected" | "unprotected")}
-            className="px-3 py-2 border rounded-md text-sm bg-white"
+            className="px-3 py-2 border rounded-md text-sm bg-white dark:bg-slate-800"
           >
             <option value="all">全部</option>
             <option value="protected">已保护</option>
@@ -179,7 +179,7 @@ export function BranchPanel({
         </div>
 
         {/* 创建新分支 */}
-        <div className="p-4 border-b bg-gray-50">
+        <div className="p-4 border-b bg-gray-50 dark:border-b dark:bg-slate-800 dark:bg-slate-800">
           <h3 className="text-sm font-medium mb-3">创建新分支</h3>
           <div className="flex gap-2 flex-wrap">
             <Input
@@ -198,7 +198,7 @@ export function BranchPanel({
               <select
                 value={selectedBaseBranch}
                 onChange={(e) => setSelectedBaseBranch(e.target.value)}
-                className="px-3 py-2 border rounded-md text-sm bg-white"
+                className="px-3 py-2 border rounded-md text-sm bg-white dark:bg-slate-800"
               >
                 <option value="">基于分支...</option>
                 {baseBranches.map((b) => (
@@ -222,11 +222,11 @@ export function BranchPanel({
         <div className="flex-1 overflow-y-auto p-4">
           <h3 className="text-sm font-medium mb-3">
             分支列表 ({filteredBranches.length})
-            {searchQuery && <span className="text-gray-500 ml-1">（搜索结果）</span>}
+            {searchQuery && <span className="text-gray-500 dark:text-gray-400 ml-1">（搜索结果）</span>}
           </h3>
           {filteredBranches.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <GitBranch className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <GitBranch className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
               <p>没有找到匹配的分支</p>
             </div>
           ) : (
@@ -235,7 +235,7 @@ export function BranchPanel({
                 <div
                   key={branch.id}
                   className={`p-4 rounded-lg border ${
-                    branch.isMain ? 'bg-blue-50 border-blue-200' : 'bg-white hover:bg-gray-50'
+                    branch.isMain ? 'bg-blue-50 border-blue-200' : 'bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 dark:bg-slate-800'
                   } ${branch.isProtected ? 'border-amber-200' : ''}`}
                 >
                   {/* 重命名编辑模式 */}
@@ -270,7 +270,7 @@ export function BranchPanel({
                   ) : (
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <GitBranch className={`w-4 h-4 ${branch.isProtected ? 'text-amber-500' : 'text-gray-500'}`} />
+                        <GitBranch className={`w-4 h-4 ${branch.isProtected ? 'text-amber-500' : 'text-gray-500 dark:text-gray-400'}`} />
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-medium font-mono">{branch.name}</span>
@@ -288,9 +288,9 @@ export function BranchPanel({
                             )}
                           </div>
                           {branch.description && (
-                            <p className="text-sm text-gray-500">{branch.description}</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">{branch.description}</p>
                           )}
-                          <p className="text-xs text-gray-400 mt-1">
+                          <p className="text-xs text-gray-400 dark:text-gray-500 dark:text-gray-400 mt-1">
                             创建于 {new Date(branch.createdAt).toLocaleDateString("zh-CN")}
                           </p>
                         </div>
@@ -310,8 +310,8 @@ export function BranchPanel({
                         {/* 保护切换 */}
                         {!branch.isMain && (
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-gray-400">
-                              {branch.isProtected ? <ShieldOff className="w-3.5 h-3.5 text-amber-500" /> : <Shield className="w-3.5 h-3.5 text-gray-400" />}
+                            <span className="text-xs text-gray-400 dark:text-gray-500 dark:text-gray-400">
+                              {branch.isProtected ? <ShieldOff className="w-3.5 h-3.5 text-amber-500" /> : <Shield className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 dark:text-gray-400" />}
                             </span>
                             <Switch
                               checked={branch.isProtected}

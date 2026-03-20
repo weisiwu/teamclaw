@@ -49,7 +49,7 @@ export function DialogContent({
 
   return (
     <div className={cn(
-      "bg-white rounded-xl shadow-lg w-full max-w-md p-6",
+      "bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-md p-6",
       className
     )} {...props}>
       {(title || dialogContext) && (
@@ -57,9 +57,9 @@ export function DialogContent({
           {title && <h2 className="text-lg font-semibold">{title}</h2>}
           <button
             onClick={handleClose}
-            className="p-1 hover:bg-gray-100 rounded-lg ml-auto"
+            className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 dark:bg-slate-700 rounded-lg ml-auto"
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
           </button>
         </div>
       )}

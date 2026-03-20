@@ -37,8 +37,8 @@ export function DocViewer({ docId, className = '' }: DocViewerProps) {
   if (isLoading) {
     return (
       <div className={`flex items-center justify-center h-96 ${className}`}>
-        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-        <span className="ml-2 text-gray-500">加载预览中...</span>
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400 dark:text-gray-500 dark:text-gray-400" />
+        <span className="ml-2 text-gray-500 dark:text-gray-400">加载预览中...</span>
       </div>
     );
   }
@@ -55,9 +55,9 @@ export function DocViewer({ docId, className = '' }: DocViewerProps) {
 
   if (!preview || !preview.canPreview) {
     return (
-      <div className={`flex flex-col items-center justify-center h-96 bg-gray-50 rounded-lg ${className}`}>
-        <FileText className="w-12 h-12 text-gray-400 mb-4" />
-        <p className="text-gray-600 mb-2">{preview?.message || '该文件不支持在线预览'}</p>
+      <div className={`flex flex-col items-center justify-center h-96 bg-gray-50 dark:bg-slate-800 rounded-lg ${className}`}>
+        <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 dark:text-gray-400 mb-4" />
+        <p className="text-gray-600 dark:text-gray-300 mb-2">{preview?.message || '该文件不支持在线预览'}</p>
         {preview?.url && (
           <a
             href={preview.url}
@@ -105,8 +105,8 @@ export function DocViewer({ docId, className = '' }: DocViewerProps) {
               title="Code Preview"
             />
           ) : (
-            <div className="flex items-center justify-center h-full bg-gray-50 rounded-lg">
-              <FileCode className="w-8 h-8 text-gray-400" />
+            <div className="flex items-center justify-center h-full bg-gray-50 dark:bg-slate-800 rounded-lg">
+              <FileCode className="w-8 h-8 text-gray-400 dark:text-gray-500 dark:text-gray-400" />
             </div>
           )}
         </div>
@@ -125,7 +125,7 @@ export function DocViewer({ docId, className = '' }: DocViewerProps) {
               >
                 上一页
               </Button>
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-gray-600 dark:text-gray-300">
                 第 {page} / {preview.pages} 页
               </span>
               <Button
@@ -138,7 +138,7 @@ export function DocViewer({ docId, className = '' }: DocViewerProps) {
               </Button>
             </div>
           )}
-          <div className="flex-1 bg-gray-100 rounded-lg overflow-hidden">
+          <div className="flex-1 bg-gray-100 dark:bg-slate-700 rounded-lg overflow-hidden">
             {preview.url ? (
               <iframe
                 src={`${preview.url}#page=${page}`}
@@ -147,7 +147,7 @@ export function DocViewer({ docId, className = '' }: DocViewerProps) {
               />
             ) : (
               <div className="flex items-center justify-center h-full">
-                <p className="text-gray-500">PDF 预览不可用</p>
+                <p className="text-gray-500 dark:text-gray-400">PDF 预览不可用</p>
               </div>
             )}
           </div>        </div>
@@ -155,7 +155,7 @@ export function DocViewer({ docId, className = '' }: DocViewerProps) {
 
     case 'image':
       return (
-        <div className={`flex items-center justify-center h-full bg-gray-50 rounded-lg ${className}`}>
+        <div className={`flex items-center justify-center h-full bg-gray-50 dark:bg-slate-800 rounded-lg ${className}`}>
           {preview.url ? (
             <img
               src={preview.url}
@@ -163,7 +163,7 @@ export function DocViewer({ docId, className = '' }: DocViewerProps) {
               className="max-w-full max-h-full object-contain rounded-lg"
             />
           ) : (
-            <Image className="w-12 h-12 text-gray-400" />
+            <Image className="w-12 h-12 text-gray-400 dark:text-gray-500 dark:text-gray-400" />
           )}
         </div>
       );
@@ -179,8 +179,8 @@ export function DocViewer({ docId, className = '' }: DocViewerProps) {
               title="Text Preview"
             />
           ) : (
-            <div className="flex items-center justify-center h-full bg-gray-50 rounded-lg">
-              <FileText className="w-8 h-8 text-gray-400" />
+            <div className="flex items-center justify-center h-full bg-gray-50 dark:bg-slate-800 rounded-lg">
+              <FileText className="w-8 h-8 text-gray-400 dark:text-gray-500 dark:text-gray-400" />
             </div>
           )}
         </div>
@@ -188,9 +188,9 @@ export function DocViewer({ docId, className = '' }: DocViewerProps) {
 
     default:
       return (
-        <div className={`flex flex-col items-center justify-center h-96 bg-gray-50 rounded-lg ${className}`}>
-          <FileText className="w-12 h-12 text-gray-400 mb-4" />
-          <p className="text-gray-600">不支持的文件类型</p>
+        <div className={`flex flex-col items-center justify-center h-96 bg-gray-50 dark:bg-slate-800 rounded-lg ${className}`}>
+          <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 dark:text-gray-400 mb-4" />
+          <p className="text-gray-600 dark:text-gray-300">不支持的文件类型</p>
         </div>
       );
   }

@@ -110,8 +110,8 @@ export function VersionHistory({ version, open, onOpenChange }: VersionHistoryPr
       case "published": return "bg-green-500";
       case "branched": return "bg-yellow-500";
       case "updated": return "bg-orange-500";
-      case "archived": return "bg-gray-500";
-      default: return "bg-gray-500";
+      case "archived": return "bg-gray-500 dark:bg-slate-500";
+      default: return "bg-gray-500 dark:bg-slate-500";
     }
   };
 
@@ -192,13 +192,13 @@ export function VersionHistory({ version, open, onOpenChange }: VersionHistoryPr
         {/* 时间线内容 */}
         <div className="p-4 overflow-y-auto max-h-[50vh]">
           {filteredEvents.length === 0 ? (
-            <p className="text-center text-gray-500 py-8">暂无历史记录</p>
+            <p className="text-center text-gray-500 dark:text-gray-400 py-8">暂无历史记录</p>
           ) : (
             <div className="space-y-4">
               {filteredEvents.map((event, index) => (
                 <div key={event.id} className="flex gap-4">
                   {/* 时间 */}
-                  <div className="w-16 text-sm text-gray-500 text-right shrink-0">
+                  <div className="w-16 text-sm text-gray-500 dark:text-gray-400 text-right shrink-0">
                     {new Date(event.timestamp).toLocaleString("zh-CN", {
                       month: "short",
                       day: "numeric",
@@ -213,7 +213,7 @@ export function VersionHistory({ version, open, onOpenChange }: VersionHistoryPr
                       {getEventIcon(event.type)}
                     </div>
                     {index < filteredEvents.length - 1 && (
-                      <div className="w-0.5 h-full bg-gray-200 my-1" />
+                      <div className="w-0.5 h-full bg-gray-200 dark:bg-slate-700 my-1" />
                     )}
                   </div>
 
@@ -226,10 +226,10 @@ export function VersionHistory({ version, open, onOpenChange }: VersionHistoryPr
                       <span className="font-medium">{event.description}</span>
                     </div>
                     {event.details && (
-                      <p className="text-sm text-gray-500">{event.details}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{event.details}</p>
                     )}
                     {event.user && (
-                      <p className="text-xs text-gray-400 mt-1">操作者: {event.user}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 dark:text-gray-400 mt-1">操作者: {event.user}</p>
                     )}
                   </div>
                 </div>
@@ -242,17 +242,17 @@ export function VersionHistory({ version, open, onOpenChange }: VersionHistoryPr
         <div className="grid grid-cols-3 gap-4 p-4 border-t">
           <div className="text-center">
             <p className="text-2xl font-bold">{historyEvents.length}</p>
-            <p className="text-sm text-gray-500">总事件</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">总事件</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold">
               {historyEvents.filter(e => e.type === "built").length}
             </p>
-            <p className="text-sm text-gray-500">构建次数</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">构建次数</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold">{version.commitCount}</p>
-            <p className="text-sm text-gray-500">提交数</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">提交数</p>
           </div>
         </div>
       </div>

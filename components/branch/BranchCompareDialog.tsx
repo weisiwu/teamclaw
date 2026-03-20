@@ -75,7 +75,7 @@ export function BranchCompareDialog({
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* 对话框 */}
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+      <div className="relative bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[80vh] overflow-hidden flex flex-col">
         {/* 标题 */}
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center gap-2">
@@ -108,7 +108,7 @@ export function BranchCompareDialog({
               </div>
               
               <div className="pt-6">
-                <ArrowRight className="w-5 h-5 text-gray-400" />
+                <ArrowRight className="w-5 h-5 text-gray-400 dark:text-gray-500 dark:text-gray-400" />
               </div>
               
               <div className="flex-1">

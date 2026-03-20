@@ -35,7 +35,7 @@ const getStatusIcon = (status: TaskStatus) => {
     case "completed": return <CheckCircle className="w-5 h-5 text-green-500" />;
     case "in_progress": return <PlayCircle className="w-5 h-5 text-blue-500" />;
     case "cancelled": return <XCircle className="w-5 h-5 text-red-500" />;
-    default: return <AlertCircle className="w-5 h-5 text-gray-400" />;
+    default: return <AlertCircle className="w-5 h-5 text-gray-400 dark:text-gray-500 dark:text-gray-400" />;
   }
 };
 
@@ -105,7 +105,7 @@ export default function TaskDetailPage({
           </Button>
         </Link>
         <Card>
-          <CardContent className="py-12 text-center text-gray-500 flex items-center justify-center gap-2">
+          <CardContent className="py-12 text-center text-gray-500 dark:text-gray-400 flex items-center justify-center gap-2">
             <Loader2 className="w-5 h-5 animate-spin" />
             加载中...
           </CardContent>
@@ -124,7 +124,7 @@ export default function TaskDetailPage({
           </Button>
         </Link>
         <Card>
-          <CardContent className="py-12 text-center text-gray-500">
+          <CardContent className="py-12 text-center text-gray-500 dark:text-gray-400">
             任务不存在
           </CardContent>
         </Card>
@@ -148,7 +148,7 @@ export default function TaskDetailPage({
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <span className="font-mono text-sm text-gray-500">{task.id}</span>
+                <span className="font-mono text-sm text-gray-500 dark:text-gray-400">{task.id}</span>
                 <Badge variant={STATUS_BADGE_VARIANT[task.status]}>
                   {getStatusIcon(task.status)}
                   <span className="ml-1">{STATUS_LABELS[task.status]}</span>
@@ -181,25 +181,25 @@ export default function TaskDetailPage({
           </div>
         </CardHeader>
         <CardContent>
-          <p className="text-gray-700 mb-4">{task.description}</p>
+          <p className="text-gray-700 dark:text-gray-200 mb-4">{task.description}</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
-              <span className="text-gray-500">创建人：</span>
+              <span className="text-gray-500 dark:text-gray-400">创建人：</span>
               <span className="font-medium">{task.creator}</span>
             </div>
             <div>
-              <span className="text-gray-500">创建时间：</span>
+              <span className="text-gray-500 dark:text-gray-400">创建时间：</span>
               <span className="font-medium">{task.createdAt}</span>
             </div>
             {task.completedAt && (
               <div>
-                <span className="text-gray-500">完成时间：</span>
+                <span className="text-gray-500 dark:text-gray-400">完成时间：</span>
                 <span className="font-medium">{task.completedAt}</span>
               </div>
             )}
             {task.duration && (
               <div>
-                <span className="text-gray-500">耗时：</span>
+                <span className="text-gray-500 dark:text-gray-400">耗时：</span>
                 <span className="font-medium">{task.duration} 分钟</span>
               </div>
             )}
@@ -218,7 +218,7 @@ export default function TaskDetailPage({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-gray-700 whitespace-pre-wrap">
+            <p className="text-gray-700 dark:text-gray-200 whitespace-pre-wrap">
               {task.changes || "暂无改动摘要"}
             </p>
           </CardContent>
@@ -236,13 +236,13 @@ export default function TaskDetailPage({
             {task.changedFiles.length > 0 ? (
               <ul className="space-y-1">
                 {task.changedFiles.map((file, i) => (
-                  <li key={i} className="font-mono text-sm text-gray-600">
+                  <li key={i} className="font-mono text-sm text-gray-600 dark:text-gray-300">
                     {file}
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-gray-500">暂无改动文件</p>
+              <p className="text-gray-500 dark:text-gray-400">暂无改动文件</p>
             )}
           </CardContent>
         </Card>
@@ -259,13 +259,13 @@ export default function TaskDetailPage({
             {task.commits.length > 0 ? (
               <ul className="space-y-1">
                 {task.commits.map((commit, i) => (
-                  <li key={i} className="font-mono text-sm text-gray-600">
+                  <li key={i} className="font-mono text-sm text-gray-600 dark:text-gray-300">
                     {commit}
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-gray-500">暂无关联 Commit</p>
+              <p className="text-gray-500 dark:text-gray-400">暂无关联 Commit</p>
             )}
           </CardContent>
         </Card>
@@ -288,7 +288,7 @@ export default function TaskDetailPage({
                 ))}
               </div>
             ) : (
-              <p className="text-gray-500">暂无参与 Agent</p>
+              <p className="text-gray-500 dark:text-gray-400">暂无参与 Agent</p>
             )}
           </CardContent>
         </Card>
@@ -305,9 +305,9 @@ export default function TaskDetailPage({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-gray-900">
+            <div className="text-3xl font-bold text-gray-900 dark:text-white">
               {task.tokenCost.toLocaleString()}
-              <span className="text-sm font-normal text-gray-500 ml-2">Tokens</span>
+              <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">Tokens</span>
             </div>
           </CardContent>
         </Card>
@@ -330,7 +330,7 @@ export default function TaskDetailPage({
                 ))}
               </div>
             ) : (
-              <p className="text-gray-500">暂无标签</p>
+              <p className="text-gray-500 dark:text-gray-400">暂无标签</p>
             )}
           </CardContent>
         </Card>
@@ -353,7 +353,7 @@ export default function TaskDetailPage({
                   <div className="flex justify-between items-start">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm">{comment.author}</span>
-                      <span className="text-xs text-gray-400">{comment.createdAt}</span>
+                      <span className="text-xs text-gray-400 dark:text-gray-500 dark:text-gray-400">{comment.createdAt}</span>
                     </div>
                     <Button
                       variant="ghost"
@@ -364,12 +364,12 @@ export default function TaskDetailPage({
                       <Trash2 className="w-3 h-3" />
                     </Button>
                   </div>
-                  <p className="text-sm text-gray-700 mt-1">{comment.content}</p>
+                  <p className="text-sm text-gray-700 dark:text-gray-200 mt-1">{comment.content}</p>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-gray-500 text-sm mb-4">暂无评论</p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">暂无评论</p>
           )}
 
           {/* 添加评论表单 */}

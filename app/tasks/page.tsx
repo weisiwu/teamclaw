@@ -81,7 +81,7 @@ const getStatusIcon = (status: TaskStatus) => {
     case "completed": return <CheckCircle className="w-4 h-4 text-green-500" />;
     case "in_progress": return <PlayCircle className="w-4 h-4 text-blue-500" />;
     case "cancelled": return <XCircle className="w-4 h-4 text-red-500" />;
-    default: return <AlertCircle className="w-4 h-4 text-gray-400" />;
+    default: return <AlertCircle className="w-4 h-4 text-gray-400 dark:text-gray-500 dark:text-gray-400" />;
   }
 };
 
@@ -118,7 +118,7 @@ function FilterBar({
       <CardContent className="p-4">
         <div className="flex gap-4 flex-wrap items-center">
           <div className="flex-1 min-w-[200px] relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 dark:text-gray-400" />
             <Input
               placeholder="搜索任务ID、标题或描述..."
               value={search}
@@ -196,7 +196,7 @@ function TaskCard({
           <div className="flex items-start gap-3">
             <button
               onClick={() => onSelect(task.id, !isSelected)}
-              className="mt-1 text-gray-400 hover:text-gray-600"
+              className="mt-1 text-gray-400 dark:text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 dark:text-gray-300"
             >
               {isSelected ? (
                 <CheckSquare className="w-5 h-5 text-blue-500" />
@@ -206,7 +206,7 @@ function TaskCard({
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-3 mb-2">
-                <span className="font-mono text-sm text-gray-500">{task.id}</span>
+                <span className="font-mono text-sm text-gray-500 dark:text-gray-400">{task.id}</span>
                 <button
                   onClick={() => {
                     // 快速切换状态
@@ -215,7 +215,7 @@ function TaskCard({
                     const nextStatus = statusFlow[(currentIndex + 1) % statusFlow.length];
                     onStatusChange(task.id, nextStatus);
                   }}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 dark:bg-slate-700 transition-colors cursor-pointer"
                   title="点击切换状态"
                 >
                   <Badge variant={STATUS_BADGE_VARIANT[task.status]}>
@@ -227,8 +227,8 @@ function TaskCard({
                   优先级：{task.priority}
                 </span>
               </div>
-              <h3 className="font-semibold text-gray-900 mb-1">{task.title}</h3>
-              <div className="flex items-center gap-4 text-sm text-gray-500">
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{task.title}</h3>
+              <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
                 <span>创建：{task.createdAt}</span>
                 {task.completedAt && <span>完成：{task.completedAt}</span>}
                 {task.duration && <span>耗时：{task.duration} 分钟</span>}
@@ -329,7 +329,7 @@ function CreateTaskModal({
         
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
               任务标题 *
             </label>
             <Input
@@ -339,7 +339,7 @@ function CreateTaskModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
               任务描述
             </label>
             <Input
@@ -349,7 +349,7 @@ function CreateTaskModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
               优先级
             </label>
             <Select
@@ -591,8 +591,8 @@ function TasksContent() {
         {/* 页面标题 */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">任务管理</h1>
-            <p className="text-gray-500 mt-1">管理团队协作任务</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">任务管理</h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">管理团队协作任务</p>
           </div>
           <div className="flex gap-2">
             <Button 
@@ -626,7 +626,7 @@ function TasksContent() {
             onClear={handleClearFilters}
           />
           {/* 视图切换 */}
-          <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+          <div className="flex gap-1 bg-gray-100 dark:bg-slate-700 rounded-lg p-1">
             <Button
               variant={viewMode === "list" ? "default" : "ghost"}
               size="sm"
@@ -658,14 +658,14 @@ function TasksContent() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200">
+            <Card className="bg-gradient-to-br from-gray-50 dark:from-slate-800 to-gray-100 dark:to-slate-700 border-gray-200 dark:border-slate-700">
               <CardContent className="p-3 flex items-center gap-3">
                 <div className="p-2 bg-gray-400 rounded-lg">
                   <AlertCircle className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-600 font-medium">待处理</p>
-                  <p className="text-lg font-bold text-gray-900">{taskStats.pending}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 font-medium">待处理</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-white">{taskStats.pending}</p>
                 </div>
               </CardContent>
             </Card>
@@ -786,17 +786,17 @@ function TasksContent() {
         {viewMode === "timeline" ? (
           // 时间线视图
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-700">任务时间线</h3>
+            <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200">任务时间线</h3>
             {isLoading ? (
-              <Card><CardContent className="py-12 text-center text-gray-500">加载中...</CardContent></Card>
+              <Card><CardContent className="py-12 text-center text-gray-500 dark:text-gray-400">加载中...</CardContent></Card>
             ) : error ? (
               <Card><CardContent className="py-12 text-center text-red-500">加载失败</CardContent></Card>
             ) : data?.data.length === 0 ? (
-              <Card><CardContent className="py-12 text-center text-gray-500">暂无任务</CardContent></Card>
+              <Card><CardContent className="py-12 text-center text-gray-500 dark:text-gray-400">暂无任务</CardContent></Card>
             ) : (
               <div className="relative">
                 {/* 时间线竖线 */}
-                <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200" />
+                <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-slate-600" />
                 
                 {data?.data
                   .slice()
@@ -826,14 +826,14 @@ function TasksContent() {
                           <div className="flex items-start justify-between">
                             <div>
                               <div className="flex items-center gap-2 mb-1">
-                                <span className="font-mono text-sm text-gray-500">{task.id}</span>
+                                <span className="font-mono text-sm text-gray-500 dark:text-gray-400">{task.id}</span>
                                 <Badge variant={STATUS_BADGE_VARIANT[task.status]}>
                                   {STATUS_LABELS[task.status]}
                                 </Badge>
                                 <span className="text-xs text-orange-600">P{task.priority}</span>
                               </div>
                               <h3 className="font-semibold">{task.title}</h3>
-                              <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                              <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
                                 <span className="flex items-center gap-1">
                                   <Clock className="w-3 h-3" />
                                   {task.createdAt}
@@ -866,7 +866,7 @@ function TasksContent() {
           <div className="space-y-3">
           {isLoading ? (
             <Card>
-              <CardContent className="py-12 text-center text-gray-500">
+              <CardContent className="py-12 text-center text-gray-500 dark:text-gray-400">
                 加载中...
               </CardContent>
             </Card>
@@ -878,17 +878,17 @@ function TasksContent() {
             </Card>
           ) : data?.data.length === 0 ? (
             <Card>
-              <CardContent className="py-12 text-center text-gray-500">
+              <CardContent className="py-12 text-center text-gray-500 dark:text-gray-400">
                 暂无任务
               </CardContent>
             </Card>
           ) : (
             <>
               {/* 全选行 */}
-              <div className="flex items-center gap-2 px-2 py-1 text-sm text-gray-500">
+              <div className="flex items-center gap-2 px-2 py-1 text-sm text-gray-500 dark:text-gray-400">
                 <button
                   onClick={() => handleSelectAll(selectedTaskIds.size !== data?.data.length)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-gray-400 dark:text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 dark:text-gray-300"
                 >
                   {selectedTaskIds.size === data?.data.length ? (
                     <CheckSquare className="w-5 h-5 text-blue-500" />
@@ -946,7 +946,7 @@ function TasksContent() {
             >
               上一页
             </Button>
-            <span className="flex items-center px-4 text-sm text-gray-600">
+            <span className="flex items-center px-4 text-sm text-gray-600 dark:text-gray-300">
               第 {page} / {data.totalPages} 页 (共 {data.total} 条)
             </span>
             <Button
@@ -983,7 +983,7 @@ function TasksContent() {
               </Button>
             </div>
             
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
               确定要删除选中的 {selectedTaskIds.size} 个任务吗？此操作不可恢复。
             </p>
             
@@ -1012,8 +1012,8 @@ function TasksLoading() {
     <div className="page-container">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">任务管理</h1>
-          <p className="text-gray-500 mt-1">管理团队协作任务</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">任务管理</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">管理团队协作任务</p>
         </div>
         <Button disabled>
           <Plus className="w-4 h-4 mr-2" />
@@ -1021,7 +1021,7 @@ function TasksLoading() {
         </Button>
       </div>
       <Card>
-        <CardContent className="py-12 text-center text-gray-500">
+        <CardContent className="py-12 text-center text-gray-500 dark:text-gray-400">
           加载中...
         </CardContent>
       </Card>

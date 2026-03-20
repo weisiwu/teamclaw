@@ -52,9 +52,9 @@ function getStatusIcon(status: string) {
     case 'downloading':
       return <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />;
     case 'pending':
-      return <Archive className="w-5 h-5 text-gray-400" />;
+      return <Archive className="w-5 h-5 text-gray-400 dark:text-gray-500 dark:text-gray-400" />;
     case 'cancelled':
-      return <X className="w-5 h-5 text-gray-400" />;
+      return <X className="w-5 h-5 text-gray-400 dark:text-gray-500 dark:text-gray-400" />;
     default:
       return null;
   }
@@ -181,7 +181,7 @@ export function DownloadManager({
 
           <div className="flex-1 overflow-y-auto space-y-4 mt-4">
             {tasks.length === 0 ? (
-              <div className="text-center py-10 text-gray-500">暂无下载任务</div>
+              <div className="text-center py-10 text-gray-500 dark:text-gray-400">暂无下载任务</div>
             ) : (
               tasks.map((task) => (
                 <div key={task.id} className="border rounded-lg p-4 space-y-3">
@@ -190,7 +190,7 @@ export function DownloadManager({
                       {getStatusIcon(task.status)}
                       <div>
                         <p className="font-medium">{task.zipName || '下载任务'}</p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
                           {task.fileCount || task.fileIds.length} 个文件 · {formatBytes(task.totalBytes)}
                         </p>
                       </div>
@@ -225,7 +225,7 @@ export function DownloadManager({
                   {task.status === 'downloading' && (
                     <div className="space-y-2">
                       <Progress value={task.id === activeTaskId ? progress : task.progress} />
-                      <div className="flex justify-between text-sm text-gray-500">
+                      <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
                         <span>
                           {task.id === activeTaskId
                             ? `${formatBytes((progress / 100) * task.totalBytes)} / ${formatBytes(task.totalBytes)}`

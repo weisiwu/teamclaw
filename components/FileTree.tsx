@@ -25,7 +25,7 @@ export function FileTree({ node, depth = 0 }: FileTreeProps) {
 
   if (node.type === 'file') {
     return (
-      <div className="pl-4 py-0.5 text-sm text-gray-700 hover:text-blue-600 cursor-default truncate">
+      <div className="pl-4 py-0.5 text-sm text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 cursor-default truncate">
         <FileIcon name={node.name} type="file" />
         <span className="truncate">{node.name}</span>
       </div>
@@ -35,11 +35,11 @@ export function FileTree({ node, depth = 0 }: FileTreeProps) {
   return (
     <div>
       <button
-        className="w-full flex items-center pl-2 py-0.5 text-sm text-gray-800 hover:bg-gray-100 rounded cursor-pointer"
+        className="w-full flex items-center pl-2 py-0.5 text-sm text-gray-800 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-slate-700 rounded cursor-pointer"
         style={{ paddingLeft: `${depth * 16 + 4}px` }}
         onClick={() => setOpen(!open)}
       >
-        <span className="mr-1 text-xs text-gray-400">{open ? '▼' : '▶'}</span>
+        <span className="mr-1 text-xs text-gray-400 dark:text-gray-500 dark:text-gray-400">{open ? '▼' : '▶'}</span>
         <FileIcon name={node.name} type="dir" />
         <span className="font-medium">{node.name}/</span>
       </button>
@@ -60,7 +60,7 @@ interface FileTreeViewProps {
 
 export function FileTreeView({ tree }: FileTreeViewProps) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
+    <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 p-4">
       <FileTree node={tree} />
     </div>
   );

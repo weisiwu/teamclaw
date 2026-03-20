@@ -28,17 +28,17 @@ export default async function DocPage({ params }: PageProps) {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-2 text-sm text-gray-500 mb-6">
-        <Link href="/docs" className="hover:text-gray-900 transition-colors">
+      <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-6">
+        <Link href="/docs" className="hover:text-gray-900 dark:hover:text-white dark:text-white transition-colors">
           文档中心
         </Link>
         <span>/</span>
-        <span className="text-gray-900">{doc.title}</span>
+        <span className="text-gray-900 dark:text-white">{doc.title}</span>
       </nav>
 
       {/* Title with download button */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">{doc.title}</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{doc.title}</h1>
         <DownloadButton slug={slug} title={doc.title} />
       </div>
 

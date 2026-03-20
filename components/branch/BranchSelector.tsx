@@ -22,7 +22,7 @@ interface BranchSelectorProps {
 export function BranchSelector({ branches, value, onChange, disabled }: BranchSelectorProps) {
   return (
     <div className="flex items-center gap-2">
-      <GitBranch className="w-4 h-4 text-gray-400" />
+      <GitBranch className="w-4 h-4 text-gray-400 dark:text-gray-500 dark:text-gray-400" />
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
