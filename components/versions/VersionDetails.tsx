@@ -490,6 +490,7 @@ export function VersionDetails(props: VersionDetailsProps) {
               }}
               isOpen={activeTab === "timeline"}
               onClose={() => setActiveTab("info")}
+              versionId={version.id}
             />
           )}
         </div>

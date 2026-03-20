@@ -9,11 +9,12 @@ import {
   Dialog,
   DialogContent,
 } from "@/components/ui/dialog";
-import { VersionMessageScreenshot, VersionChangelog } from "@/lib/api/types";
+import { VersionMessageScreenshot, VersionChangelog, TimelineEvent as ApiTimelineEvent } from "@/lib/api/types";
+import { useVersionTimeline } from "@/lib/api/versions";
 
 interface VersionTimelineProps {
-  screenshots: VersionMessageScreenshot[];
-  changelog: VersionChangelog | null;
+  screenshots?: VersionMessageScreenshot[];
+  changelog?: VersionChangelog | null;
   versionInfo: {
     version: string;
     createdAt: string;
@@ -23,11 +24,13 @@ interface VersionTimelineProps {
   onClose: () => void;
   /** 可选的分支列表，用于筛选 */
   availableBranches?: string[];
+  /** 版本 ID，用于从 API 获取时间线事件 */
+  versionId?: string;
 }
 
 interface TimelineEvent {
   id: string;
-  type: "screenshot" | "changelog" | "version";
+  type: "screenshot" | "changelog" | "version" | "manual_note";
   title: string;
   description: string;
   timestamp: string;
@@ -35,45 +38,59 @@ interface TimelineEvent {
   data?: VersionMessageScreenshot | VersionChangelog | { createdBy: string };
 }
 
-export function VersionTimeline({ screenshots, changelog, versionInfo, isOpen, onClose, availableBranches = [] }: VersionTimelineProps) {
+export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOpen, onClose, availableBranches = [], versionId }: VersionTimelineProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "screenshot" | "changelog">("all");
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
   const [branchFilter, setBranchFilter] = useState<string>("all");
 
+  // API-based timeline (when versionId is provided)
+  const { data: apiEvents } = useVersionTimeline(versionId ?? null);
+
   // 构建时间线事件
-  const events: TimelineEvent[] = [
-    {
-      id: "version-created",
-      type: "version" as const,
-      title: "版本创建",
-      description: `版本 ${versionInfo.version} 已创建`,
-      timestamp: versionInfo.createdAt,
-      data: { createdBy: versionInfo.createdBy },
-    },
-    ...changelog
-      ? [
-          {
-            id: "changelog-generated",
-            type: "changelog" as const,
-            title: "变更摘要生成",
-            description: changelog.title || "变更摘要已生成",
-            timestamp: changelog.generatedAt || "",
-            branchName: changelog.branchName,
-            data: changelog,
-          },
-        ]
-      : [],
-    ...screenshots.map((screenshot, index) => ({
-      id: `screenshot-${index}`,
-      type: "screenshot" as const,
-      title: "截图关联",
-      description: screenshot.messageContent?.slice(0, 50) + "..." || "截图已关联",
-      timestamp: screenshot.createdAt,
-      branchName: screenshot.branchName,
-      data: screenshot,
-    })),
-  ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  const events: TimelineEvent[] = versionId && apiEvents && apiEvents.length > 0
+    ? apiEvents.map((evt: ApiTimelineEvent) => ({
+        id: evt.id,
+        type: evt.type === 'version_created' ? 'version' as const
+          : evt.type === 'changelog_generated' ? 'changelog' as const
+          : evt.type === 'manual_note' ? 'manual_note' as const
+          : 'screenshot' as const,
+        title: evt.title,
+        description: evt.description || '',
+        timestamp: evt.timestamp,
+      }))
+    : [
+        {
+          id: "version-created",
+          type: "version" as const,
+          title: "版本创建",
+          description: `版本 ${versionInfo.version} 已创建`,
+          timestamp: versionInfo.createdAt,
+          data: { createdBy: versionInfo.createdBy },
+        },
+        ...(changelog
+          ? [
+              {
+                id: "changelog-generated",
+                type: "changelog" as const,
+                title: "变更摘要生成",
+                description: changelog.title || "变更摘要已生成",
+                timestamp: changelog.generatedAt || "",
+                branchName: changelog.branchName,
+                data: changelog,
+              },
+            ]
+          : []),
+        ...screenshots.map((screenshot, index) => ({
+          id: `screenshot-${index}`,
+          type: "screenshot" as const,
+          title: "截图关联",
+          description: screenshot.messageContent?.slice(0, 50) + "..." || "截图已关联",
+          timestamp: screenshot.createdAt,
+          branchName: screenshot.branchName,
+          data: screenshot,
+        })),
+      ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
   // 过滤事件
   const filteredEvents = events.filter((event) => {
@@ -166,6 +183,8 @@ export function VersionTimeline({ screenshots, changelog, versionInfo, isOpen, o
         return <Badge variant="default">截图</Badge>;
       case "changelog":
         return <Badge variant="info">变更摘要</Badge>;
+      case "manual_note":
+        return <Badge variant="default">备注</Badge>;
       default:
         return <Badge variant="default">版本</Badge>;
     }
