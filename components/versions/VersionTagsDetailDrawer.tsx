@@ -1,12 +1,13 @@
 "use client";
 
 import { GitTag } from "@/lib/api/types";
-import { X, Tag, Copy, Check, Link2, FileText, Plus, Zap } from "lucide-react";
+import { X, Tag, Copy, Check, Link2, FileText, Plus, Zap, RefreshCw, GitCommit, Files, ArrowUp, ArrowDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { VersionMessageScreenshot } from "@/lib/api/types";
+import { useVersionChangeStats } from "@/lib/api/versions";
 
 interface VersionTagsDetailDrawerProps {
   tag: GitTag | null;
@@ -79,6 +80,8 @@ export function VersionTagsDetailDrawer({
 }: VersionTagsDetailDrawerProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
+  const { data: changeStats, isLoading: statsLoading } = useVersionChangeStats(tag?.name ?? null);
+
   if (!tag) return null;
 
   const status = statusConfig[tag.status];
@@ -90,6 +93,20 @@ export function VersionTagsDetailDrawer({
     hour: "2-digit",
     minute: "2-digit",
   });
+
+  // Build change type badges from stats API
+  const statsChangeTypes = changeStats?.changeTypes
+    ? Object.entries(changeStats.changeTypes)
+        .filter(([, count]) => count > 0)
+        .map(([type, count]) => {
+          const config = commitTypeConfig[type] ?? {
+            label: type,
+            bgClass: "bg-gray-50",
+            textClass: "text-gray-700",
+          };
+          return { type, count: count as number, ...config };
+        })
+    : [];
 
   const handleCopy = async (text: string, field: string) => {
     try {
@@ -178,58 +195,163 @@ export function VersionTagsDetailDrawer({
           <div className="border-t pt-5">
             <SectionHeader
               icon={FileText}
-              title="变更摘要"
-            />
-            <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-              {/* Commit type breakdown */}
-              {changeTypes.length > 0 ? (
-                <div className="space-y-2">
-                  <div className="text-xs text-gray-500 font-medium">变更类型</div>
-                  <div className="flex flex-wrap gap-2">
-                    {changeTypes.map((ct) => (
-                      <span
-                        key={ct.label}
-                        className={cn(
-                          "inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border",
-                          ct.bgClass,
-                          ct.textClass,
-                          "border-opacity-50"
-                        )}
-                        style={{ borderColor: 'currentColor', opacity: 0.8 }}
-                      >
-                        {ct.label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <Zap className="w-4 h-4 text-yellow-500" />
-                  <span>无明确类型标注（建议使用 conventional commits）</span>
-                </div>
-              )}
-
-              {/* Summary note */}
-              <div className="text-xs text-gray-400 leading-relaxed">
-                查看完整变更历史，请访问「版本面板」查看该版本的详细文件变更和 commit 记录。
-              </div>
-
-              {/* Quick links */}
-              <div className="flex gap-2 pt-1">
+              title="版本摘要"
+              action={
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  className="flex-1 text-xs h-7"
+                  className="h-7 px-2 text-xs text-gray-400 hover:text-gray-600"
                   onClick={() => {
-                    const panelUrl = `/versions/panel?tag=${encodeURIComponent(tag.name)}`;
-                    window.open(panelUrl, '_blank');
+                    window.open(`/versions/panel?tag=${encodeURIComponent(tag.name)}`, '_blank');
                   }}
                 >
-                  <FileText className="w-3 h-3 mr-1" />
-                  查看完整变更
+                  <RefreshCw className="w-3 h-3 mr-0.5" />
+                  刷新
                 </Button>
+              }
+            />
+
+            {/* Stats row */}
+            {statsLoading ? (
+              <div className="bg-gray-50 rounded-xl p-4 text-center text-xs text-gray-400">
+                加载中...
               </div>
-            </div>
+            ) : changeStats ? (
+              <div className="bg-gray-50 rounded-xl p-4 space-y-4">
+                {/* Commit + file stats */}
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1.5 text-sm">
+                    <GitCommit className="w-4 h-4 text-gray-400" />
+                    <span className="font-medium text-gray-700">{changeStats.commitCount}</span>
+                    <span className="text-gray-400 text-xs">commits</span>
+                  </div>
+                  <div className="h-4 w-px bg-gray-200" />
+                  <div className="flex items-center gap-1.5 text-sm">
+                    <Files className="w-4 h-4 text-gray-400" />
+                    <span className="font-medium text-gray-700">{changeStats.fileCount}</span>
+                    <span className="text-gray-400 text-xs">文件</span>
+                  </div>
+                  <div className="h-4 w-px bg-gray-200" />
+                  <div className="flex items-center gap-1.5 text-sm text-green-600">
+                    <ArrowUp className="w-4 h-4" />
+                    <span className="font-medium">{changeStats.totalAdditions}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-sm text-red-500">
+                    <ArrowDown className="w-4 h-4" />
+                    <span className="font-medium">{changeStats.totalDeletions}</span>
+                  </div>
+                </div>
+
+                {/* Change type breakdown from API */}
+                {statsChangeTypes.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="text-xs text-gray-500 font-medium">变更类型分布</div>
+                    <div className="flex flex-wrap gap-2">
+                      {statsChangeTypes.map(({ type, count, label, bgClass, textClass }) => (
+                        <span
+                          key={type}
+                          className={cn(
+                            "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border",
+                            bgClass,
+                            textClass
+                          )}
+                          style={{ borderColor: 'currentColor', opacity: 0.8 }}
+                        >
+                          {label}
+                          <span className="ml-0.5 opacity-60">×{count}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Zap className="w-4 h-4 text-yellow-500" />
+                    <span>无明确类型标注（建议使用 conventional commits）</span>
+                  </div>
+                )}
+
+                {/* Top changed files */}
+                {changeStats.topFiles && changeStats.topFiles.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-xs text-gray-500 font-medium">变更最多的文件</div>
+                    <div className="space-y-1.5">
+                      {changeStats.topFiles.slice(0, 5).map((file, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs">
+                          <span className="text-gray-400 w-4">{i + 1}.</span>
+                          <span className="flex-1 text-gray-600 font-mono truncate" title={file.path}>
+                            {file.path.split('/').pop()}
+                          </span>
+                          <span className="text-green-600">+{file.additions}</span>
+                          <span className="text-red-500">-{file.deletions}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Link to full panel */}
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 text-xs h-7"
+                    onClick={() => {
+                      const panelUrl = `/versions/panel?tag=${encodeURIComponent(tag.name)}`;
+                      window.open(panelUrl, '_blank');
+                    }}
+                  >
+                    <FileText className="w-3 h-3 mr-1" />
+                    查看完整变更
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                {changeTypes.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="text-xs text-gray-500 font-medium">变更类型</div>
+                    <div className="flex flex-wrap gap-2">
+                      {changeTypes.map((ct) => (
+                        <span
+                          key={ct.label}
+                          className={cn(
+                            "inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border",
+                            ct.bgClass,
+                            ct.textClass,
+                            "border-opacity-50"
+                          )}
+                          style={{ borderColor: 'currentColor', opacity: 0.8 }}
+                        >
+                          {ct.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Zap className="w-4 h-4 text-yellow-500" />
+                    <span>无明确类型标注（建议使用 conventional commits）</span>
+                  </div>
+                )}
+                <div className="text-xs text-gray-400 leading-relaxed">
+                  查看完整变更历史，请访问「版本面板」查看该版本的详细文件变更和 commit 记录。
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 text-xs h-7"
+                    onClick={() => {
+                      const panelUrl = `/versions/panel?tag=${encodeURIComponent(tag.name)}`;
+                      window.open(panelUrl, '_blank');
+                    }}
+                  >
+                    <FileText className="w-3 h-3 mr-1" />
+                    查看完整变更
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ========== 消息截图 Section ========== */}
