@@ -6,7 +6,9 @@ import { getVersions } from "@/lib/api/versions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Tag, Star, Loader2, ChevronLeft, ChevronRight, LayoutGrid, List } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Plus, Search, Tag, Star, Loader2, ChevronLeft, ChevronRight, LayoutGrid, List, AlertTriangle, RefreshCw, Package } from "lucide-react";
 import Link from "next/link";
 
 export default function VersionsPage() {
@@ -15,14 +17,16 @@ export default function VersionsPage() {
   const [search, setSearch] = useState("");
   const [data, setData] = useState<{ data: Version[]; total: number; totalPages: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
   const [viewMode, setViewMode] = useState<"card" | "compact">("card");
   const [pageSize, setPageSize] = useState(20);
 
   useEffect(() => {
     setIsLoading(true);
+    setError(null);
     getVersions(page, pageSize, statusFilter)
       .then(setData)
-      .catch(console.error)
+      .catch((err) => setError(err instanceof Error ? err : new Error(String(err))))
       .finally(() => setIsLoading(false));
   }, [page, statusFilter, pageSize]);
 
@@ -117,6 +121,28 @@ export default function VersionsPage() {
         </div>
       </div>
 
+      {/* Error */}
+      {error && (
+        <Card className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/10 mb-6">
+          <CardContent className="py-6 flex flex-col items-center gap-3">
+            <AlertTriangle className="w-8 h-8 text-red-500" />
+            <div className="text-center">
+              <p className="font-medium text-red-700 dark:text-red-400">加载失败</p>
+              <p className="text-sm text-red-600 dark:text-red-500 mt-1">{error.message}</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setError(null); setIsLoading(true); getVersions(page, pageSize, statusFilter).then(setData).catch((err) => setError(err instanceof Error ? err : new Error(String(err)))).finally(() => setIsLoading(false)); }}
+              className="gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              重试
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Loading */}
       {isLoading ? (
         <div className="page-loading py-20">
@@ -124,16 +150,19 @@ export default function VersionsPage() {
           <span>加载中...</span>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="page-section">
-          <div className="page-empty">
-            <div className="page-empty-icon">🏷️</div>
-            <h3 className="page-empty-title">暂无版本记录</h3>
-            <p className="page-empty-desc">创建第一个版本开始管理</p>
+        <EmptyState
+          icon={Package}
+          title="暂无版本记录"
+          description="创建第一个版本开始管理"
+          action={
             <Link href="/versions/new">
-              <Button variant="outline" className="mt-2">创建版本</Button>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Plus className="w-4 h-4" />
+                创建版本
+              </Button>
             </Link>
-          </div>
-        </div>
+          }
+        />
       ) : (
         <>
           {viewMode === "card" ? (
