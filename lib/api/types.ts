@@ -1075,6 +1075,20 @@ export interface TimelineEvent {
   actorId?: string;
   screenshotId?: string;
   summaryId?: string;
+  screenshot?: {
+    id: string;
+    url: string;
+    thumbnailUrl?: string;
+    messageContent?: string;
+    senderName?: string;
+  };
+  changelog?: {
+    features: string[];
+    fixes: string[];
+    improvements: string[];
+    breaking: string[];
+    docs: string[];
+  };
 }
 
 export interface TimelineResponse {

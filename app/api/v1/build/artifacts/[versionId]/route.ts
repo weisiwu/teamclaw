@@ -2,9 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 const SERVER_URL = process.env.SERVER_URL || "http://localhost:9700";
 
-/** Allowed env values for build triggers */
-const VALID_ENVS = new Set(["production", "staging", "development", "test"]);
-
 /**
  * GET /api/v1/build/artifacts/[versionId]
  * Proxy to Express server artifact API: GET /api/v1/artifacts/:versionId

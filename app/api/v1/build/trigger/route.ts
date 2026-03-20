@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   }
   if (!env || typeof env !== "string" || !VALID_ENVS.has(env)) {
     return NextResponse.json(
-      { code: 400, message: `Missing or invalid env. Must be one of: ${[...VALID_ENVS].join(", ")}` },
+      { code: 400, message: `Missing or invalid env. Must be one of: ${Array.from(VALID_ENVS).join(", ")}` },
       { status: 400 }
     );
   }
