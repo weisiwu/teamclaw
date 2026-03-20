@@ -115,4 +115,8 @@ export const ScreenshotModel = {
     persist();
     return count;
   },
+
+  getAllScreenshots(): Screenshot[] {
+    return Array.from(screenshots.values());
+  },
 };

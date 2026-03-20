@@ -171,9 +171,11 @@ router.get('/', (req: Request, res: Response) => {
   const pageSize = parseInt(req.query.pageSize as string) || 10;
   const status = req.query.status as string;
   const branch = req.query.branch as string;
+  const hasScreenshot = req.query.hasScreenshot as string;
+  const hasSummary = req.query.hasSummary as string;
 
   let sql = 'SELECT * FROM versions WHERE 1=1';
-  const params: Record<string, string> = {};
+  const params: Record<string, string | number> = {};
 
   if (status && status !== 'all') {
     sql += ' AND status = @status';
@@ -186,14 +188,41 @@ router.get('/', (req: Request, res: Response) => {
 
   sql += ' ORDER BY created_at DESC';
 
-  const totalRow = db.prepare(sql.replace('SELECT *', 'SELECT COUNT(*) as cnt')).get(params) as { cnt: number };
-  const total = totalRow.cnt;
+  // Fetch all rows for in-memory filtering (versions table is typically small)
+  const allRows = db.prepare(sql).all(params) as Array<Record<string, unknown>>;
 
-  sql += ' LIMIT @limit OFFSET @offset';
+  // Build screenshot index for hasScreenshot filtering
+  const screenshotIndex = new Map<string, boolean>();
+  const screenshotData = ScreenshotModel.getAllScreenshots();
+  for (const shot of screenshotData) {
+    screenshotIndex.set(shot.versionId, true);
+  }
+
+  // Build summary index for hasSummary filtering (SQLite)
+  const summaryIndex = new Set<string>();
+  const summaryRows = db.prepare('SELECT version_id FROM version_summaries').all() as Array<{ version_id: string }>;
+  for (const row of summaryRows) {
+    summaryIndex.add(row.version_id);
+  }
+
+  // Apply in-memory filters
+  let filteredRows = allRows;
+  if (hasScreenshot === 'true') {
+    filteredRows = filteredRows.filter(r => screenshotIndex.get(r.id as string));
+  } else if (hasScreenshot === 'false') {
+    filteredRows = filteredRows.filter(r => !screenshotIndex.get(r.id as string));
+  }
+  if (hasSummary === 'true') {
+    filteredRows = filteredRows.filter(r => summaryIndex.has(r.id as string));
+  } else if (hasSummary === 'false') {
+    filteredRows = filteredRows.filter(r => !summaryIndex.has(r.id as string));
+  }
+
+  const total = filteredRows.length;
   const offset = (page - 1) * pageSize;
-  const rows = db.prepare(sql).all({ ...params, limit: pageSize, offset }) as Array<Record<string, unknown>>;
+  const paginatedRows = filteredRows.slice(offset, offset + pageSize);
 
-  const data = rows.map(row => {
+  const data = paginatedRows.map(row => {
     const summaryRecord = VersionSummaryModel.findByVersionId(row.id as string);
     return {
       id: row.id,
@@ -209,8 +238,8 @@ router.get('/', (req: Request, res: Response) => {
       tag_created: row.tag_created === 1,
       gitTag: (row.git_tag as string) || undefined,
       gitTagCreatedAt: (row.git_tag_created_at as string) || undefined,
-      hasScreenshot: ScreenshotModel.findByVersionId(row.id as string).length > 0,
-      hasSummary: !!summaryRecord,
+      hasScreenshot: !!screenshotIndex.get(row.id as string),
+      hasSummary: summaryIndex.has(row.id as string),
     };
   });
 
