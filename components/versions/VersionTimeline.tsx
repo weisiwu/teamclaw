@@ -50,7 +50,7 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
   const [branchFilter, setBranchFilter] = useState<string>("all");
 
   // API-based timeline (when versionId is provided)
-  const { data: apiEvents } = useVersionTimeline(versionId ?? null);
+  const { data: apiEvents, isLoading: timelineLoading, isError: timelineError } = useVersionTimeline(versionId ?? null);
   const queryClient = useQueryClient();
 
   // Add note dialog state
@@ -319,7 +319,17 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
 
         {/* 时间线 */}
         <div className="flex-1 overflow-y-auto py-4">
-          {filteredEvents.length === 0 ? (
+          {timelineLoading ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <div className="h-8 w-8 mx-auto mb-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              <p>加载时间线...</p>
+            </div>
+          ) : timelineError ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <History className="h-12 w-12 mx-auto mb-3 opacity-50" />
+              <p className="text-red-500">加载时间线失败</p>
+            </div>
+          ) : filteredEvents.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <History className="h-12 w-12 mx-auto mb-3 opacity-50" />
               <p>暂无变更记录</p>
