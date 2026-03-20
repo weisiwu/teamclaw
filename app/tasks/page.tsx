@@ -589,10 +589,10 @@ function TasksContent() {
     <>
       <div className="page-container">
         {/* 页面标题 */}
-        <div className="flex items-center justify-between">
+        <div className="page-header">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">任务管理</h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-1">管理团队协作任务</p>
+            <h1 className="page-header-title">任务管理</h1>
+            <p className="page-header-subtitle">管理团队协作任务</p>
           </div>
           <div className="flex gap-2">
             <Button 
@@ -626,7 +626,7 @@ function TasksContent() {
             onClear={handleClearFilters}
           />
           {/* 视图切换 */}
-          <div className="flex gap-1 bg-gray-100 dark:bg-slate-700 rounded-lg p-1">
+          <div className="flex gap-1 bg-muted rounded-lg p-1">
             <Button
               variant={viewMode === "list" ? "default" : "ghost"}
               size="sm"
@@ -1010,10 +1010,10 @@ function TasksContent() {
 function TasksLoading() {
   return (
     <div className="page-container">
-      <div className="flex items-center justify-between">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">任务管理</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">管理团队协作任务</p>
+          <h1 className="page-header-title">任务管理</h1>
+          <p className="page-header-subtitle">管理团队协作任务</p>
         </div>
         <Button disabled>
           <Plus className="w-4 h-4 mr-2" />
@@ -1021,7 +1021,7 @@ function TasksLoading() {
         </Button>
       </div>
       <Card>
-        <CardContent className="py-12 text-center text-gray-500 dark:text-gray-400">
+        <CardContent className="py-12 text-center text-muted-foreground">
           加载中...
         </CardContent>
       </Card>

@@ -60,24 +60,28 @@ export default function CapabilitiesPage() {
   };
 
   const getRoleBadge = (role: string) => {
-    if (role === 'admin') return <span className="px-2 py-0.5 text-xs rounded bg-red-100 text-red-700">管理员</span>;
-    if (role === 'sub_admin') return <span className="px-2 py-0.5 text-xs rounded bg-orange-100 text-orange-700">副管理员</span>;
-    return <span className="px-2 py-0.5 text-xs rounded bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300">全体成员</span>;
+    if (role === 'admin') return <span className="px-2 py-0.5 text-xs rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">管理员</span>;
+    if (role === 'sub_admin') return <span className="px-2 py-0.5 text-xs rounded bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">副管理员</span>;
+    return <span className="px-2 py-0.5 text-xs rounded bg-secondary text-muted-foreground">全体成员</span>;
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-gray-500 dark:text-gray-400">加载中...</div>
+        <div className="text-lg text-muted-foreground">加载中...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 p-8">
+    <div className="page-container">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">辅助能力管理</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">配置系统辅助能力的启用/禁用状态</p>
+        <div className="page-header mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">辅助能力管理</h1>
+            <p className="page-header-subtitle">配置系统辅助能力的启用/禁用状态</p>
+          </div>
+        </div>
 
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
@@ -89,17 +93,17 @@ export default function CapabilitiesPage() {
           {abilities.map(ability => (
             <div
               key={ability.id}
-              className={`bg-white rounded-lg shadow p-5 border-l-4 ${
-                ability.enabled ? 'border-green-400' : 'border-gray-300 dark:border-slate-600'
+              className={`bg-card rounded-lg shadow p-5 border-l-4 border-border ${
+                ability.enabled ? 'border-green-400 dark:border-green-500' : ''
               }`}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-gray-900 dark:text-white">{ability.name}</h3>
+                    <h3 className="font-semibold text-foreground">{ability.name}</h3>
                     {getRoleBadge(ability.requiredRole)}
                   </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{ability.description}</p>
+                  <p className="text-sm text-muted-foreground">{ability.description}</p>
                 </div>
                 <button
                   onClick={() => toggleAbility(ability)}
@@ -117,13 +121,13 @@ export default function CapabilitiesPage() {
                   />
                   {toggling === ability.id && (
                     <span className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">...</span>
+                      <span className="text-xs text-muted-foreground">...</span>
                     </span>
                   )}
                 </button>
               </div>
-              <div className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-700">
-                <span className={`text-xs font-mono ${ability.enabled ? 'text-green-600' : 'text-gray-400 dark:text-gray-500'}`}>
+              <div className="mt-2 pt-2 border-t border-border">
+                <span className={`text-xs font-mono ${ability.enabled ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
                   {ability.enabled ? '● 已启用' : '○ 已禁用'}
                 </span>
               </div>
