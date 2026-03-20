@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { VersionMessageScreenshot } from "@/lib/api/types";
 import { useVersionChangeStats } from "@/lib/api/versions";
 import { useLatestBuild, useBuilds, useTriggerBuild, BuildRecord } from "@/lib/api/builds";
+import { ArtifactsPanel } from "@/components/versions/ArtifactsPanel";
 
 interface VersionTagsDetailDrawerProps {
   tag: GitTag | null;
@@ -87,6 +88,7 @@ export function VersionTagsDetailDrawer({
 }: VersionTagsDetailDrawerProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showBuildHistory, setShowBuildHistory] = useState(false);
+  const [showArtifacts, setShowArtifacts] = useState(false);
 
   const { data: changeStats, isLoading: statsLoading } = useVersionChangeStats(tag?.name ?? null);
   const { data: latestBuild, isLoading: latestBuildLoading } = useLatestBuild(tag?.name ?? '');
@@ -489,6 +491,27 @@ export function VersionTagsDetailDrawer({
                         {b.duration && <span className="text-gray-400">{formatDuration(b.duration)}</span>}
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* 产物下载入口 - 构建成功时显示 */}
+                {latestBuild.status === 'success' && (
+                  <div className="pt-2 border-t mt-2">
+                    <button
+                      className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                      onClick={() => setShowArtifacts(!showArtifacts)}
+                    >
+                      <Package className="w-3.5 h-3.5" />
+                      {showArtifacts ? '收起产物列表' : '查看产物'}
+                      {latestBuild.artifactCount != null && latestBuild.artifactCount > 0 && (
+                        <span className="text-gray-400">({latestBuild.artifactCount})</span>
+                      )}
+                    </button>
+                    {showArtifacts && tag && (
+                      <div className="mt-2">
+                        <ArtifactsPanel versionId={tag.name} versionName={tag.name} />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
