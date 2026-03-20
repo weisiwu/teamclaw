@@ -16,8 +16,7 @@ export default function VersionsPage() {
   const [data, setData] = useState<{ data: Version[]; total: number; totalPages: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"card" | "compact">("card");
-
-  const pageSize = 20;
+  const [pageSize, setPageSize] = useState(20);
 
   useEffect(() => {
     setIsLoading(true);
@@ -25,7 +24,12 @@ export default function VersionsPage() {
       .then(setData)
       .catch(console.error)
       .finally(() => setIsLoading(false));
-  }, [page, statusFilter]);
+  }, [page, statusFilter, pageSize]);
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setPage(1); // reset to first page when changing page size
+  };
 
   const versions = data?.data || [];
   const totalPages = data?.totalPages || 1;
@@ -76,6 +80,22 @@ export default function VersionsPage() {
             </Button>
           ))}
         </div>
+        {/* Page size selector */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">每页</span>
+          <select
+            className="h-8 w-16 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            value={pageSize}
+            onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+          >
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+          <span className="text-sm text-muted-foreground">条</span>
+        </div>
+
         {/* View mode toggle */}
         <div className="flex gap-1 border rounded-lg p-1">
           <Button
