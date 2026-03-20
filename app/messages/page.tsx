@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { LegacySelect as Select } from "@/components/ui/select";
 import { PriorityBadge, StatusBadge, RoleBadge } from "@/components/messages/PriorityBadge";
 import { useQueueStatus, usePreemptMessage, useSendMessage } from "@/hooks/useMessages";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   MessageSquare,
   Zap,
@@ -204,10 +205,11 @@ function QueuePageContent() {
           </CardHeader>
           <CardContent>
             {!queue?.list || queue.list.length === 0 ? (
-              <div className="py-8 text-center text-gray-400 dark:text-gray-500">
-                <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>队列空闲，暂无待处理消息</p>
-              </div>
+              <EmptyState
+              icon={MessageSquare}
+              title="队列空闲"
+              description="暂无待处理消息"
+            />
             ) : (
               <div className="space-y-3">
                 {queue.list
