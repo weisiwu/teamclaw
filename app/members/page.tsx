@@ -8,6 +8,7 @@ import { LegacySelect as Select } from "@/components/ui/select";
 import { MemberForm } from "@/components/members";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useMemberList, useCreateMember, useUpdateMember, useDeleteMember, useBatchDeleteMembers } from "@/hooks/useMembers";
+import { usePermission } from "@/hooks/usePermission";
 import { Member, ROLE_LABELS, MEMBER_ROLE_OPTIONS, MemberRole, MemberStatus, CreateMemberRequest, UpdateMemberRequest } from "@/lib/api/types";
 import { Pencil, Trash2, UserPlus, Loader2, Search, Users, ArrowUpDown, ArrowUp, ArrowDown, Download, Upload, X, Power, PowerOff, Eye } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -34,6 +35,9 @@ export default function MembersPage() {
   const updateMember = useUpdateMember();
   const deleteMember = useDeleteMember();
   const batchDeleteMembers = useBatchDeleteMembers();
+
+  // 权限检查
+  const { isAdminOrAbove, canDeleteMembers } = usePermission();
 
   const members = data?.data || [];
 
@@ -245,10 +249,12 @@ export default function MembersPage() {
     <div className="page-container">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">成员管理</h1>
-        <Button onClick={handleAdd}>
-          <UserPlus className="w-4 h-4 mr-2" />
-          添加成员
-        </Button>
+        {isAdminOrAbove() && (
+          <Button onClick={handleAdd}>
+            <UserPlus className="w-4 h-4 mr-2" />
+            添加成员
+          </Button>
+        )}
       </div>
 
       {/* Search and Actions Bar */}
@@ -315,7 +321,7 @@ export default function MembersPage() {
             </div>
           )}
           
-          {selectedIds.size > 0 && (
+          {selectedIds.size > 0 && isAdminOrAbove() && (
             <>
               <Select 
                 onChange={(e) => e.target.value && handleBatchRoleChange(e.target.value as MemberRole)}
@@ -343,9 +349,9 @@ export default function MembersPage() {
             <EmptyState
               icon={searchQuery ? Search : Users}
               title={searchQuery ? "没有匹配的成员" : "暂无成员数据"}
-              description={searchQuery ? "请尝试其他搜索条件或清除筛选" : "点击上方「添加成员」开始添加"}
+              description={searchQuery ? "请尝试其他搜索条件或清除筛选" : isAdminOrAbove() ? "点击上方「添加成员」开始添加" : "暂无成员数据"}
               action={
-                !searchQuery && (
+                !searchQuery && isAdminOrAbove() && (
                   <Button onClick={handleAdd}>
                     <UserPlus className="w-4 h-4 mr-2" />
                     添加成员
@@ -431,18 +437,20 @@ export default function MembersPage() {
                         <Badge variant={member.status === "active" ? "success" : "info"}>
                           {member.status === "active" ? "启用" : "禁用"}
                         </Badge>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleToggleStatus(member)}
-                          title={member.status === "active" ? "禁用" : "启用"}
-                        >
-                          {member.status === "active" ? (
-                            <PowerOff className="w-4 h-4 text-orange-500" />
-                          ) : (
-                            <Power className="w-4 h-4 text-green-500" />
-                          )}
-                        </Button>
+                        {isAdminOrAbove() && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleToggleStatus(member)}
+                            title={member.status === "active" ? "禁用" : "启用"}
+                          >
+                            {member.status === "active" ? (
+                              <PowerOff className="w-4 h-4 text-orange-500" />
+                            ) : (
+                              <Power className="w-4 h-4 text-green-500" />
+                            )}
+                          </Button>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -455,20 +463,26 @@ export default function MembersPage() {
                         >
                           <Eye className="w-4 h-4 text-blue-500" />
                         </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleEdit(member)}
-                        >
-                          <Pencil className="w-4 h-4 dark:text-white" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => setDeleteConfirmId(member.id)}
-                        >
-                          <Trash2 className="w-4 h-4 text-red-500" />
-                        </Button>
+                        {isAdminOrAbove() && (
+                          <>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => handleEdit(member)}
+                            >
+                              <Pencil className="w-4 h-4 dark:text-white" />
+                            </Button>
+                            {canDeleteMembers() && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setDeleteConfirmId(member.id)}
+                              >
+                                <Trash2 className="w-4 h-4 text-red-500" />
+                              </Button>
+                            )}
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
