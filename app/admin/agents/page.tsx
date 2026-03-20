@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import {
   RefreshCw,
   Activity,
@@ -175,6 +176,7 @@ export default function AgentMonitorPage() {
   const statsMap = statsData || {};
 
   return (
+    <PermissionGuard>
     <div className="page-container space-y-6">
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
@@ -294,5 +296,6 @@ export default function AgentMonitorPage() {
         </Card>
       )}
     </div>
+    </PermissionGuard>
   );
 }

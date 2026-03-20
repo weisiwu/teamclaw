@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { SystemConfig } from '../../../lib/api/adminConfig';
+import { PermissionGuard } from '@/components/layout/PermissionGuard';
 
 export default function AdminConfigPage() {
   const [config, setConfig] = useState<SystemConfig | null>(null);
@@ -99,6 +100,7 @@ export default function AdminConfigPage() {
   if (!config) return <div className="text-red-500 p-8">{error || '加载失败'}</div>;
 
   return (
+    <PermissionGuard>
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
@@ -212,5 +214,6 @@ export default function AdminConfigPage() {
         </div>
       </div>
     </div>
+    </PermissionGuard>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { Webhook, WebhookHistory } from '../../../lib/api/webhooks';
+import { PermissionGuard } from '@/components/layout/PermissionGuard';
 
 const EVENT_OPTIONS = [
   'version.created', 'version.deleted', 'version.bumped',
@@ -122,6 +123,7 @@ export default function WebhooksPage() {
   };
 
   return (
+    <PermissionGuard>
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-6">
@@ -253,5 +255,6 @@ export default function WebhooksPage() {
         )}
       </div>
     </div>
+    </PermissionGuard>
   );
 }

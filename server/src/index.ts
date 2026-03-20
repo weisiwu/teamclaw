@@ -1,7 +1,8 @@
-import express from 'express';
+import express, { Router } from 'express';
 import { join } from 'path';
 import cors from 'cors';
 import { success } from './utils/response.js';
+import { requireAdmin } from './middleware/auth.js';
 import healthRouter from './routes/health.js';
 import projectRouter from './routes/project.js';
 import userRouter from './routes/user.js';
@@ -70,9 +71,13 @@ app.use('/api/v1/search', searchRouter);
 app.use('/api/v1/cron-jobs', cronJobRouter);
 app.use('/api/v1/token-stats', tokenStatsRouter);
 app.use('/api/v1/dashboard', dashboardRouter);
-app.use('/api/v1/admin/config', adminConfigRouter);
-app.use('/api/v1/admin/audit-logs', auditLogRouter);
-app.use('/api/v1/admin/webhooks', webhookRouter);
+// Admin routes — all protected by requireAdmin middleware
+const adminRouter = Router();
+adminRouter.use(requireAdmin);
+adminRouter.use('/config', adminConfigRouter);
+adminRouter.use('/audit-logs', auditLogRouter);
+adminRouter.use('/webhooks', webhookRouter);
+app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/tags', tagRouter);
 app.use('/api/v1/builds', buildRouter);
 app.use('/api/v1/artifacts', artifactRouter);

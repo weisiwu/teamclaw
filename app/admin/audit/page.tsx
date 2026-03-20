@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { AuditLog } from '../../../lib/api/auditLogs';
+import { PermissionGuard } from '@/components/layout/PermissionGuard';
 
 const ACTION_LABELS: Record<string, string> = {
   'user.create': '用户创建', 'user.delete': '用户删除', 'user.update': '用户更新',
@@ -76,6 +77,7 @@ export default function AuditLogPage() {
   };
 
   return (
+    <PermissionGuard>
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
@@ -175,5 +177,6 @@ export default function AuditLogPage() {
         )}
       </div>
     </div>
+    </PermissionGuard>
   );
 }
