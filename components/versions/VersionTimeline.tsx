@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { History, MessageSquare, FileText, Search, Filter, Download, ChevronDown, ChevronRight, MessageSquarePlus } from "lucide-react";
+import { History, MessageSquare, FileText, Search, Filter, Download, ChevronDown, ChevronRight, MessageSquarePlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { VersionMessageScreenshot, VersionChangelog, TimelineEvent as ApiTimelineEvent } from "@/lib/api/types";
-import { useVersionTimeline, useAddTimelineEvent } from "@/lib/api/versions";
+import { useVersionTimeline, useAddTimelineEvent, useDeleteTimelineEvent } from "@/lib/api/versions";
 
 interface VersionTimelineProps {
   screenshots?: VersionMessageScreenshot[];
@@ -56,6 +56,7 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
   const addNoteMutation = useAddTimelineEvent();
+  const deleteEventMutation = useDeleteTimelineEvent();
 
   const handleAddNote = async () => {
     if (!noteText.trim() || !versionId) return;
@@ -66,6 +67,16 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
       setNoteDialogOpen(false);
     } catch (err) {
       console.error("[VersionTimeline] Failed to add note:", err);
+    }
+  };
+
+  const handleDeleteEvent = async (eventId: string) => {
+    if (!versionId) return;
+    try {
+      await deleteEventMutation.mutateAsync({ versionId, eventId });
+      queryClient.invalidateQueries({ queryKey: ["versionTimeline", versionId] });
+    } catch (err) {
+      console.error("[VersionTimeline] Failed to delete event:", err);
     }
   };
 
@@ -307,6 +318,18 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
                       <span className="text-xs text-muted-foreground ml-auto">
                         {new Date(event.timestamp).toLocaleString("zh-CN")}
                       </span>
+                      {event.type === "manual_note" && versionId && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-6 px-1 text-muted-foreground hover:text-red-500"
+                          onClick={() => handleDeleteEvent(event.id)}
+                          disabled={deleteEventMutation.isPending}
+                          title="删除备注"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
 
                     <p className="text-sm text-muted-foreground">{event.description}</p>
