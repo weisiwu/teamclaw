@@ -161,13 +161,26 @@ export function VersionTagsDetailDrawer({
 
   const status = statusConfig[tag.status];
   const changeTypes = getChangeTypes(tag.subject);
-  const date = new Date(tag.taggerDate).toLocaleDateString("zh-CN", {
+  const date = new Date(tag.taggerDate);
+  const dateStr = date.toLocaleDateString("zh-CN", {
     year: "numeric",
     month: "long",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
+  const relativeTime = (() => {
+    const diff = Date.now() - date.getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}分钟前`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}小时前`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days}天前`;
+    const months = Math.floor(days / 30);
+    if (months < 12) return `${months}个月前`;
+    return `${Math.floor(months / 12)}年前`;
+  })();
 
   // Build change type badges from stats API
   const statsChangeTypes = changeStats?.changeTypes
@@ -249,6 +262,17 @@ export function VersionTagsDetailDrawer({
             onCopy={handleCopy}
             copied={copiedField === "commitHash"}
             isMonospace
+            action={
+              <a
+                href={`https://github.com/weisiwu/teamclaw/commit/${tag.commitHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                title="在 GitHub 查看此 Commit"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-gray-400 hover:text-blue-500" />
+              </a>
+            }
           />
 
           {/* Commit message */}
@@ -261,7 +285,10 @@ export function VersionTagsDetailDrawer({
           <DetailItem label="邮箱" value={tag.authorEmail} />
 
           {/* Date */}
-          <DetailItem label="创建时间" value={date} />
+          <DetailItem
+            label="创建时间"
+            value={`${dateStr} (${relativeTime})`}
+          />
 
           {/* Project */}
           <DetailItem label="项目" value={tag.projectName} />
@@ -721,6 +748,7 @@ function DetailItem({
   onCopy,
   copied,
   isMonospace,
+  action,
 }: {
   label: string;
   value: string;
@@ -728,6 +756,7 @@ function DetailItem({
   onCopy?: (text: string, field: string) => void;
   copied?: boolean;
   isMonospace?: boolean;
+  action?: React.ReactNode;
 }) {
   return (
     <div>
@@ -741,21 +770,24 @@ function DetailItem({
         >
           {value}
         </span>
-        {copyValue && onCopy && (
-          <button
-            onClick={() => onCopy(copyValue, label.toLowerCase().replace(/\s/g, ""))}
-            className={cn(
-              "p-1 rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
-            )}
-            title="复制"
-          >
-            {copied ? (
-              <Check className="w-3.5 h-3.5 text-green-500" />
-            ) : (
-              <Copy className="w-3.5 h-3.5" />
-            )}
-          </button>
-        )}
+        <div className="flex items-center gap-1">
+          {action}
+          {copyValue && onCopy && (
+            <button
+              onClick={() => onCopy(copyValue, label.toLowerCase().replace(/\s/g, ""))}
+              className={cn(
+                "p-1 rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
+              )}
+              title="复制"
+            >
+              {copied ? (
+                <Check className="w-3.5 h-3.5 text-green-500" />
+              ) : (
+                <Copy className="w-3.5 h-3.5" />
+              )}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

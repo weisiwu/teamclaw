@@ -380,7 +380,7 @@ export function BuildHistoryPanel({
 
       {/* 改进1：Build Summary Stats Bar */}
       {builds.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-muted/30 rounded-lg border">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2 p-3 bg-muted/30 rounded-lg border">
           <div className="flex flex-col items-center justify-center py-1">
             <span className="text-lg font-semibold text-foreground">{totalBuilds}</span>
             <span className="text-xs text-muted-foreground">总构建</span>
@@ -399,6 +399,10 @@ export function BuildHistoryPanel({
           <div className="flex flex-col items-center justify-center py-1">
             <span className={`text-lg font-semibold ${successRate >= 80 ? "text-green-600" : successRate >= 50 ? "text-yellow-600" : "text-red-600"}`}>{successRate}%</span>
             <span className="text-xs text-muted-foreground">成功率</span>
+          </div>
+          <div className="flex flex-col items-center justify-center py-1">
+            <span className="text-lg font-semibold text-foreground">{avgDuration ? formatDuration(avgDuration) : "-"}</span>
+            <span className="text-xs text-muted-foreground">平均时长</span>
           </div>
           <div className="flex flex-col items-center justify-center py-1">
             <span className="text-xs font-medium text-foreground">{lastBuild ? formatTime(lastBuild.queuedAt) : "-"}</span>

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { GitTag, Version } from "@/lib/api/types";
 import { useTags } from "@/lib/api/tags";
 import { Tag, Zap, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { VersionTagsSearchBar } from "./VersionTagsSearchBar";
 import { VersionSortToggle } from "./VersionSortToggle";
 import { VersionTagsListItem } from "./VersionTagsListItem";
@@ -69,6 +70,39 @@ export function VersionTagsPanel() {
   const [bumpExpanded, setBumpExpanded] = useState(false);
   const [bumpTaskId, setBumpTaskId] = useState<string>("");
   const [bumpVersionId, setBumpVersionId] = useState<string>("");
+  const [activeGroup, setActiveGroup] = useState<"week" | "month" | "older">("week");
+  const weekRef = useRef<HTMLDivElement>(null);
+  const monthRef = useRef<HTMLDivElement>(null);
+  const olderRef = useRef<HTMLDivElement>(null);
+  const groupRefMap = { week: weekRef, month: monthRef, older: olderRef };
+
+  // Intersection observer to track active time group while scrolling
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const id = entry.target.getAttribute("data-group") as "week" | "month" | "older";
+            if (id) setActiveGroup(id);
+          }
+        }
+      },
+      { rootMargin: "-80px 0px -60% 0px", threshold: 0 }
+    );
+    // Observe all group headers after render
+    const timeout = setTimeout(() => {
+      Object.values(groupRefMap).forEach((ref) => {
+        if (ref.current) observer.observe(ref.current);
+      });
+    }, 0);
+    return () => { clearTimeout(timeout); observer.disconnect(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  const scrollToGroup = useCallback((group: "week" | "month" | "older") => {
+    groupRefMap[group].current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const tags = useMemo(() => data?.data || [], [data]);
 
@@ -272,7 +306,40 @@ export function VersionTagsPanel() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      <div className="flex-1 overflow-y-auto px-6 py-4" id="version-tags-content">
+        {/* Sticky time-group navigation */}
+        {!isLoading && filteredAndSortedTags.length > 0 && (
+          <div className="sticky top-0 z-10 pb-3 mb-1 bg-gradient-to-b from-white to-white/95 backdrop-blur-sm">
+            <div className="flex items-center gap-1 bg-gray-50 rounded-lg p-1 border">
+              {(["week", "month", "older"] as const).map((group) => {
+                const count = groupedTags[group].length;
+                if (count === 0) return null;
+                const isActive = activeGroup === group;
+                return (
+                  <button
+                    key={group}
+                    onClick={() => scrollToGroup(group)}
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                      isActive
+                        ? "bg-white text-blue-700 shadow-sm border border-blue-200"
+                        : "text-gray-500 hover:text-gray-700 hover:bg-white/60"
+                    )}
+                  >
+                    <Clock className="w-3 h-3" />
+                    <span>{TIME_GROUP_LABEL[group]}</span>
+                    <span className={cn(
+                      "px-1.5 py-0.5 rounded text-xs",
+                      isActive ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-500"
+                    )}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {isLoading ? (
           <VersionTagsSkeleton />
         ) : filteredAndSortedTags.length === 0 ? (
@@ -284,7 +351,7 @@ export function VersionTagsPanel() {
               const groupTags = groupedTags[group];
               if (groupTags.length === 0) return null;
               return (
-                <div key={group}>
+                <div key={group} data-group={group} ref={groupRefMap[group]}>
                   {/* Group header */}
                   <div className="flex items-center gap-2 mb-3">
                     <Clock className="w-3.5 h-3.5 text-gray-400" />
