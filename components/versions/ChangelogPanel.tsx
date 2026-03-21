@@ -35,11 +35,13 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, ver
   const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const startEditing = () => {
     setEditContent(changelog?.content || versionSummary || "");
     setEditing(true);
     setSaveSuccess(null);
+    setSaveError(null);
   };
 
   const cancelEditing = () => {
@@ -61,6 +63,7 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, ver
       }
     } catch (e) {
       console.error("Failed to save changelog:", e);
+      setSaveError(e instanceof Error ? e.message : "保存失败，请重试");
     } finally {
       setSaving(false);
     }
@@ -207,6 +210,13 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, ver
       {saveSuccess && (
         <div className="text-xs text-green-600 bg-green-50 px-3 py-2 rounded-md">
           ✅ 变更摘要已保存于 {saveSuccess}
+        </div>
+      )}
+
+      {/* 保存失败提示 */}
+      {saveError && (
+        <div className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-md">
+          ❌ {saveError}
         </div>
       )}
 

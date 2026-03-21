@@ -385,6 +385,13 @@ export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }:
                   </Button>
                 </div>
               )}
+
+              {/* 已加载全部 */}
+              {!hasMore && messages.length > 0 && (
+                <div className="text-center pt-2 text-xs text-gray-400">
+                  已加载全部消息
+                </div>
+              )}
             </>
           )}
         </div>

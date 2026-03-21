@@ -333,6 +333,7 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
             <div className="text-center py-8 text-muted-foreground">
               <History className="h-12 w-12 mx-auto mb-3 opacity-50" />
               <p>暂无变更记录</p>
+              <p className="text-xs text-gray-400 mt-2">关联截图或生成摘要有助于记录变更历史</p>
             </div>
           ) : (
             <div className="space-y-0">
