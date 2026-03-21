@@ -534,6 +534,7 @@ export function VersionDetails(props: VersionDetailsProps) {
               changelog={changelog}
               loading={false}
               generating={refreshSummaryMutation.isPending}
+              generationError={refreshSummaryMutation.error?.message}
               onGenerate={handleRefreshSummary}
               versionSummary={version.summary}
               summaryGeneratedAt={version.summaryGeneratedAt}

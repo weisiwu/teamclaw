@@ -26,6 +26,8 @@ interface ChangelogPanelProps {
   changedFiles?: string[];
   /** AI 生成当前步骤描述 */
   progressStep?: string;
+  /** AI 生成失败错误信息 */
+  generationError?: string | null;
 }
 
 const changeTypeLabels: Record<ChangelogChange["type"], { label: string; variant: "default" | "success" | "warning" | "error" | "info" }> = {
@@ -38,7 +40,7 @@ const changeTypeLabels: Record<ChangelogChange["type"], { label: string; variant
   other: { label: "其他", variant: "default" },
 };
 
-export function ChangelogPanel({ changelog, onGenerate, loading, generating, progress, onCancel, versionSummary, summaryGeneratedAt, summaryGeneratedBy, versionId, onSummarySaved, changedFiles, progressStep }: ChangelogPanelProps) {
+export function ChangelogPanel({ changelog, onGenerate, loading, generating, progress, onCancel, versionSummary, summaryGeneratedAt, summaryGeneratedBy, versionId, onSummarySaved, changedFiles, progressStep, generationError }: ChangelogPanelProps) {
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState(false);
@@ -310,6 +312,13 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, pro
             </div>
           </div>
         )}
+
+        {/* 生成失败提示 */}
+        {generationError && (
+          <div className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-md">
+            ❌ 生成失败：{generationError}
+          </div>
+        )}
       </div>
 
       {/* 保存成功提示 */}
@@ -334,6 +343,11 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, pro
               <h3 className="font-semibold text-gray-900">确认生成变更摘要</h3>
             </div>
             <div className="p-4 space-y-3">
+              {changelog && (
+                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                  ⚠️ 重新生成将覆盖现有的变更摘要，当前内容将无法恢复。
+                </div>
+              )}
               {changedFiles && changedFiles.length > 0 ? (
                 <>
                   <p className="text-sm text-gray-600">
