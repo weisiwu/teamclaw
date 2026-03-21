@@ -1061,6 +1061,39 @@ router.get('/:id/rollback-preview', (req: Request, res: Response) => {
   res.json(success(preview));
 });
 
+// GET /api/v1/versions/:id/head-status — Check if version is at current HEAD (iter75)
+router.get('/:id/head-status', (req: Request, res: Response) => {
+  const db = getDb();
+  const row = db.prepare('SELECT id, version, projectPath, commit_hash FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  if (!row) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  const projectPath = (row.projectPath as string) ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
+
+  let currentCommit = '';
+  let isCurrentHead = false;
+
+  try {
+    currentCommit = execSync('git rev-parse HEAD', { cwd: projectPath, encoding: 'utf-8' }).trim();
+    const versionCommit = (row.commit_hash as string) || '';
+    isCurrentHead = currentCommit === versionCommit;
+  } catch (err) {
+    // Git operation failed - assume not at head
+    currentCommit = '';
+    isCurrentHead = false;
+  }
+
+  res.json(success({
+    isCurrentHead,
+    currentCommit,
+    versionCommit: row.commit_hash || '',
+    canRollback: !isCurrentHead,
+  }));
+});
+
 // POST /api/v1/versions/:id/rollback — Rollback to a tag, branch, or commit（仅管理员）
 router.post('/:id/rollback', requireAdmin, async (req: Request, res: Response) => {
   const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;

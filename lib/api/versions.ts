@@ -3199,3 +3199,32 @@ export function useVersionChangeStats(tagName: string | null) {
     staleTime: 5 * 60 * 1000, // 5 min cache
   });
 }
+
+// ========== Version Head Status API (iter75) ==========
+
+export interface VersionHeadStatus {
+  isCurrentHead: boolean;
+  currentCommit: string;
+  versionCommit: string;
+  canRollback: boolean;
+}
+
+export async function getVersionHeadStatus(versionId: string): Promise<VersionHeadStatus | null> {
+  try {
+    const res = await fetch(`${API_BASE}/versions/${versionId}/head-status`);
+    const json = await res.json();
+    if ((json.code === 200 || json.code === 0) && json.data) return json.data;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function useVersionHeadStatus(versionId: string | null) {
+  return useQuery({
+    queryKey: ['versionHeadStatus', versionId],
+    queryFn: () => getVersionHeadStatus(versionId!),
+    enabled: Boolean(versionId),
+    staleTime: 30 * 1000, // 30s cache - changes on rollback
+  });
+}
