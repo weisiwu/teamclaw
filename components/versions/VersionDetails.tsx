@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT } from "@/lib/api/types";
 import { useBuildArtifacts, useVersionScreenshots, useVersionChangelog, useRefreshVersionSummary, useVersionArtifacts } from "@/lib/api/versions";
 import { useLatestBuild, useRebuildBuild, useRollbackBuild, createPackageAPI, getPackageDownloadUrl } from "@/lib/api/builds";
@@ -65,6 +65,24 @@ export function VersionDetails(props: VersionDetailsProps) {
   const [rollingBack, setRollingBack] = useState(false);
   const [packaging, setPackaging] = useState(false);
 
+  // Toast 通知
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error">("success");
+  const [toastVisible, setToastVisible] = useState(false);
+
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    setToastMsg(msg);
+    setToastType(type);
+    setToastVisible(true);
+  };
+
+  useEffect(() => {
+    if (toastVisible) {
+      const timer = setTimeout(() => setToastVisible(false), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastVisible]);
+
   // Express 服务器产物列表（真实构建产物）
   const { data: serverArtifacts = [] } = useVersionArtifacts(version?.id || "", latestBuild?.buildNumber);
 
@@ -94,7 +112,7 @@ export function VersionDetails(props: VersionDetailsProps) {
       window.open(getPackageDownloadUrl(latestBuild.id, 'zip'), '_blank');
     } catch (err) {
       console.error('Package failed:', err);
-      alert('打包失败: ' + (err instanceof Error ? err.message : String(err)));
+      showToast('打包失败: ' + (err instanceof Error ? err.message : String(err)), 'error');
     } finally {
       setPackaging(false);
     }
@@ -110,10 +128,10 @@ export function VersionDetails(props: VersionDetailsProps) {
         targetType: 'tag',
         createBranch: true,
       });
-      alert('回退成功');
+      showToast('回退成功', 'success');
     } catch (err) {
       console.error('Rollback failed:', err);
-      alert('回退失败: ' + (err instanceof Error ? err.message : String(err)));
+      showToast('回退失败: ' + (err instanceof Error ? err.message : String(err)), 'error');
     } finally {
       setRollingBack(false);
     }
@@ -517,6 +535,24 @@ export function VersionDetails(props: VersionDetailsProps) {
         presetVersion={version}
         onBuildComplete={onBuildComplete}
       />
+
+      {/* Toast 通知 */}
+      {toastVisible && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm text-white ${
+              toastType === "success" ? "bg-gray-900" : "bg-red-600"
+            }`}
+          >
+            {toastType === "success" ? (
+              <CheckCircle className="w-4 h-4 text-green-400" />
+            ) : (
+              <XCircle className="w-4 h-4 text-white" />
+            )}
+            <span>{toastMsg}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

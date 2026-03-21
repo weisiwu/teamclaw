@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, Suspense } from "react";
+import { useMemo, Suspense, useState, useEffect } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Download } from "lucide-react";
+import { RefreshCw, Download, CheckCircle2, XCircle } from "lucide-react";
 import {
   TokenSummaryCards,
   TokenTrendChart,
@@ -60,11 +60,29 @@ function TokensContent() {
     window.location.reload();
   };
 
+  // Toast 通知
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error">("success");
+  const [toastVisible, setToastVisible] = useState(false);
+
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    setToastMsg(msg);
+    setToastType(type);
+    setToastVisible(true);
+  };
+
+  useEffect(() => {
+    if (toastVisible) {
+      const timer = setTimeout(() => setToastVisible(false), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastVisible]);
+
   // 导出数据
   const handleExport = () => {
     const exportData = dailyData?.data;
     if (!exportData || exportData.length === 0) {
-      alert("暂无数据可导出");
+      showToast("暂无数据可导出", "error");
       return;
     }
     interface DailyRecord {
@@ -191,6 +209,24 @@ function TokensContent() {
         onSearchChange={handleTaskSearchChange}
         onPageChange={handleTaskPageChange}
       />
+
+      {/* Toast 通知 */}
+      {toastVisible && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm text-white ${
+              toastType === "success" ? "bg-gray-900" : "bg-red-600"
+            }`}
+          >
+            {toastType === "success" ? (
+              <CheckCircle2 className="w-4 h-4 text-green-400" />
+            ) : (
+              <XCircle className="w-4 h-4 text-white" />
+            )}
+            <span>{toastMsg}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

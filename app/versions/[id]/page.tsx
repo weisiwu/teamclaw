@@ -6,7 +6,7 @@ import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT, VERSION_STATU
 import { getVersion, bumpVersion, getVersionScreenshots, getVersionChangelog } from "@/lib/api/versions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Tag, Calendar, Clock, GitBranch, FileText, Star, History, Download, RotateCcw, Zap, Settings, Image as ImageIcon } from "lucide-react";
+import { Loader2, ArrowLeft, Tag, Calendar, Clock, GitBranch, FileText, Star, History, Download, RotateCcw, Zap, Settings, Image as ImageIcon, CheckCircle2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { BumpHistoryPanel } from "@/components/versions/BumpHistoryPanel";
 import { ArtifactsPanel } from "@/components/versions/ArtifactsPanel";
@@ -37,6 +37,24 @@ export default function VersionDetailPage() {
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
   const [messageSelectorOpen, setMessageSelectorOpen] = useState(false);
   const [linkingScreenshot, setLinkingScreenshot] = useState(false);
+
+  // Toast 通知
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error">("success");
+  const [toastVisible, setToastVisible] = useState(false);
+
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    setToastMsg(msg);
+    setToastType(type);
+    setToastVisible(true);
+  };
+
+  useEffect(() => {
+    if (toastVisible) {
+      const timer = setTimeout(() => setToastVisible(false), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastVisible]);
 
   useEffect(() => {
     if (!id) return;
@@ -84,7 +102,7 @@ export default function VersionDetailPage() {
       setScreenshots((prev) => [newScreenshot, ...prev]);
     } catch (err) {
       console.error("[VersionDetail] Failed to link screenshot:", err);
-      alert(`关联截图失败: ${err instanceof Error ? err.message : String(err)}`);
+      showToast(`关联截图失败: ${err instanceof Error ? err.message : String(err)}`, 'error');
     } finally {
       setLinkingScreenshot(false);
     }
@@ -523,6 +541,24 @@ export default function VersionDetailPage() {
         onOpenChange={setMessageSelectorOpen}
         onSelect={handleLinkScreenshot}
       />
+
+      {/* Toast 通知 */}
+      {toastVisible && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm text-white ${
+              toastType === "success" ? "bg-gray-900" : "bg-red-600"
+            }`}
+          >
+            {toastType === "success" ? (
+              <CheckCircle2 className="w-4 h-4 text-green-400" />
+            ) : (
+              <XCircle className="w-4 h-4 text-white" />
+            )}
+            <span>{toastMsg}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

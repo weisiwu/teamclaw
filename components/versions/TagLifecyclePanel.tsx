@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TagLifecycleRecord } from "@/lib/api/types";
 import { useAllTags, useArchiveTag, useTagProtection, useDeleteTag, useRenameTag } from "@/lib/api/versions";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,24 @@ export function TagLifecyclePanel({ versionId }: TagLifecyclePanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | "auto" | "manual">("all");
   const [showFilters, setShowFilters] = useState(false);
+
+  // Toast 通知
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error">("success");
+  const [toastVisible, setToastVisible] = useState(false);
+
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    setToastMsg(msg);
+    setToastType(type);
+    setToastVisible(true);
+  };
+
+  useEffect(() => {
+    if (toastVisible) {
+      const timer = setTimeout(() => setToastVisible(false), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastVisible]);
 
   // Filter tags by versionId if provided, plus search + source filter
   let filteredTags = versionId
@@ -54,7 +72,7 @@ export function TagLifecyclePanel({ versionId }: TagLifecyclePanelProps) {
 
   const handleDelete = async (tag: TagLifecycleRecord) => {
     if (tag.protected) {
-      alert("Cannot delete protected tag");
+      showToast("无法删除受保护的标签", "error");
       return;
     }
     await deleteTag.mutateAsync(tag.id);
@@ -126,6 +144,7 @@ export function TagLifecyclePanel({ versionId }: TagLifecyclePanelProps) {
   }
 
   return (
+    <>
     <Card>
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <div className="flex items-center gap-2">
@@ -349,6 +368,25 @@ export function TagLifecyclePanel({ versionId }: TagLifecyclePanelProps) {
         )}
       </CardContent>
     </Card>
+
+    {/* Toast 通知 */}
+    {toastVisible && (
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-2 duration-200">
+        <div
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm text-white ${
+            toastType === "success" ? "bg-gray-900" : "bg-red-600"
+          }`}
+        >
+          {toastType === "success" ? (
+            <Check className="w-4 h-4 text-green-400" />
+          ) : (
+            <X className="w-4 h-4 text-white" />
+          )}
+          <span>{toastMsg}</span>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

@@ -253,6 +253,13 @@ export default function ProjectDetailPage({ params }: Props) {
   const [loadingSub, setLoadingSub] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Toast 通知
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const showToast = (type: 'success' | 'error', msg: string) => {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   const { project } = data || {};
 
   const loadFeatures = async () => {
@@ -292,13 +299,13 @@ export default function ProjectDetailPage({ params }: Props) {
       const res = await fetch(`/api/v1/projects/${id}/refresh`, { method: 'POST' });
       const json = await res.json();
       if (json.code === 0) {
-        alert(`刷新完成！\n新特性: ${json.data.refresh.newFeatures}\n新文档: ${json.data.refresh.newDocs}\n新提交: ${json.data.refresh.newCommits}`);
+        showToast('success', `刷新完成！新特性: ${json.data.refresh.newFeatures}，新文档: ${json.data.refresh.newDocs}，新提交: ${json.data.refresh.newCommits}`);
         window.location.reload();
       } else {
-        alert('刷新失败: ' + json.message);
+        showToast('error', '刷新失败: ' + json.message);
       }
     } catch (e) {
-      alert('刷新失败: ' + (e as Error).message);
+      showToast('error', '刷新失败: ' + (e as Error).message);
     }
     setRefreshing(false);
   };
@@ -569,6 +576,13 @@ export default function ProjectDetailPage({ params }: Props) {
       )}
 
       {activeTab === 'branches' && <BranchesPanel />}
+
+      {/* Toast 通知 */}
+      {toast && (
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 rounded-lg text-sm ${toast.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          {toast.msg}
+        </div>
+      )}
     </div>
   );
 }

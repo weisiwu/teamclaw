@@ -4,7 +4,7 @@ import { GitTag } from "@/lib/api/types";
 import { X, Tag, Copy, Check, Link2, FileText, Plus, Zap, RefreshCw, GitCommit, Files, ArrowUp, ArrowDown, Play, Package, Loader2, CheckCircle2, XCircle, Clock, RotateCcw, Activity, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { VersionMessageScreenshot } from "@/lib/api/types";
 import { useVersionChangeStats } from "@/lib/api/versions";
@@ -90,6 +90,24 @@ export function VersionTagsDetailDrawer({
   const [showBuildHistory, setShowBuildHistory] = useState(false);
   const [showArtifacts, setShowArtifacts] = useState(false);
 
+  // Toast 通知
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error">("success");
+  const [toastVisible, setToastVisible] = useState(false);
+
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    setToastMsg(msg);
+    setToastType(type);
+    setToastVisible(true);
+  };
+
+  useEffect(() => {
+    if (toastVisible) {
+      const timer = setTimeout(() => setToastVisible(false), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastVisible]);
+
   const { data: changeStats, isLoading: statsLoading } = useVersionChangeStats(tag?.name ?? null);
   const { data: latestBuild, isLoading: latestBuildLoading } = useLatestBuild(tag?.name ?? '');
   const { data: buildListData } = useBuilds(tag?.name ?? '', 5);
@@ -111,7 +129,7 @@ export function VersionTagsDetailDrawer({
       onBuildTriggered?.(result.buildId);
     } catch (err) {
       console.error('Failed to trigger build:', err);
-      alert('触发构建失败: ' + (err instanceof Error ? err.message : String(err)));
+      showToast('触发构建失败: ' + (err instanceof Error ? err.message : String(err)), 'error');
     }
   };
 
@@ -670,6 +688,24 @@ export function VersionTagsDetailDrawer({
           </div>
         </div>
       </div>
+
+      {/* Toast 通知 */}
+      {toastVisible && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm text-white ${
+              toastType === "success" ? "bg-gray-900" : "bg-red-600"
+            }`}
+          >
+            {toastType === "success" ? (
+              <CheckCircle2 className="w-4 h-4 text-green-400" />
+            ) : (
+              <XCircle className="w-4 h-4 text-white" />
+            )}
+            <span>{toastMsg}</span>
+          </div>
+        </div>
+      )}
     </>
   );
 }

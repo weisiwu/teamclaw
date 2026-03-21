@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { Webhook, WebhookHistory } from '../../../lib/api/webhooks';
 import { PermissionGuard } from '@/components/layout/PermissionGuard';
+import { CheckCircle2, XCircle } from 'lucide-react';
 
 const EVENT_OPTIONS = [
   'version.created', 'version.deleted', 'version.bumped',
@@ -20,6 +21,24 @@ export default function WebhooksPage() {
   const [testing, setTesting] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, { success: boolean; statusCode?: number; error?: string } | null>>({});
 
+  // Toast 通知
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error">("success");
+  const [toastVisible, setToastVisible] = useState(false);
+
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    setToastMsg(msg);
+    setToastType(type);
+    setToastVisible(true);
+  };
+
+  useEffect(() => {
+    if (toastVisible) {
+      const timer = setTimeout(() => setToastVisible(false), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastVisible]);
+
   // Form state
   const [form, setForm] = useState({ name: '', url: '', secret: '', events: [] as string[] });
 
@@ -35,7 +54,7 @@ export default function WebhooksPage() {
   useEffect(() => { fetchWebhooks(); }, []);
 
   const createWebhook = async () => {
-    if (!form.name || !form.url || form.events.length === 0) { alert('请填写完整'); return; }
+    if (!form.name || !form.url || form.events.length === 0) { showToast('请填写完整', 'error'); return; }
     try {
       const res = await fetch('/api/v1/admin/webhooks', {
         method: 'POST',
@@ -48,7 +67,7 @@ export default function WebhooksPage() {
         setShowForm(false);
         setForm({ name: '', url: '', secret: '', events: [] });
       }
-    } catch { alert('创建失败'); }
+    } catch { showToast('创建失败', 'error'); }
   };
 
   const updateWebhook = async (id: string) => {
@@ -64,7 +83,7 @@ export default function WebhooksPage() {
         setEditingId(null);
         setForm({ name: '', url: '', secret: '', events: [] });
       }
-    } catch { alert('更新失败'); }
+    } catch { showToast('更新失败', 'error'); }
   };
 
   const deleteWebhook = async (id: string) => {
@@ -73,7 +92,7 @@ export default function WebhooksPage() {
       const res = await fetch(`/api/v1/admin/webhooks/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) setWebhooks(prev => prev.filter(w => w.id !== id));
-    } catch { alert('删除失败'); }
+    } catch { showToast('删除失败', 'error'); }
   };
 
   const testWebhook = async (id: string) => {
@@ -254,6 +273,24 @@ export default function WebhooksPage() {
           </div>
         )}
       </div>
+
+      {/* Toast 通知 */}
+      {toastVisible && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm text-white ${
+              toastType === "success" ? "bg-gray-900" : "bg-red-600"
+            }`}
+          >
+            {toastType === "success" ? (
+              <CheckCircle2 className="w-4 h-4 text-green-400" />
+            ) : (
+              <XCircle className="w-4 h-4 text-white" />
+            )}
+            <span>{toastMsg}</span>
+          </div>
+        </div>
+      )}
     </div>
     </PermissionGuard>
   );

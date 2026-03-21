@@ -19,7 +19,9 @@ import {
   Webhook,
   Tag,
   Shield,
-  Layers
+  Layers,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 
 const ACTION_LABELS: Record<string, string> = {
@@ -81,6 +83,24 @@ export default function AuditLogPage() {
   const [offset, setOffset] = useState(0);
   const limit = 30;
 
+  // Toast 通知
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error">("success");
+  const [toastVisible, setToastVisible] = useState(false);
+
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    setToastMsg(msg);
+    setToastType(type);
+    setToastVisible(true);
+  };
+
+  useEffect(() => {
+    if (toastVisible) {
+      const timer = setTimeout(() => setToastVisible(false), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastVisible]);
+
   const fetchLogs = async () => {
     setLoading(true);
     try {
@@ -134,7 +154,7 @@ export default function AuditLogPage() {
       a.download = `audit-logs-${Date.now()}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch { alert('导出失败'); }
+    } catch { showToast('导出失败', 'error'); }
   };
 
   const pageLabel = () => {
@@ -337,6 +357,24 @@ export default function AuditLogPage() {
             >
               下一页
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Toast 通知 */}
+      {toastVisible && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm text-white ${
+              toastType === "success" ? "bg-gray-900" : "bg-red-600"
+            }`}
+          >
+            {toastType === "success" ? (
+              <CheckCircle2 className="w-4 h-4 text-green-400" />
+            ) : (
+              <XCircle className="w-4 h-4 text-white" />
+            )}
+            <span>{toastMsg}</span>
           </div>
         </div>
       )}
