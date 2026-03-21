@@ -510,6 +510,7 @@ export function VersionDetails(props: VersionDetailsProps) {
               versionSummary={version.summary}
               summaryGeneratedAt={version.summaryGeneratedAt}
               summaryGeneratedBy={version.summaryGeneratedBy}
+              changedFiles={version.changedFiles}
             />
           )}
 

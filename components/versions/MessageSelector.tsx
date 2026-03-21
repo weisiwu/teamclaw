@@ -83,7 +83,7 @@ interface MessageSelectorProps {
 
 export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }: MessageSelectorProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedMessage, setSelectedMessage] = useState<MessageItem | null>(null);
+  const [selectedMessages, setSelectedMessages] = useState<MessageItem[]>([]);
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -225,17 +225,25 @@ export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }:
       msg.senderName.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleToggleMessage = (msg: MessageItem) => {
+    setSelectedMessages(prev =>
+      prev.some(m => m.id === msg.id)
+        ? prev.filter(m => m.id !== msg.id)
+        : [...prev, msg]
+    );
+  };
+
   const handleSelect = () => {
-    if (selectedMessage) {
-      onSelect(selectedMessage);
-      setSelectedMessage(null);
+    if (selectedMessages.length > 0) {
+      selectedMessages.forEach(msg => onSelect(msg));
+      setSelectedMessages([]);
       setSearchQuery("");
       onOpenChange(false);
     }
   };
 
   const handleClose = () => {
-    setSelectedMessage(null);
+    setSelectedMessages([]);
     setSearchQuery("");
     setError(null);
     onOpenChange(false);
@@ -321,14 +329,23 @@ export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }:
               {filteredMessages.map((msg) => (
                 <div
                   key={msg.id}
-                  className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                    selectedMessage?.id === msg.id
+                  className={`p-3 rounded-lg border cursor-pointer transition-colors flex items-start gap-2 ${
+                    selectedMessages.some(m => m.id === msg.id)
                       ? "border-primary bg-primary/5"
                       : "border-border hover:bg-muted/50"
                   }`}
-                  onClick={() => setSelectedMessage(msg)}
+                  onClick={() => handleToggleMessage(msg)}
                 >
-                  <div className="flex items-start gap-3">
+                  {/* Checkbox */}
+                  <input
+                    type="checkbox"
+                    className="mt-1 w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary flex-shrink-0"
+                    checked={selectedMessages.some(m => m.id === msg.id)}
+                    onChange={() => handleToggleMessage(msg)}
+                    onClick={e => e.stopPropagation()}
+                  />
+
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
                     <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                       {msg.senderAvatar ? (
                         <Image
@@ -400,8 +417,8 @@ export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }:
           <Button variant="outline" onClick={handleClose}>
             取消
           </Button>
-          <Button onClick={handleSelect} disabled={!selectedMessage}>
-            确认选择
+          <Button onClick={handleSelect} disabled={selectedMessages.length === 0}>
+            {selectedMessages.length > 0 ? `批量关联（${selectedMessages.length}条）` : '确认选择'}
           </Button>
         </DialogFooter>
       </DialogContent>

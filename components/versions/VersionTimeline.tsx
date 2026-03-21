@@ -389,6 +389,22 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
 
                     <p className="text-sm text-muted-foreground">{event.description}</p>
 
+                    {/* 截图事件：显示消息内容摘要（前50字） */}
+                    {event.type === "screenshot" && event.data && "messageContent" in event.data && (
+                      <p className="text-xs text-gray-400 mt-1 truncate">
+                        💬 {(event.data as VersionMessageScreenshot).messageContent?.slice(0, 50)}
+                        {(event.data as VersionMessageScreenshot).messageContent?.length > 50 ? "…" : ""}
+                      </p>
+                    )}
+
+                    {/* 摘要生成事件：显示摘要内容预览（前100字） */}
+                    {event.type === "changelog" && event.data && "content" in event.data && (
+                      <p className="text-xs text-gray-400 mt-1 line-clamp-2">
+                        📝 {(event.data as VersionChangelog).content?.slice(0, 100)}
+                        {(event.data as VersionChangelog).content?.length > 100 ? "…" : ""}
+                      </p>
+                    )}
+
                     {/* 展开详情 */}
                     {event.data && (
                       <Button
