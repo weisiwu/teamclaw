@@ -45,7 +45,7 @@ export function TokenDailyTable({ data, isLoading }: TokenDailyTableProps) {
             endDate: date,
           });
           setTaskCache((prev) => ({ ...prev, [date]: result.data }));
-        } catch (_e) {
+        } catch {
           setTaskCache((prev) => ({ ...prev, [date]: [] }));
         } finally {
           setLoadingTasks((prev) => {
@@ -197,19 +197,31 @@ export function TokenDailyTable({ data, isLoading }: TokenDailyTableProps) {
                       <p className="text-sm text-gray-400 text-center py-2">暂无任务数据</p>
                     ) : (
                       <div className="space-y-1.5">
-                        {tasks.map((task) => (
-                          <div
-                            key={task.taskId}
-                            className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50 transition-colors"
-                          >
-                            <span className="text-sm text-gray-700 truncate flex-1 mr-4">
-                              {task.taskTitle}
-                            </span>
-                            <span className="text-sm font-medium text-gray-600 shrink-0">
-                              {formatNumber(task.tokens)}
-                            </span>
-                          </div>
-                        ))}
+                        {/* 表头 */}
+                        <div className="flex items-center justify-between py-1 px-2 text-xs font-medium text-gray-400 border-b border-gray-100">
+                          <span className="flex-1">任务名称</span>
+                          <span className="w-20 text-right mr-4">Token 用量</span>
+                          <span className="w-16 text-right">占比</span>
+                        </div>
+                        {tasks.map((task) => {
+                          const pct = item.tokens > 0 ? (task.tokens / item.tokens) * 100 : 0;
+                          return (
+                            <div
+                              key={task.taskId}
+                              className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50 transition-colors group"
+                            >
+                              <span className="text-sm text-gray-700 truncate flex-1 mr-4">
+                                {task.taskTitle || task.taskId}
+                              </span>
+                              <span className="text-sm font-medium text-gray-600 shrink-0 w-20 text-right mr-4">
+                                {formatNumber(task.tokens)}
+                              </span>
+                              <span className="text-sm text-gray-400 shrink-0 w-16 text-right font-mono">
+                                {pct.toFixed(1)}%
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

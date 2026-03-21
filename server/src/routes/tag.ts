@@ -23,6 +23,8 @@ import {
   renameTag,
   removeTag,
 } from '../services/tagService.js';
+import { ScreenshotModel } from '../models/screenshot.js';
+import { getDb } from '../db/sqlite.js';
 
 const router = Router();
 
@@ -51,16 +53,39 @@ router.get('/', (req: Request, res: Response) => {
     sourceMap.set(t.name, t.source);
   }
 
-  // Merge: git tags + protected from DB
-  const mergedTags = gitTags.map(t => ({
-    name: t.name,
-    commit: t.commit,
-    date: t.date,
-    annotation: t.message,
-    hasRecord: protectedMap.has(t.name),
-    protected: protectedMap.get(t.name) || false,
-    source: sourceMap.get(t.name) || 'manual' as 'auto' | 'manual',
-  }));
+  // Build screenshot and changelog indexes by versionId (iter69-change-tracking)
+  const screenshotIndex = new Set<string>();
+  for (const shot of ScreenshotModel.getAllScreenshots()) {
+    screenshotIndex.add(shot.versionId);
+  }
+  const db = getDb();
+  const summaryRows = db.prepare('SELECT version_id FROM version_summaries').all() as Array<{ version_id: string }>;
+  const summaryIndex = new Set<string>();
+  for (const row of summaryRows) {
+    summaryIndex.add(row.version_id);
+  }
+
+  // Build versionId map: tagName -> versionId from DB records
+  const tagVersionIdMap = new Map<string, string>();
+  for (const t of dbTags) {
+    tagVersionIdMap.set(t.name, t.versionId);
+  }
+
+  // Merge: git tags + protected from DB + screenshot/changelog status (iter69-change-tracking)
+  const mergedTags = gitTags.map(t => {
+    const versionId = tagVersionIdMap.get(t.name);
+    return {
+      name: t.name,
+      commit: t.commit,
+      date: t.date,
+      annotation: t.message,
+      hasRecord: protectedMap.has(t.name),
+      protected: protectedMap.get(t.name) || false,
+      source: sourceMap.get(t.name) || 'manual' as 'auto' | 'manual',
+      hasScreenshot: versionId ? screenshotIndex.has(versionId) : false,
+      hasChangelog: versionId ? summaryIndex.has(versionId) : false,
+    };
+  });
 
   // Apply filters
   let tags = mergedTags;
@@ -72,6 +97,18 @@ router.get('/', (req: Request, res: Response) => {
 
   if (source !== undefined && source !== 'all') {
     tags = tags.filter(t => t.source === source);
+  }
+
+  // Filter by hasScreenshot / hasChangelog (iter69-change-tracking)
+  if (req.query.hasScreenshot === 'true') {
+    tags = tags.filter(t => t.hasScreenshot === true);
+  } else if (req.query.hasScreenshot === 'false') {
+    tags = tags.filter(t => t.hasScreenshot === false);
+  }
+  if (req.query.hasChangelog === 'true') {
+    tags = tags.filter(t => t.hasChangelog === true);
+  } else if (req.query.hasChangelog === 'false') {
+    tags = tags.filter(t => t.hasChangelog === false);
   }
 
   const total = tags.length;
