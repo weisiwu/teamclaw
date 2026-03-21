@@ -24,6 +24,8 @@ interface ChangelogPanelProps {
   onSummarySaved?: (savedAt: string) => void;
   /** 本次变更的文件列表，用于生成前预览 */
   changedFiles?: string[];
+  /** AI 生成当前步骤描述 */
+  progressStep?: string;
 }
 
 const changeTypeLabels: Record<ChangelogChange["type"], { label: string; variant: "default" | "success" | "warning" | "error" | "info" }> = {
@@ -36,7 +38,7 @@ const changeTypeLabels: Record<ChangelogChange["type"], { label: string; variant
   other: { label: "其他", variant: "default" },
 };
 
-export function ChangelogPanel({ changelog, onGenerate, loading, generating, progress, onCancel, versionSummary, summaryGeneratedAt, summaryGeneratedBy, versionId, onSummarySaved, changedFiles }: ChangelogPanelProps) {
+export function ChangelogPanel({ changelog, onGenerate, loading, generating, progress, onCancel, versionSummary, summaryGeneratedAt, summaryGeneratedBy, versionId, onSummarySaved, changedFiles, progressStep }: ChangelogPanelProps) {
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState(false);
@@ -144,7 +146,7 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, pro
         {generating && progress !== undefined && (
           <div className="space-y-1">
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>AI 正在分析变更...</span>
+              <span>{progressStep || "AI 正在分析变更..."}</span>
               <span>{progress}%</span>
             </div>
             <div className="h-1.5 bg-muted rounded-full overflow-hidden">
@@ -203,7 +205,7 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, pro
         {generating && progress !== undefined && (
           <div className="space-y-1">
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>AI 正在分析变更...</span>
+              <span>{progressStep || "AI 正在分析变更..."}</span>
               <span>{progress}%</span>
             </div>
             <div className="h-1.5 bg-muted rounded-full overflow-hidden">
@@ -297,7 +299,7 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, pro
         {generating && progress !== undefined && (
           <div className="space-y-1">
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>AI 正在分析变更...</span>
+              <span>{progressStep || "AI 正在分析变更..."}</span>
               <span>{progress}%</span>
             </div>
             <div className="h-1.5 bg-muted rounded-full overflow-hidden">

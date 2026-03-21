@@ -397,15 +397,25 @@ export function ArtifactsPanel({ versionId, versionName }: ArtifactsPanelProps) 
               >
                 {getFileIcon(artifact.name)}
                 <div className="flex-1 min-w-0">
-                  <button
-                    className="text-sm font-medium text-gray-800 truncate hover:text-blue-600 cursor-pointer text-left w-full"
-                    title={artifact.name}
-                    onClick={() => handlePreview(artifact)}
-                  >
-                    {artifact.name}
-                  </button>
-                  <div className="text-xs text-gray-400 truncate" title={artifact.path}>
-                    {artifact.path}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <button
+                      className="text-sm font-medium text-gray-800 truncate hover:text-blue-600 cursor-pointer text-left min-w-0"
+                      title={artifact.name}
+                      onClick={() => handlePreview(artifact)}
+                    >
+                      {artifact.name}
+                    </button>
+                    {artifact.type && (
+                      <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded border border-gray-200 shrink-0 font-mono">
+                        {artifact.type}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-gray-400 truncate" title={artifact.path}>
+                    <span className="truncate">{artifact.path}</span>
+                    {artifact.modifiedAt && (
+                      <span className="shrink-0">更新于 {new Date(artifact.modifiedAt).toLocaleDateString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">

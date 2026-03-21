@@ -32,6 +32,7 @@ export function TagLifecyclePanel({ versionId }: TagLifecyclePanelProps) {
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | "auto" | "manual">("all");
+  const [archivedFilter, setArchivedFilter] = useState<"all" | "active" | "archived">("active");
   const [showFilters, setShowFilters] = useState(false);
 
   // Toast 通知
@@ -65,6 +66,13 @@ export function TagLifecyclePanel({ versionId }: TagLifecyclePanelProps) {
       t.annotation?.toLowerCase().includes(q) ||
       t.version?.toLowerCase().includes(q)
     );
+  }
+
+  // Archive filter
+  if (archivedFilter === "active") {
+    filteredTags = filteredTags.filter(t => !t.archived);
+  } else if (archivedFilter === "archived") {
+    filteredTags = filteredTags.filter(t => t.archived);
   }
 
   const handleArchive = async (tag: TagLifecycleRecord) => {
@@ -255,6 +263,19 @@ export function TagLifecyclePanel({ versionId }: TagLifecyclePanelProps) {
                   onClick={() => setSourceFilter(s)}
                 >
                   {s === "all" ? "全部" : s === "auto" ? "自动" : "手动"}
+                </Button>
+              ))}
+            </div>
+            <div className="flex gap-1">
+              {(["active", "archived", "all"] as const).map((s) => (
+                <Button
+                  key={s}
+                  variant={archivedFilter === s ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 text-xs px-2"
+                  onClick={() => setArchivedFilter(s)}
+                >
+                  {s === "active" ? "有效" : s === "archived" ? "已归档" : "全部"}
                 </Button>
               ))}
             </div>
