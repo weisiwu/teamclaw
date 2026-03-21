@@ -103,8 +103,10 @@ export function VersionChangeLogPanel({
       };
       await linkScreenshot(versionId, req);
       await loadScreenshots();
+      setMessageSelectorOpen(false);
     } catch (e) {
       console.error("Failed to link screenshot:", e);
+      alert("关联截图失败，请重试");
     } finally {
       setLinkLoading(false);
     }
@@ -116,6 +118,7 @@ export function VersionChangeLogPanel({
       await loadScreenshots();
     } catch (e) {
       console.error("Failed to unlink screenshot:", e);
+      alert("解除关联失败，请重试");
     }
   };
 

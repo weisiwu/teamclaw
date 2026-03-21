@@ -9,6 +9,7 @@ export function success<T>(data: T, message = 'ok'): ApiResponse<T> {
 }
 
 export function error(code: number, message: string): ApiResponse<null>;
+export function error(code: number): ApiResponse<null>;
 export function error(message: string): ApiResponse<null>;
 export function error(codeOrMessage: number | string, message?: string): ApiResponse<null> {
   if (typeof codeOrMessage === 'string') {

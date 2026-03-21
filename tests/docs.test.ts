@@ -11,9 +11,6 @@ vi.mock('path', () => ({
   join: vi.fn((...args: string[]) => args.join('/')),
 }));
 
-const mockFs = await import('fs');
-const mockPath = await import('path');
-
 describe('docs.ts - extractFrontmatter', () => {
   // We need to test the logic directly without importing the module
   // since it uses process.cwd() and fs at module level

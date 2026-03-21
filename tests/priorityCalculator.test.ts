@@ -21,7 +21,6 @@ describe('calculatePriority', () => {
   });
 
   it('defaults employee weight for unknown role', () => {
-    // @ts-expect-error - testing runtime behavior
     expect(calculatePriority('unknown' as any, 1)).toBe(3);
   });
 });
