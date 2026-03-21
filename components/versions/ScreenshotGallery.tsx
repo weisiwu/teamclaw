@@ -22,6 +22,7 @@ export function ScreenshotGallery({ screenshots, onUnlink, onLink, loading }: Sc
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
   const [lightboxImageLoading, setLightboxImageLoading] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   const handleImageError = (id: string) => {
     setImageErrors(prev => new Set(prev).add(id));
@@ -184,7 +185,7 @@ export function ScreenshotGallery({ screenshots, onUnlink, onLink, loading }: Sc
                     size="sm"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onUnlink(screenshot.id);
+                      setPendingDeleteId(screenshot.id);
                     }}
                   >
                     <Trash2 className="h-4 w-4 mr-1" />
@@ -307,6 +308,31 @@ export function ScreenshotGallery({ screenshots, onUnlink, onLink, loading }: Sc
                 <span>Esc 关闭</span>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 删除确认对话框 */}
+      <Dialog open={!!pendingDeleteId} onOpenChange={() => setPendingDeleteId(null)}>
+        <DialogContent title="确认删除截图">
+          <p className="text-sm text-muted-foreground">
+            确定要解除关联此截图吗？此操作不会删除消息记录。
+          </p>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setPendingDeleteId(null)}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (pendingDeleteId && onUnlink) {
+                  onUnlink(pendingDeleteId);
+                }
+                setPendingDeleteId(null);
+              }}
+            >
+              确认删除
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
