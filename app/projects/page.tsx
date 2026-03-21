@@ -2,8 +2,10 @@
 
 import Link from 'next/link';
 import { useState, useRef, useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Package } from 'lucide-react';
 import { useProjects, useDeleteProject } from '../../hooks/useProjects';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ProjectsSkeleton } from '@/components/ui/projects-skeleton';
 
 export default function ProjectsPage() {
   const { data, isLoading, error, refetch } = useProjects();
@@ -52,12 +54,7 @@ export default function ProjectsPage() {
         </Link>
       </div>
 
-      {isLoading && (
-        <div className="page-loading">
-          <Loader2 className="w-5 h-5 animate-spin" />
-          <span>加载中...</span>
-        </div>
-      )}
+      {isLoading && <ProjectsSkeleton />}
 
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-400 text-sm flex items-center justify-between gap-3">
@@ -75,19 +72,19 @@ export default function ProjectsPage() {
       )}
 
       {data && data.projects.length === 0 && (
-        <div className="page-section">
-          <div className="page-empty">
-            <div className="page-empty-icon">📦</div>
-            <h3 className="page-empty-title">暂无项目</h3>
-            <p className="page-empty-desc">导入第一个项目开始使用</p>
+        <EmptyState
+          icon={Package}
+          title="暂无项目"
+          description="导入第一个项目开始使用"
+          action={
             <Link
               href="/import"
               className="px-4 py-2 bg-primary text-primary-foreground text-sm rounded-lg hover:opacity-90 transition-opacity"
             >
               立即导入
             </Link>
-          </div>
-        </div>
+          }
+        />
       )}
 
       {data && data.projects.length > 0 && (

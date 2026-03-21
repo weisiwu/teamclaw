@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, RefreshCw, AlertCircle } from 'lucide-react';
+import { Loader2, RefreshCw, AlertCircle, Activity } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 
 interface ServiceStatus {
   status: string;
@@ -94,24 +95,20 @@ export default function MonitorPage() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Card className="w-full max-w-md">
-          <CardContent className="flex flex-col items-center py-12 gap-3">
-            <div className="p-3 rounded-full bg-red-50 dark:bg-red-900/20">
-              <AlertCircle className="w-8 h-8 text-red-500" />
-            </div>
-            <p className="text-base font-medium text-gray-900 dark:text-white">加载失败</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs">{error}</p>
-            <Button
-              variant="outline"
-              onClick={fetchHealth}
-              className="mt-2 gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              重试
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 p-8">
+        <div className="max-w-4xl mx-auto">
+          <EmptyState
+            icon={AlertCircle}
+            title="加载失败"
+            description={error}
+            action={
+              <Button variant="outline" onClick={fetchHealth} className="gap-2">
+                <RefreshCw className="w-4 h-4" />
+                重试
+              </Button>
+            }
+          />
+        </div>
       </div>
     );
   }

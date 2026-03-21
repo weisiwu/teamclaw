@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { LegacySelect as Select } from "@/components/ui/select";
 import { MemberForm } from "@/components/members";
 import { EmptyState } from "@/components/ui/empty-state";
+import { MembersSkeleton } from "@/components/ui/projects-skeleton";
 import { useMemberList, useCreateMember, useUpdateMember, useDeleteMember, useBatchDeleteMembers } from "@/hooks/useMembers";
 import { usePermission } from "@/hooks/usePermission";
 import { Member, ROLE_LABELS, MEMBER_ROLE_OPTIONS, MemberRole, MemberStatus, CreateMemberRequest, UpdateMemberRequest } from "@/lib/api/types";
@@ -340,10 +341,7 @@ export default function MembersPage() {
 
       <div className="bg-white dark:bg-slate-800 rounded-xl border dark:border-slate-700 overflow-hidden">
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-            <span className="ml-2 text-gray-500 dark:text-gray-400">加载中...</span>
-          </div>
+          <MembersSkeleton />
         ) : filteredMembers.length === 0 ? (
           <div className="py-6">
             <EmptyState
