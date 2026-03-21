@@ -90,6 +90,13 @@ const PRIORITY_LABEL_MAP: Record<string, string> = {
 };
 
 const getPriorityText = (value: string | number) => PRIORITY_OPTIONS.find(o => o.value === String(value))?.text ?? String(value);
+const getPriorityColor = (value: string | number): string => {
+  const num = Number(value);
+  if (num >= 9) return "border-l-4 border-red-500";
+  if (num >= 7) return "border-l-4 border-orange-400";
+  if (num >= 5) return "border-l-4 border-blue-400";
+  return "border-l-4 border-gray-300 dark:border-gray-600";
+};
 
 // 状态图标组件
 const getStatusIcon = (status: TaskStatus) => {
@@ -206,7 +213,7 @@ function TaskCard({
   onStatusChange: (id: string, status: TaskStatus) => void;
 }) {
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className={`hover:shadow-md transition-shadow ${getPriorityColor(task.priority)}`}>
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3">
@@ -910,7 +917,7 @@ function TasksContent() {
                       </div>
                       
                       {/* 时间线内容 */}
-                      <Card className="flex-1">
+                      <Card className={`flex-1 ${getPriorityColor(task.priority)}`}>
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between">
                             <div>

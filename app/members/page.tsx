@@ -412,8 +412,8 @@ export default function MembersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y dark:divide-slate-700">
-                {filteredMembers.map((member) => (
-                  <tr key={member.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                {filteredMembers.map((member, idx) => (
+                  <tr key={member.id} className={`hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60 dark:bg-slate-800/20' : ''}`}>
                     <td className="px-4 py-3">
                       <input
                         type="checkbox"
