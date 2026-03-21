@@ -1,47 +1,70 @@
 /**
  * Audit Service
  * 后台管理平台 - 审计日志服务
+ * 支持 SQLite DB 写入（audit_log 表）+ JSON 文件回退
  */
+import { getDb } from '../db/sqlite.js';
 import * as fs from 'fs';
 import * as path from 'path';
 const DATA_FILE = path.join(process.cwd(), 'data', 'auditLogs.json');
 function generateId(prefix) {
     return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
-function loadStore() {
+/**
+ * DB-backed audit log
+ * Falls back to JSON file if DB write fails
+ */
+function writeToDb(entry) {
     try {
-        if (fs.existsSync(DATA_FILE)) {
-            const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-            return JSON.parse(raw);
-        }
+        const db = getDb();
+        db.prepare(`
+      INSERT INTO audit_log (id, action, user_id, target, details, ip_address, user_agent, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(entry.id, entry.action, entry.actor, entry.target || null, entry.details ? JSON.stringify(entry.details) : null, entry.ipAddress || null, entry.userAgent || null, entry.timestamp);
+        // Prune: keep only last 10000 rows in DB
+        db.prepare(`
+      DELETE FROM audit_log WHERE id NOT IN (
+        SELECT id FROM audit_log ORDER BY created_at DESC LIMIT 10000
+      )
+    `).run();
     }
     catch {
-        // ignore
+        // Fallback: also write to JSON file for redundancy
+        writeToJsonFile(entry);
     }
-    return { logs: [] };
 }
-function saveStore(store) {
-    const dir = path.dirname(DATA_FILE);
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+/**
+ * JSON file fallback for audit logs
+ */
+function writeToJsonFile(entry) {
+    try {
+        const dir = path.dirname(DATA_FILE);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        let store = { logs: [] };
+        try {
+            if (fs.existsSync(DATA_FILE)) {
+                store = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
+            }
+        }
+        catch {
+            // ignore parse errors
+        }
+        store.logs.push(entry);
+        // Keep last 10000
+        const trimmed = store.logs.slice(-10000);
+        fs.writeFileSync(DATA_FILE, JSON.stringify({ logs: trimmed }, null, 2), 'utf-8');
     }
-    // 只保留最近 10000 条
-    const logs = store.logs.slice(-10000);
-    fs.writeFileSync(DATA_FILE, JSON.stringify({ logs }, null, 2), 'utf-8');
-}
-let storeCache = null;
-function getStore() {
-    if (!storeCache) {
-        storeCache = loadStore();
+    catch {
+        // silently ignore
     }
-    return storeCache;
 }
 export class AuditService {
     /**
-     * 记录审计日志
+     * 记录审计日志（写入 DB + JSON 回退）
      */
     async log(params) {
-        const store = getStore();
         const entry = {
             id: generateId('audit'),
             action: params.action,
@@ -52,45 +75,96 @@ export class AuditService {
             userAgent: params.userAgent,
             timestamp: new Date().toISOString(),
         };
-        store.logs.push(entry);
-        saveStore(store);
+        writeToDb(entry);
         return entry;
     }
     /**
-     * 查询审计日志
+     * 查询审计日志（优先从 DB 读取，fallback 到 JSON）
      */
     async query(query) {
-        const store = getStore();
-        let filtered = store.logs;
-        if (query.action) {
-            filtered = filtered.filter(l => l.action === query.action);
+        try {
+            const db = getDb();
+            const conditions = [];
+            const params = [];
+            if (query.action) {
+                conditions.push('action = ?');
+                params.push(query.action);
+            }
+            if (query.actor) {
+                conditions.push('user_id = ?');
+                params.push(query.actor);
+            }
+            if (query.target) {
+                conditions.push('target = ?');
+                params.push(query.target);
+            }
+            if (query.startDate) {
+                conditions.push('created_at >= ?');
+                params.push(query.startDate);
+            }
+            if (query.endDate) {
+                conditions.push('created_at <= ?');
+                params.push(query.endDate);
+            }
+            const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+            // Count total
+            const countRow = db.prepare(`SELECT COUNT(*) as total FROM audit_log ${where}`).get(...params);
+            // Query with pagination
+            const limit = query.limit || 50;
+            const offset = query.offset || 0;
+            const rows = db.prepare(`
+        SELECT id, action, user_id as actor, target, details, ip_address as ipAddress, user_agent as userAgent, created_at as timestamp
+        FROM audit_log ${where}
+        ORDER BY created_at DESC
+        LIMIT ? OFFSET ?
+      `).all(...params, limit, offset);
+            const list = rows.map(row => ({
+                id: row.id,
+                action: row.action,
+                actor: row.actor,
+                target: row.target,
+                details: row.details ? JSON.parse(row.details) : undefined,
+                ipAddress: row.ipAddress,
+                userAgent: row.userAgent,
+                timestamp: row.timestamp,
+            }));
+            return { list, total: countRow.total };
         }
-        if (query.actor) {
-            filtered = filtered.filter(l => l.actor === query.actor);
+        catch {
+            // Fallback to JSON file query
+            let store = { logs: [] };
+            try {
+                if (fs.existsSync(DATA_FILE)) {
+                    store = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
+                }
+            }
+            catch {
+                // ignore
+            }
+            let filtered = store.logs;
+            if (query.action)
+                filtered = filtered.filter(l => l.action === query.action);
+            if (query.actor)
+                filtered = filtered.filter(l => l.actor === query.actor);
+            if (query.target)
+                filtered = filtered.filter(l => l.target === query.target);
+            if (query.startDate)
+                filtered = filtered.filter(l => l.timestamp >= query.startDate);
+            if (query.endDate)
+                filtered = filtered.filter(l => l.timestamp <= query.endDate);
+            if (query.keyword) {
+                const kw = query.keyword.toLowerCase();
+                filtered = filtered.filter(l => l.action.toLowerCase().includes(kw) ||
+                    l.actor.toLowerCase().includes(kw) ||
+                    (l.target && l.target.toLowerCase().includes(kw)) ||
+                    (l.details && JSON.stringify(l.details).toLowerCase().includes(kw)));
+            }
+            filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+            const total = filtered.length;
+            const limit = query.limit || 50;
+            const offset = query.offset || 0;
+            return { list: filtered.slice(offset, offset + limit), total };
         }
-        if (query.target) {
-            filtered = filtered.filter(l => l.target === query.target);
-        }
-        if (query.startDate) {
-            filtered = filtered.filter(l => l.timestamp >= query.startDate);
-        }
-        if (query.endDate) {
-            filtered = filtered.filter(l => l.timestamp <= query.endDate);
-        }
-        if (query.keyword) {
-            const kw = query.keyword.toLowerCase();
-            filtered = filtered.filter(l => l.action.toLowerCase().includes(kw) ||
-                l.actor.toLowerCase().includes(kw) ||
-                (l.target && l.target.toLowerCase().includes(kw)) ||
-                (l.details && JSON.stringify(l.details).toLowerCase().includes(kw)));
-        }
-        // 按时间倒序
-        filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        const total = filtered.length;
-        const limit = query.limit || 50;
-        const offset = query.offset || 0;
-        const list = filtered.slice(offset, offset + limit);
-        return { list, total };
     }
     /**
      * 导出 CSV

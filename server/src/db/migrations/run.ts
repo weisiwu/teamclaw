@@ -120,6 +120,13 @@ export function runMigrations() {
     // Column may already exist in newer dbs, ignore
   }
 
+  // Add project_id column to versions (iter-19)
+  try {
+    db.prepare("ALTER TABLE versions ADD COLUMN project_id TEXT").run();
+  } catch (e: unknown) {
+    // Column may already exist, ignore
+  }
+
   // Add rollback tracking fields to versions (iter75-version-rollback)
   try {
     db.prepare("ALTER TABLE versions ADD COLUMN rollback_count INTEGER DEFAULT 0").run();

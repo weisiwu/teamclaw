@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { useParams } from "next/navigation";
 import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT, VERSION_STATUS_LABELS, VERSION_STATUS_BADGE_VARIANT } from "@/lib/api/types";
 import { getVersion, bumpVersion, getVersionScreenshots, getVersionChangelog } from "@/lib/api/versions";
@@ -8,18 +8,31 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, ArrowLeft, Tag, Calendar, Clock, GitBranch, FileText, Star, History, Download, RotateCcw, Zap, Settings, Image as ImageIcon, CheckCircle2, XCircle } from "lucide-react";
 import Link from "next/link";
-import { BumpHistoryPanel } from "@/components/versions/BumpHistoryPanel";
-import { ArtifactsPanel } from "@/components/versions/ArtifactsPanel";
 import { RollbackDialog } from "@/components/versions/RollbackDialog";
-import { RollbackHistoryPanel } from "@/components/versions/RollbackHistoryPanel";
 import { UpgradeConfigDialog } from "@/components/versions/UpgradeConfigDialog";
-import { VersionChangeLogPanel } from "@/components/versions/VersionChangeLogPanel";
-import { VersionSummaryPanel } from "@/components/versions/VersionSummaryPanel";
-import { VersionGitTagPanel } from "@/components/versions/VersionGitTagPanel";
-import { VersionTimeline } from "@/components/versions/VersionTimeline";
-import { ScreenshotGallery } from "@/components/versions/ScreenshotGallery";
 import { MessageSelector, MessageItem } from "@/components/versions/MessageSelector";
 import { linkScreenshot } from "@/lib/api/versions";
+
+// Lazy-load panel components for code-splitting (reduces initial bundle size)
+const BumpHistoryPanel = lazy(() => import("@/components/versions/BumpHistoryPanel").then(m => ({ default: m.BumpHistoryPanel })));
+const ArtifactsPanel = lazy(() => import("@/components/versions/ArtifactsPanel").then(m => ({ default: m.ArtifactsPanel })));
+const RollbackHistoryPanel = lazy(() => import("@/components/versions/RollbackHistoryPanel").then(m => ({ default: m.RollbackHistoryPanel })));
+const VersionChangeLogPanel = lazy(() => import("@/components/versions/VersionChangeLogPanel").then(m => ({ default: m.VersionChangeLogPanel })));
+const VersionSummaryPanel = lazy(() => import("@/components/versions/VersionSummaryPanel").then(m => ({ default: m.VersionSummaryPanel })));
+const VersionGitTagPanel = lazy(() => import("@/components/versions/VersionGitTagPanel").then(m => ({ default: m.VersionGitTagPanel })));
+const VersionTimeline = lazy(() => import("@/components/versions/VersionTimeline").then(m => ({ default: m.VersionTimeline })));
+const ScreenshotGallery = lazy(() => import("@/components/versions/ScreenshotGallery").then(m => ({ default: m.ScreenshotGallery })));
+
+// Skeleton fallback for lazy-loaded panels
+function PanelSkeleton({ lines = 3 }: { lines?: number }) {
+  return (
+    <div className="space-y-3 animate-pulse">
+      {Array.from({ length: lines }).map((_, i) => (
+        <div key={i} className="h-4 bg-gray-200 rounded w-3/4" />
+      ))}
+    </div>
+  );
+}
 
 export default function VersionDetailPage() {
   const params = useParams();
@@ -291,11 +304,15 @@ export default function VersionDetailPage() {
             <Download className="w-4 h-4" />
             构建产物下载
           </h2>
-          <ArtifactsPanel versionId={id} versionName={version.version} />
+          <Suspense fallback={<PanelSkeleton lines={4} />}>
+            <ArtifactsPanel versionId={id} versionName={version.version} />
+          </Suspense>
         </div>
       ) : activeTab === "bumpHistory" ? (
         <div>
-          <BumpHistoryPanel versionId={id} />
+          <Suspense fallback={<PanelSkeleton lines={3} />}>
+            <BumpHistoryPanel versionId={id} />
+          </Suspense>
         </div>
       ) : activeTab === "rollback" ? (
         <div className="space-y-4">
@@ -323,7 +340,9 @@ export default function VersionDetailPage() {
 
           {/* Rollback history */}
           <div className="bg-white rounded-xl border p-5">
-            <RollbackHistoryPanel versionId={id} />
+            <Suspense fallback={<PanelSkeleton lines={4} />}>
+              <RollbackHistoryPanel versionId={id} />
+            </Suspense>
           </div>
         </div>
       ) : activeTab === "changelog" ? (
@@ -332,10 +351,12 @@ export default function VersionDetailPage() {
             <FileText className="w-4 h-4" />
             变更记录
           </h2>
-          <VersionChangeLogPanel
-            versionId={id}
-            versionCreatedAt={version.createdAt}
-          />
+          <Suspense fallback={<PanelSkeleton lines={5} />}>
+            <VersionChangeLogPanel
+              versionId={id}
+              versionCreatedAt={version.createdAt}
+            />
+          </Suspense>
         </div>
       ) : activeTab === "versionSummary" ? (
         <div className="bg-white rounded-xl border p-5">
@@ -343,14 +364,18 @@ export default function VersionDetailPage() {
             <FileText className="w-4 h-4" />
             版本摘要
           </h2>
-          <VersionSummaryPanel
-            versionId={id}
-            versionName={version.version}
-          />
+          <Suspense fallback={<PanelSkeleton lines={4} />}>
+            <VersionSummaryPanel
+              versionId={id}
+              versionName={version.version}
+            />
+          </Suspense>
         </div>
       ) : activeTab === "gitTag" ? (
         <div className="bg-white rounded-xl border p-5">
-          <VersionGitTagPanel version={version} onRefresh={setVersion} />
+          <Suspense fallback={<PanelSkeleton lines={3} />}>
+            <VersionGitTagPanel version={version} onRefresh={setVersion} />
+          </Suspense>
         </div>
       ) : activeTab === "timeline" ? (
         <div className="bg-white rounded-xl border p-5">
@@ -358,27 +383,31 @@ export default function VersionDetailPage() {
             <Clock className="w-4 h-4" />
             变更时间线
           </h2>
-          <VersionTimeline
-            screenshots={screenshots}
-            changelog={changelog}
-            versionInfo={{
-              version: version.version,
-              createdAt: version.createdAt,
-              createdBy: version.summaryGeneratedBy || "system",
-            }}
-            isOpen={true}
-            onClose={() => setActiveTab("details")}
-            versionId={id}
-          />
+          <Suspense fallback={<PanelSkeleton lines={5} />}>
+            <VersionTimeline
+              screenshots={screenshots}
+              changelog={changelog}
+              versionInfo={{
+                version: version.version,
+                createdAt: version.createdAt,
+                createdBy: version.summaryGeneratedBy || "system",
+              }}
+              isOpen={true}
+              onClose={() => setActiveTab("details")}
+              versionId={id}
+            />
+          </Suspense>
         </div>
       ) : activeTab === "screenshots" ? (
         <div className="bg-white rounded-xl border p-5">
-          <ScreenshotGallery
-            screenshots={screenshots}
-            onLink={() => setMessageSelectorOpen(true)}
-            onUnlink={handleUnlinkScreenshot}
-            loading={linkingScreenshot}
-          />
+          <Suspense fallback={<PanelSkeleton lines={4} />}>
+            <ScreenshotGallery
+              screenshots={screenshots}
+              onLink={() => setMessageSelectorOpen(true)}
+              onUnlink={handleUnlinkScreenshot}
+              loading={linkingScreenshot}
+            />
+          </Suspense>
         </div>
       ) : (
         <div className="space-y-6">

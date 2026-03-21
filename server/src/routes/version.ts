@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { success, error } from '../utils/response.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { requireProjectAccess } from '../middleware/projectAccess.js';
+import { validateId, validateBody, versionIdSchema, createVersionSchema, updateVersionSchema, rollbackSchema } from '../middleware/validation.js';
 import { auditService } from '../services/auditService.js';
 import { ScreenshotModel } from '../models/screenshot.js';
 import { VersionSummaryModel } from '../models/versionSummary.js';

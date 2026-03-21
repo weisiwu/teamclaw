@@ -1,10 +1,14 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { success, error } from '../utils/response.js';
+import { requireAdmin } from '../middleware/auth.js';
+import { requireProjectAccess } from '../middleware/projectAccess.js';
+import { auditService } from '../services/auditService.js';
 import { ScreenshotModel } from '../models/screenshot.js';
 import { VersionSummaryModel } from '../models/versionSummary.js';
 import { saveScreenshot, deleteScreenshotFile } from '../services/fileStorage.js';
 import { generateChangelogFromCommits } from '../services/changelogGenerator.js';
-import { onVersionCreated, onScreenshotLinked, onChangelogGenerated } from '../services/changeTracker.js';
+import { onVersionCreated, onScreenshotLinked, onChangelogGenerated, onVersionRollback } from '../services/changeTracker.js';
 import { getGitLog, getTags, createTag, getBranches, getCurrentBranch, createBranch, tagExists } from '../services/gitService.js';
 import { runBuild, getBuildConfig } from '../services/buildService.js';
 import { listArtifacts, deleteArtifacts, getArtifactInfo, getArtifactStream, importArtifactsFromDir, getArtifactsTotalSize } from '../services/artifactStore.js';
@@ -34,6 +38,45 @@ const settings = {
 /** 导出 settings 访问函数（供 autoBump 服务使用） */
 export function getVersionSettings() {
     return settings;
+}
+// ========== Input Validation Schemas (Zod) ==========
+const idParamSchema = z.string().min(1, 'id is required').max(100).regex(/^[a-zA-Z0-9_-]+$/, 'id contains invalid characters');
+const createVersionBodySchema = z.object({
+    version: z.string().min(1, 'version is required').max(50),
+    title: z.string().min(1, 'title is required').max(200),
+    description: z.string().max(50000).optional(),
+    status: z.enum(['draft', 'published', 'archived']).optional(),
+    tags: z.array(z.string().max(50)).max(20).optional(),
+    branch: z.string().max(100).optional(),
+    projectPath: z.string().max(500).optional(),
+});
+const updateVersionBodySchema = z.object({
+    version: z.string().min(1).max(50).optional(),
+    title: z.string().min(1).max(200).optional(),
+    description: z.string().max(50000).optional(),
+    status: z.enum(['draft', 'published', 'archived']).optional(),
+    tags: z.array(z.string().max(50)).max(20).optional(),
+});
+// Validation middleware factory
+function validateIdParam(paramName = 'id') {
+    return (req, res, next) => {
+        const result = idParamSchema.safeParse(req.params[paramName]);
+        if (!result.success) {
+            res.status(400).json(error(400, `Invalid ${paramName}: ${result.error.errors[0].message}`));
+            return;
+        }
+        next();
+    };
+}
+function validateBody(schema) {
+    return (req, res, next) => {
+        const result = schema.safeParse(req.body);
+        if (!result.success) {
+            res.status(400).json(error(400, `Validation error: ${result.error.errors[0].message}`));
+            return;
+        }
+        next();
+    };
 }
 // Initialize with sample data
 const sampleVersions = [
@@ -199,7 +242,7 @@ router.get('/', (req, res) => {
     }));
 });
 // GET /api/v1/versions/:id — 详情
-router.get('/:id', (req, res) => {
+router.get('/:id', validateIdParam(), (req, res) => {
     const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id);
     if (!row) {
         res.status(404).json(error(404, 'Version not found'));
@@ -294,7 +337,33 @@ router.delete('/:id/events/:eventId', (req, res) => {
         res.status(500).json(error(500, 'Failed to delete event'));
     }
 });
-router.post('/', (req, res) => {
+// PUT /api/v1/versions/:id/events/:eventId — Update a manual note
+router.put('/:id/events/:eventId', (req, res) => {
+    const { id: versionId, eventId } = req.params;
+    const { note } = req.body;
+    if (!note || typeof note !== 'string') {
+        res.status(400).json(error(400, 'note is required and must be a string'));
+        return;
+    }
+    const event = db.prepare('SELECT id, event_type FROM version_change_events WHERE id = ? AND version_id = ?').get(eventId, versionId);
+    if (!event) {
+        res.status(404).json(error(404, 'Event not found'));
+        return;
+    }
+    if (event.event_type !== 'manual_note') {
+        res.status(403).json(error(403, 'Only manual notes can be edited'));
+        return;
+    }
+    try {
+        db.prepare('UPDATE version_change_events SET description = ? WHERE id = ?').run(note, eventId);
+        res.json(success({ eventId }));
+    }
+    catch (err) {
+        console.error('[version] Update event error:', err);
+        res.status(500).json(error(500, 'Failed to update manual note'));
+    }
+});
+router.post('/', validateBody(createVersionBodySchema), (req, res) => {
     const { version, title, description, status, tags, branch, projectPath } = req.body;
     if (!version || !title) {
         res.status(400).json(error(400, 'version and title are required'));
@@ -385,8 +454,8 @@ router.post('/', (req, res) => {
         gitTagCreatedAt: tagCreated ? new Date().toISOString() : undefined,
     }));
 });
-// PUT /api/v1/versions/:id — 更新版本（含自动 bump 逻辑）
-router.put('/:id', (req, res) => {
+// PUT /api/v1/versions/:id — 更新版本（含自动 bump 逻辑，仅管理员）
+router.put('/:id', validateIdParam(), requireAdmin, (req, res) => {
     const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id);
     if (!row) {
         res.status(404).json(error(404, 'Version not found'));
@@ -438,13 +507,22 @@ router.put('/:id', (req, res) => {
         bumpedTo: isPublishing && settings.autoBump ? updatedRow.version : undefined,
     }));
 });
-// DELETE /api/v1/versions/:id — 删除
-router.delete('/:id', (req, res) => {
-    const row = db.prepare('SELECT id FROM versions WHERE id = ?').get(req.params.id);
+// DELETE /api/v1/versions/:id — 删除（需要项目权限）
+router.delete('/:id', validateIdParam(), requireProjectAccess, (req, res) => {
+    const row = db.prepare('SELECT id, version, created_by FROM versions WHERE id = ?').get(req.params.id);
     if (!row) {
         res.status(404).json(error(404, 'Version not found'));
         return;
     }
+    // 记录审计日志
+    auditService.log({
+        action: 'version_delete',
+        actor: req.user?.id || 'unknown',
+        target: req.params.id,
+        details: { version: row.version, deletedBy: req.user?.id, originalCreator: row.created_by },
+        ipAddress: (req.ip || req.socket.remoteAddress),
+        userAgent: req.headers['user-agent'],
+    });
     db.prepare('DELETE FROM versions WHERE id = ?').run(req.params.id);
     res.json(success({ deleted: true }));
 });
@@ -708,8 +786,8 @@ router.get('/:id/artifacts/*', (req, res) => {
     res.setHeader('Content-Type', 'application/octet-stream');
     artifactStream.stream.pipe(res);
 });
-// DELETE /api/v1/versions/:id/artifacts — Delete all artifacts for a version
-router.delete('/:id/artifacts', (req, res) => {
+// DELETE /api/v1/versions/:id/artifacts — Delete all artifacts for a version（仅管理员）
+router.delete('/:id/artifacts', requireAdmin, (req, res) => {
     const row = db.prepare('SELECT id, version FROM versions WHERE id = ?').get(req.params.id);
     if (!row) {
         res.status(404).json(error(404, 'Version not found'));
@@ -855,9 +933,38 @@ router.get('/:id/rollback-preview', (req, res) => {
     const preview = getRollbackPreview(projectPath, targetRef);
     res.json(success(preview));
 });
-// POST /api/v1/versions/:id/rollback — Rollback to a tag, branch, or commit
-router.post('/:id/rollback', async (req, res) => {
-    const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(req.params.id);
+// GET /api/v1/versions/:id/head-status — Check if version is at current HEAD (iter75)
+router.get('/:id/head-status', (req, res) => {
+    const db = getDb();
+    const row = db.prepare('SELECT id, version, projectPath, commit_hash FROM versions WHERE id = ?').get(req.params.id);
+    if (!row) {
+        res.status(404).json(error(404, 'Version not found'));
+        return;
+    }
+    const projectPath = row.projectPath ||
+        path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
+    let currentCommit = '';
+    let isCurrentHead = false;
+    try {
+        currentCommit = execSync('git rev-parse HEAD', { cwd: projectPath, encoding: 'utf-8' }).trim();
+        const versionCommit = row.commit_hash || '';
+        isCurrentHead = currentCommit === versionCommit;
+    }
+    catch (err) {
+        // Git operation failed - assume not at head
+        currentCommit = '';
+        isCurrentHead = false;
+    }
+    res.json(success({
+        isCurrentHead,
+        currentCommit,
+        versionCommit: row.commit_hash || '',
+        canRollback: !isCurrentHead,
+    }));
+});
+// POST /api/v1/versions/:id/rollback — Rollback to a tag, branch, or commit（需要项目权限）
+router.post('/:id/rollback', requireProjectAccess, async (req, res) => {
+    const row = db.prepare('SELECT id, version, projectPath, created_by FROM versions WHERE id = ?').get(req.params.id);
     if (!row) {
         res.status(404).json(error(404, 'Version not found'));
         return;
@@ -893,7 +1000,7 @@ router.post('/:id/rollback', async (req, res) => {
         backupCreated: shouldCreateBranch || false,
         success: result.success,
         error: result.error,
-        performedBy: 'developer',
+        performedBy: req.user?.id || 'developer',
         performedAt: new Date().toISOString(),
     });
     // Update version rollback tracking fields (iter75)
@@ -904,6 +1011,13 @@ router.post('/:id/rollback', async (req, res) => {
         last_rollback_at = ?
     WHERE id = ?
   `).run(now, req.params.id);
+    // Record rollback event in change timeline (iter87)
+    try {
+        onVersionRollback(req.params.id, target, type || 'tag', req.user?.id || 'developer', undefined, { success: result.success, backupCreated: shouldCreateBranch || false });
+    }
+    catch (err) {
+        console.warn('[rollback] Failed to record change event:', err);
+    }
     // Auto-generate version summary on rollback
     try {
         const rollbackMsg = `Rollback to ${target} (${type || 'tag'})`;
@@ -926,6 +1040,23 @@ router.post('/:id/rollback', async (req, res) => {
     }
     // Return enriched response with rollback tracking info (iter75)
     const updated = db.prepare('SELECT rollback_count, last_rollback_at FROM versions WHERE id = ?').get(req.params.id);
+    // 审计日志 - 增强版（iter-19）
+    auditService.log({
+        action: 'version_rollback',
+        actor: req.user?.id || req.headers['x-user-id'] || 'unknown',
+        target: req.params.id,
+        details: {
+            target,
+            type: type || 'tag',
+            success: result.success,
+            operatorId: req.user?.id,
+            targetResource: `version:${req.params.id}`,
+            originalCreator: row.created_by,
+            timestamp: new Date().toISOString()
+        },
+        ipAddress: (req.ip || req.socket.remoteAddress),
+        userAgent: req.headers['user-agent'],
+    });
     res.json(success({
         ...result,
         rollbackCount: updated?.rollback_count ?? 1,
@@ -1034,8 +1165,8 @@ router.post('/:id/screenshots', async (req, res) => {
         res.status(500).json(error(500, '截图上传失败'));
     }
 });
-// DELETE /api/v1/versions/:id/screenshots/:screenshotId - Delete a screenshot
-router.delete('/:id/screenshots/:screenshotId', async (req, res) => {
+// DELETE /api/v1/versions/:id/screenshots/:screenshotId - Delete a screenshot（仅管理员）
+router.delete('/:id/screenshots/:screenshotId', requireAdmin, async (req, res) => {
     try {
         const { screenshotId } = req.params;
         const screenshot = ScreenshotModel.findById(screenshotId);
@@ -1116,8 +1247,8 @@ router.put('/:id/summary', (req, res) => {
         res.status(500).json(error(500, '变更摘要更新失败'));
     }
 });
-// DELETE /api/v1/versions/:id/summary - Delete changelog summary
-router.delete('/:id/summary', (req, res) => {
+// DELETE /api/v1/versions/:id/summary - Delete changelog summary（仅管理员）
+router.delete('/:id/summary', requireAdmin, (req, res) => {
     const { id } = req.params;
     const deleted = VersionSummaryModel.delete(id);
     res.json(success({ deleted }));
@@ -1205,7 +1336,7 @@ router.get('/:id/summary/status', (req, res) => {
         generatedBy: summary?.generatedBy || null,
     }));
 });
-// GET /api/v1/versions/:id/timeline — 获取版本变更时间线
+// GET /api/v1/versions/:id/timeline — 获取版本变更时间线（统一入口，统一使用 version_change_events 表）
 router.get('/:id/timeline', (req, res) => {
     const { id: versionId } = req.params;
     const row = db.prepare('SELECT id, version, created_at FROM versions WHERE id = ?').get(versionId);
@@ -1213,50 +1344,50 @@ router.get('/:id/timeline', (req, res) => {
         res.status(404).json(error(404, 'Version not found'));
         return;
     }
-    // 获取截图记录
-    const screenshots = ScreenshotModel.findByVersionId(versionId);
-    // 获取摘要记录
-    const summary = VersionSummaryModel.findByVersionId(versionId);
-    const events = [];
-    // 版本创建 event
-    events.push({
-        id: `version-created-${versionId}`,
-        type: 'version_created',
-        title: '版本创建',
-        description: `版本 ${row.version} 已创建`,
-        timestamp: row.created_at,
-    });
-    // 截图关联 events
-    for (const shot of screenshots) {
-        events.push({
-            id: `screenshot-linked-${shot.id}`,
-            type: 'screenshot_linked',
-            title: '截图关联',
-            description: `${shot.senderName}：${shot.messageContent.substring(0, 50)}...`,
-            timestamp: shot.createdAt,
-            actor: shot.senderName,
-            screenshotId: shot.id,
-        });
+    try {
+        // Primary: use the unified changeTracker which reads from version_change_events
+        const { getVersionTimeline } = require('../services/changeTracker.js');
+        const events = getVersionTimeline(versionId);
+        // Also include legacy events not yet in version_change_events table
+        const screenshotIdsInEvents = new Set(events.filter(e => e.screenshotId).map(e => e.screenshotId));
+        const screenshots = ScreenshotModel.findByVersionId(versionId);
+        for (const shot of screenshots) {
+            if (!screenshotIdsInEvents.has(shot.id)) {
+                events.push({
+                    id: `legacy-screenshot-${shot.id}`,
+                    type: 'screenshot_linked',
+                    title: '截图关联',
+                    description: `${shot.senderName}：${shot.messageContent.substring(0, 50)}...`,
+                    timestamp: shot.createdAt,
+                    actor: shot.senderName,
+                    screenshotId: shot.id,
+                });
+            }
+        }
+        // Include version created event if not already recorded
+        const hasVersionCreated = events.some(e => e.type === 'version_created');
+        if (!hasVersionCreated) {
+            events.unshift({
+                id: `legacy-version-created-${versionId}`,
+                type: 'version_created',
+                title: '版本创建',
+                description: `版本 ${row.version} 已创建`,
+                timestamp: row.created_at,
+                actor: 'system',
+            });
+        }
+        // Sort by timestamp descending
+        events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        res.json(success({
+            versionId,
+            version: row.version,
+            events,
+        }));
     }
-    // 摘要生成 event
-    if (summary) {
-        events.push({
-            id: `changelog-generated-${summary.id}`,
-            type: 'changelog_generated',
-            title: '变更摘要生成',
-            description: `${summary.generatedBy === 'AI' ? 'AI' : '手动'}生成了包含 ${summary.features?.length || 0} 个新功能的变更摘要`,
-            timestamp: summary.generatedAt,
-            actor: summary.generatedBy,
-            summaryId: summary.id,
-        });
+    catch (err) {
+        console.error('[version] Timeline fetch error:', err);
+        res.status(500).json(error(500, 'Failed to fetch timeline'));
     }
-    // 按时间倒序
-    events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    res.json(success({
-        versionId,
-        version: row.version,
-        events,
-    }));
 });
 // GET /api/v1/versions/:id/bump-history — Get bump history for a version
 router.get('/:id/bump-history', (req, res) => {
@@ -1507,8 +1638,8 @@ router.get('/vector/search', async (req, res) => {
         res.status(500).json(error(500, '向量搜索失败'));
     }
 });
-// DELETE /api/v1/versions/:id/vector — Delete version from vector store
-router.delete('/:id/vector', async (req, res) => {
+// DELETE /api/v1/versions/:id/vector — Delete version from vector store（仅管理员）
+router.delete('/:id/vector', requireAdmin, async (req, res) => {
     try {
         await deleteVersionVector(req.params.id);
         res.json(success({ deleted: true }));

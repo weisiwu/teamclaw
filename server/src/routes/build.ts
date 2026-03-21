@@ -3,6 +3,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { success, error } from '../utils/response.js';
 import {
   createBuildRecord,
@@ -29,6 +30,39 @@ import path from 'path';
 import os from 'os';
 
 const router = Router();
+
+// ========== Input Validation Schemas (Zod) ==========
+const buildIdSchema = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/, 'build id contains invalid characters');
+const versionIdQuerySchema = z.string().min(1).max(100).optional();
+const paginationSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+// Validation middleware
+function validateIdParam(paramName: string = 'id') {
+  return (req: Request, res: Response, next: Function) => {
+    const result = buildIdSchema.safeParse(req.params[paramName]);
+    if (!result.success) {
+      res.status(400).json(error(400, `Invalid ${paramName}: ${result.error.errors[0].message}`));
+      return;
+    }
+    next();
+  };
+}
+
+function validateQuery(schema: z.ZodSchema) {
+  return (req: Request, res: Response, next: Function) => {
+    const result = schema.safeParse(req.query);
+    if (!result.success) {
+      res.status(400).json(error(400, `Query validation error: ${result.error.errors[0].message}`));
+      return;
+    }
+    // Merge validated data back to req.query
+    Object.assign(req.query, result.data);
+    next();
+  };
+}
 
 // ========== Helpers ==========
 
@@ -75,7 +109,7 @@ router.get('/latest/:versionId', (req: Request, res: Response) => {
 });
 
 // GET /api/v1/builds/:id — Get build details
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', validateIdParam(), (req: Request, res: Response) => {
   const record = getBuildRecord(req.params.id);
   if (!record) {
     return res.status(404).json(error(404, 'Build record not found'));
@@ -143,7 +177,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // POST /api/v1/builds/:id/cancel — Cancel a running build
-router.post('/:id/cancel', (req: Request, res: Response) => {
+router.post('/:id/cancel', validateIdParam(), (req: Request, res: Response) => {
   const record = getBuildRecord(req.params.id);
   if (!record) {
     return res.status(404).json(error(404, 'Build record not found'));
@@ -157,7 +191,7 @@ router.post('/:id/cancel', (req: Request, res: Response) => {
 });
 
 // POST /api/v1/builds/:id/rebuild — Rebuild using the same config as a previous build
-router.post('/:id/rebuild', async (req: Request, res: Response) => {
+router.post('/:id/rebuild', validateIdParam(), async (req: Request, res: Response) => {
   const original = getBuildRecord(req.params.id);
   if (!original) {
     return res.status(404).json(error(404, 'Build record not found'));
@@ -213,7 +247,7 @@ router.post('/:id/rebuild', async (req: Request, res: Response) => {
 });
 
 // GET /api/v1/builds/:id/output — Get full build output
-router.get('/:id/output', (req: Request, res: Response) => {
+router.get('/:id/output', validateIdParam(), (req: Request, res: Response) => {
   const record = getBuildRecord(req.params.id);
   if (!record) {
     return res.status(404).json(error(404, 'Build record not found'));
@@ -233,7 +267,7 @@ router.get('/stats/:versionId', (req: Request, res: Response) => {
 });
 
 // POST /api/v1/builds/:id/rollback — Rollback project to the state at a specific build
-router.post('/:id/rollback', (req: Request, res: Response) => {
+router.post('/:id/rollback', validateIdParam(), (req: Request, res: Response) => {
   const record = getBuildRecord(req.params.id);
   if (!record) {
     return res.status(404).json(error(404, 'Build record not found'));
@@ -290,7 +324,7 @@ router.post('/:id/rollback', (req: Request, res: Response) => {
 });
 
 // GET /api/v1/builds/:id/package — Get package info for a build
-router.get('/:id/package', (req: Request, res: Response) => {
+router.get('/:id/package', validateIdParam(), (req: Request, res: Response) => {
   const record = getBuildRecord(req.params.id);
   if (!record) {
     return res.status(404).json(error(404, 'Build record not found'));
@@ -304,7 +338,7 @@ router.get('/:id/package', (req: Request, res: Response) => {
 });
 
 // POST /api/v1/builds/:id/package — Create a package from a build's artifacts
-router.post('/:id/package', async (req: Request, res: Response) => {
+router.post('/:id/package', validateIdParam(), async (req: Request, res: Response) => {
   const record = getBuildRecord(req.params.id);
   if (!record) {
     return res.status(404).json(error(404, 'Build record not found'));
@@ -358,7 +392,7 @@ router.post('/:id/package', async (req: Request, res: Response) => {
 });
 
 // GET /api/v1/builds/:id/package/download — Download the package file
-router.get('/:id/package/download', (req: Request, res: Response) => {
+router.get('/:id/package/download', validateIdParam(), (req: Request, res: Response) => {
   const record = getBuildRecord(req.params.id);
   if (!record) {
     return res.status(404).json(error(404, 'Build record not found'));
@@ -389,7 +423,7 @@ router.get('/:id/package/download', (req: Request, res: Response) => {
 });
 
 // DELETE /api/v1/builds/:id/package — Delete a package
-router.delete('/:id/package', (req: Request, res: Response) => {
+router.delete('/:id/package', validateIdParam(), (req: Request, res: Response) => {
   const record = getBuildRecord(req.params.id);
   if (!record) {
     return res.status(404).json(error(404, 'Build record not found'));
@@ -400,6 +434,86 @@ router.delete('/:id/package', (req: Request, res: Response) => {
 
   const deleted = deletePackage(record.versionId, record.buildNumber, safeFormat);
   res.json(success({ deleted }));
+});
+
+// GET /api/v1/builds/:id/logs — Get build logs (iter-21)
+router.get('/:id/logs', validateIdParam(), (req: Request, res: Response) => {
+  const record = getBuildRecord(req.params.id);
+  if (!record) {
+    return res.status(404).json(error(404, 'Build record not found'));
+  }
+
+  const { stream = 'false' } = req.query as { stream?: string };
+  const isStream = stream === 'true';
+
+  // Parse output into log entries
+  const logs: Array<{ timestamp: string; level: 'info' | 'warn' | 'error'; message: string }> = [];
+  
+  if (record.output) {
+    const lines = record.output.split('\n');
+    lines.forEach((line, index) => {
+      if (!line.trim()) return;
+      // Try to parse timestamp and level from common log formats
+      const match = line.match(/^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})\s*(\w+)?\s*[:\-]?\s*(.+)$/);
+      if (match) {
+        const level = (match[2] || 'info').toLowerCase() as 'info' | 'warn' | 'error';
+        logs.push({
+          timestamp: match[1],
+          level: ['info', 'warn', 'error'].includes(level) ? level : 'info',
+          message: match[3],
+        });
+      } else {
+        logs.push({
+          timestamp: record.startedAt || new Date().toISOString(),
+          level: line.toLowerCase().includes('error') ? 'error' : 
+                 line.toLowerCase().includes('warn') ? 'warn' : 'info',
+          message: line,
+        });
+      }
+    });
+  }
+
+  // Add error output as error level logs
+  if (record.errorOutput) {
+    const errorLines = record.errorOutput.split('\n');
+    errorLines.forEach((line) => {
+      if (!line.trim()) return;
+      logs.push({
+        timestamp: record.completedAt || new Date().toISOString(),
+        level: 'error',
+        message: line,
+      });
+    });
+  }
+
+  // Sort by timestamp
+  logs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  if (isStream) {
+    // Stream mode: text/event-stream
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    logs.forEach((log, index) => {
+      res.write(`id: ${index}\n`);
+      res.write(`event: log\n`);
+      res.write(`data: ${JSON.stringify(log)}\n\n`);
+    });
+
+    res.write(`event: complete\n`);
+    res.write(`data: ${JSON.stringify({ total: logs.length })}\n\n`);
+    res.end();
+  } else {
+    // Normal JSON response
+    res.json(success({
+      buildId: record.id,
+      versionId: record.versionId,
+      status: record.status,
+      logs,
+      total: logs.length,
+    }));
+  }
 });
 
 // GET /api/v1/builds/packages/:versionId — List all packages for a version

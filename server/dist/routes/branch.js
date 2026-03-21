@@ -2,6 +2,8 @@
 // 提供分支的 CRUD、设置主分支、保护等 API
 import { Router } from 'express';
 import { success, error } from '../utils/response.js';
+import { requireAdmin } from '../middleware/auth.js';
+import { auditService } from '../services/auditService.js';
 import { getAllBranches, getBranch, getBranchByName, getMainBranch, createBranch, updateBranch, deleteBranch, setMainBranch, setBranchProtection, renameBranch, getBranchConfig, updateBranchConfig, getBranchStats, checkoutBranch, } from '../services/branchService.js';
 const router = Router();
 // ========== 分支 CRUD ==========
@@ -48,8 +50,8 @@ router.get('/main', (_req, res) => {
 router.get('/config', (_req, res) => {
     res.json(success(getBranchConfig()));
 });
-// PUT /api/v1/branches/config — 更新分支配置
-router.put('/config', (req, res) => {
+// PUT /api/v1/branches/config — 更新分支配置（仅管理员）
+router.put('/config', requireAdmin, (req, res) => {
     const config = req.body;
     const updated = updateBranchConfig(config);
     res.json(success(updated));
@@ -88,8 +90,8 @@ router.post('/', (req, res) => {
         res.status(409).json(error(409, message));
     }
 });
-// PUT /api/v1/branches/:id — 更新分支
-router.put('/:id', (req, res) => {
+// PUT /api/v1/branches/:id — 更新分支（仅管理员）
+router.put('/:id', requireAdmin, (req, res) => {
     const branch = getBranch(req.params.id);
     if (!branch) {
         res.status(404).json(error(404, 'Branch not found'));
@@ -109,14 +111,22 @@ router.put('/:id', (req, res) => {
         res.status(400).json(error(400, message));
     }
 });
-// DELETE /api/v1/branches/:id — 删除分支
-router.delete('/:id', (req, res) => {
+// DELETE /api/v1/branches/:id — 删除分支（仅管理员）
+router.delete('/:id', requireAdmin, (req, res) => {
     try {
         const deleted = deleteBranch(req.params.id);
         if (!deleted) {
             res.status(404).json(error(404, 'Branch not found'));
             return;
         }
+        // 审计日志
+        auditService.log({
+            action: 'branch_delete',
+            actor: req.headers['x-user-id'] || 'unknown',
+            target: req.params.id,
+            ipAddress: (req.ip || req.socket.remoteAddress),
+            userAgent: req.headers['user-agent'],
+        });
         res.json(success({ deleted: true }));
     }
     catch (err) {
@@ -125,8 +135,8 @@ router.delete('/:id', (req, res) => {
     }
 });
 // ========== 分支操作 ==========
-// PUT /api/v1/branches/:id/main — 设置为主分支
-router.put('/:id/main', (req, res) => {
+// PUT /api/v1/branches/:id/main — 设置为主分支（仅管理员）
+router.put('/:id/main', requireAdmin, (req, res) => {
     const branch = getBranch(req.params.id);
     if (!branch) {
         res.status(404).json(error(404, 'Branch not found'));
@@ -135,8 +145,8 @@ router.put('/:id/main', (req, res) => {
     const updated = setMainBranch(req.params.id);
     res.json(success(updated));
 });
-// PUT /api/v1/branches/:id/protect — 设置保护状态
-router.put('/:id/protect', (req, res) => {
+// PUT /api/v1/branches/:id/protect — 设置保护状态（仅管理员）
+router.put('/:id/protect', requireAdmin, (req, res) => {
     const { protected: isProtected } = req.body;
     const branch = getBranch(req.params.id);
     if (!branch) {
@@ -152,8 +162,8 @@ router.put('/:id/protect', (req, res) => {
         res.status(403).json(error(403, message));
     }
 });
-// PUT /api/v1/branches/:id/rename — 重命名分支
-router.put('/:id/rename', (req, res) => {
+// PUT /api/v1/branches/:id/rename — 重命名分支（仅管理员）
+router.put('/:id/rename', requireAdmin, (req, res) => {
     const { newName } = req.body;
     if (!newName || typeof newName !== 'string') {
         res.status(400).json(error(400, 'New name is required'));
@@ -176,8 +186,8 @@ router.put('/:id/rename', (req, res) => {
         res.status(403).json(error(403, message));
     }
 });
-// PUT /api/v1/branches/:id/checkout — 检出（切换到）分支
-router.put('/:id/checkout', (req, res) => {
+// PUT /api/v1/branches/:id/checkout — 检出（切换到）分支（仅管理员）
+router.put('/:id/checkout', requireAdmin, (req, res) => {
     const branch = getBranch(req.params.id);
     if (!branch) {
         res.status(404).json(error(404, 'Branch not found'));

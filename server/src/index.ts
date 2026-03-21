@@ -5,7 +5,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { success } from './utils/response.js';
 import { requireAdmin } from './middleware/auth.js';
-import { globalErrorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { unifiedErrorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import healthRouter from './routes/health.js';
 import projectRouter from './routes/project.js';
 import userRouter from './routes/user.js';
@@ -47,10 +47,24 @@ app.use(helmet({
       connectSrc: ["'self'"],
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
       upgradeInsecureRequests: [],
     },
   },
   crossOriginEmbedderPolicy: false,
+  // 额外安全配置 (iter-20)
+  xContentTypeOptions: true, // 禁止 MIME 类型嗅探
+  xFrameOptions: { action: 'deny' }, // 禁止点击劫持
+  xXssProtection: true, // 启用浏览器 XSS 过滤器
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  hsts: {
+    maxAge: 31536000, // 1年
+    includeSubDomains: true,
+    preload: true,
+  },
+  dnsPrefetchControl: { allow: false },
+  permittedCrossDomainPolicies: { permittedPolicies: 'none' },
 }));
 
 // ========== CORS Configuration ==========
@@ -168,7 +182,7 @@ app.get('/', (req, res) => {
 
 // Global error handlers — must be after all routes
 app.use(notFoundHandler);
-app.use(globalErrorHandler);
+app.use(unifiedErrorHandler);
 
 app.listen(PORT, () => {
   console.log(`TeamClaw server running on port ${PORT}`);

@@ -2,8 +2,12 @@
 // 提供标签的 CRUD、归档、保护、配置等 API
 import { Router } from 'express';
 import { success, error } from '../utils/response.js';
+import { requireAdmin } from '../middleware/auth.js';
+import { auditService } from '../services/auditService.js';
 import { getTags as gitGetTags, createTag as gitCreateTag, getTagDetails } from '../services/gitService.js';
 import { getAllTagRecords, getTagRecord, getTagsByVersionId, createTagRecord, updateTagRecord, archiveTag, protectTag, getTagConfig, updateTagConfig, getTagByName, makeTagName, shouldAutoTag, renameTag, removeTag, } from '../services/tagService.js';
+import { ScreenshotModel } from '../models/screenshot.js';
+import { getDb } from '../db/sqlite.js';
 const router = Router();
 // Default project path for git tag operations
 const DEFAULT_PROJECT_PATH = process.env.TEAMCLAW_PROJECT_PATH || '';
@@ -25,16 +29,37 @@ router.get('/', (req, res) => {
         protectedMap.set(t.name, t.protected);
         sourceMap.set(t.name, t.source);
     }
-    // Merge: git tags + protected from DB
-    const mergedTags = gitTags.map(t => ({
-        name: t.name,
-        commit: t.commit,
-        date: t.date,
-        annotation: t.message,
-        hasRecord: protectedMap.has(t.name),
-        protected: protectedMap.get(t.name) || false,
-        source: sourceMap.get(t.name) || 'manual',
-    }));
+    // Build screenshot and changelog indexes by versionId (iter69-change-tracking)
+    const screenshotIndex = new Set();
+    for (const shot of ScreenshotModel.getAllScreenshots()) {
+        screenshotIndex.add(shot.versionId);
+    }
+    const db = getDb();
+    const summaryRows = db.prepare('SELECT version_id FROM version_summaries').all();
+    const summaryIndex = new Set();
+    for (const row of summaryRows) {
+        summaryIndex.add(row.version_id);
+    }
+    // Build versionId map: tagName -> versionId from DB records
+    const tagVersionIdMap = new Map();
+    for (const t of dbTags) {
+        tagVersionIdMap.set(t.name, t.versionId);
+    }
+    // Merge: git tags + protected from DB + screenshot/changelog status (iter69-change-tracking)
+    const mergedTags = gitTags.map(t => {
+        const versionId = tagVersionIdMap.get(t.name);
+        return {
+            name: t.name,
+            commit: t.commit,
+            date: t.date,
+            annotation: t.message,
+            hasRecord: protectedMap.has(t.name),
+            protected: protectedMap.get(t.name) || false,
+            source: sourceMap.get(t.name) || 'manual',
+            hasScreenshot: versionId ? screenshotIndex.has(versionId) : false,
+            hasChangelog: versionId ? summaryIndex.has(versionId) : false,
+        };
+    });
     // Apply filters
     let tags = mergedTags;
     if (isProtected !== undefined) {
@@ -43,6 +68,19 @@ router.get('/', (req, res) => {
     }
     if (source !== undefined && source !== 'all') {
         tags = tags.filter(t => t.source === source);
+    }
+    // Filter by hasScreenshot / hasChangelog (iter69-change-tracking)
+    if (req.query.hasScreenshot === 'true') {
+        tags = tags.filter(t => t.hasScreenshot === true);
+    }
+    else if (req.query.hasScreenshot === 'false') {
+        tags = tags.filter(t => t.hasScreenshot === false);
+    }
+    if (req.query.hasChangelog === 'true') {
+        tags = tags.filter(t => t.hasChangelog === true);
+    }
+    else if (req.query.hasChangelog === 'false') {
+        tags = tags.filter(t => t.hasChangelog === false);
     }
     const total = tags.length;
     // 分页
@@ -128,8 +166,8 @@ router.post('/', (req, res) => {
     });
     res.status(201).json(success({ ...record, gitTagCreated }));
 });
-// DELETE /api/v1/tags/:tagName — 删除标签（同时删除 git tag）
-router.delete('/:tagName', (req, res) => {
+// DELETE /api/v1/tags/:tagName — 删除标签（同时删除 git tag，仅管理员）
+router.delete('/:tagName', requireAdmin, (req, res) => {
     const { tagName } = req.params;
     const { projectPath: reqProjectPath } = req.body || {};
     const projectPath = reqProjectPath || DEFAULT_PROJECT_PATH;
@@ -153,10 +191,18 @@ router.delete('/:tagName', (req, res) => {
         return;
     }
     const deleted = removeTag(record.id, { projectPath });
+    // 审计日志
+    auditService.log({
+        action: 'tag_delete',
+        actor: req.headers['x-user-id'] || 'unknown',
+        target: tagName,
+        ipAddress: (req.ip || req.socket.remoteAddress),
+        userAgent: req.headers['user-agent'],
+    });
     res.json(success({ deleted }));
 });
-// PUT /api/v1/tags/:tagName — 重命名标签（同时更新 git tag + DB）
-router.put('/:tagName', (req, res) => {
+// PUT /api/v1/tags/:tagName — 重命名标签（同时更新 git tag + DB，仅管理员）
+router.put('/:tagName', requireAdmin, (req, res) => {
     const { tagName } = req.params;
     const { name: newName, projectPath: reqProjectPath } = req.body;
     if (!newName) {
@@ -185,8 +231,8 @@ router.put('/:tagName', (req, res) => {
     }
     res.json(success(updated));
 });
-// PUT /api/v1/tags/:tagName/rename — 重命名标签（别名路由）
-router.put('/:tagName/rename', (req, res) => {
+// PUT /api/v1/tags/:tagName/rename — 重命名标签（别名路由，仅管理员）
+router.put('/:tagName/rename', requireAdmin, (req, res) => {
     const { tagName } = req.params;
     const { name: newName, projectPath: reqProjectPath } = req.body;
     if (!newName) {
@@ -211,8 +257,8 @@ router.put('/:tagName/rename', (req, res) => {
     res.json(success(updated));
 });
 // ========== 生命周期操作 ==========
-// PUT /api/v1/tags/:id/archive — 归档/取消归档标签
-router.put('/:id/archive', (req, res) => {
+// PUT /api/v1/tags/:id/archive — 归档/取消归档标签（仅管理员）
+router.put('/:id/archive', requireAdmin, (req, res) => {
     const { archived } = req.body;
     const record = getTagRecord(req.params.id);
     if (!record) {
@@ -226,8 +272,8 @@ router.put('/:id/archive', (req, res) => {
     const updated = archiveTag(req.params.id, archived);
     res.json(success(updated));
 });
-// PUT /api/v1/tags/:id/protect — 设置/取消保护标签
-router.put('/:id/protect', (req, res) => {
+// PUT /api/v1/tags/:id/protect — 设置/取消保护标签（仅管理员）
+router.put('/:id/protect', requireAdmin, (req, res) => {
     const { protect } = req.body;
     const record = getTagRecord(req.params.id);
     if (!record) {
@@ -237,8 +283,8 @@ router.put('/:id/protect', (req, res) => {
     const updated = protectTag(req.params.id, protect);
     res.json(success(updated));
 });
-// PUT /api/v1/tags/:id — 更新标签记录
-router.put('/:id', (req, res) => {
+// PUT /api/v1/tags/:id — 更新标签记录（仅管理员）
+router.put('/:id', requireAdmin, (req, res) => {
     const { message, name } = req.body;
     const record = getTagRecord(req.params.id);
     if (!record) {
@@ -267,8 +313,8 @@ router.put('/:id', (req, res) => {
 router.get('/config', (_req, res) => {
     res.json(success(getTagConfig()));
 });
-// PUT /api/v1/tags/config — 更新 Tag 配置
-router.put('/config', (req, res) => {
+// PUT /api/v1/tags/config — 更新 Tag 配置（仅管理员）
+router.put('/config', requireAdmin, (req, res) => {
     const config = req.body;
     const updated = updateTagConfig(config);
     res.json(success(updated));
