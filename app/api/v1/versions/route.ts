@@ -1,30 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { versionStore, type Version } from "./version-store";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Request-ID",
-  "Access-Control-Max-Age": "86400",
-};
-
-function generateRequestId(): string {
-  return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function jsonSuccess(data: unknown, requestId?: string): NextResponse {
-  return NextResponse.json({ code: 0, data, requestId }, {
-    headers: { ...corsHeaders },
-  });
-}
-
-function jsonError(message: string, status: number, requestId?: string): NextResponse {
-  return NextResponse.json({ code: status, message, requestId }, { status });
-}
-
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, { status: 204, headers: corsHeaders });
-}
+import { corsHeaders, generateRequestId, jsonSuccess, jsonError, optionsResponse } from "@/lib/api-shared";
 
 /**
  * GET /api/v1/versions
@@ -43,7 +19,6 @@ export async function GET(request: NextRequest) {
 
     let versions = Array.from(versionStore.values()) as Version[];
 
-    // Apply filters
     if (status) {
       versions = versions.filter(v => v.buildStatus === status);
     }
@@ -59,10 +34,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Sort by createdAt descending
     versions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    // Paginate
     const total = versions.length;
     const start = (page - 1) * pageSize;
     const paginatedVersions = versions.slice(start, start + pageSize);
@@ -79,3 +52,5 @@ export async function GET(request: NextRequest) {
     return jsonError("Internal server error", 500, requestId);
   }
 }
+
+export { optionsResponse as OPTIONS };

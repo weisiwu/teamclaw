@@ -1,96 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Request-ID",
-  "Access-Control-Max-Age": "86400",
-};
-
-function generateRequestId(): string {
-  return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function jsonSuccess(data: unknown, requestId?: string): NextResponse {
-  return NextResponse.json({ code: 0, data, requestId }, {
-    headers: { ...corsHeaders },
-  });
-}
-
-function jsonError(message: string, status: number, requestId?: string): NextResponse {
-  return NextResponse.json({ code: status, message, requestId }, { status });
-}
-
-// ========== Types ==========
-interface GitBranch {
-  id: string;
-  name: string;
-  isMain: boolean;
-  isRemote: boolean;
-  isProtected: boolean;
-  createdAt: string;
-  lastCommitAt: string;
-  commitMessage: string;
-  author: string;
-  versionId?: string;
-  description?: string;
-}
-
-// ========== In-memory store ==========
-const branchStore = new Map<string, GitBranch>();
-
-function initStore() {
-  if (branchStore.size > 0) return;
-  const now = new Date().toISOString();
-  const mainBranch: GitBranch = {
-    id: "branch_local_1",
-    name: "main",
-    isMain: true,
-    isRemote: false,
-    isProtected: true,
-    createdAt: "2026-01-01T08:00:00Z",
-    lastCommitAt: now,
-    commitMessage: "Initial commit",
-    author: "system",
-  };
-  branchStore.set(mainBranch.id, mainBranch);
-  branchStore.set("main", mainBranch);
-}
-initStore();
-
-function getAllBranches(): GitBranch[] {
-  return Array.from(branchStore.values()).filter(b => !b.name.startsWith("branch_local_"));
-}
-
-function createBranch(data: { name: string; author?: string; versionId?: string; baseBranch?: string; description?: string }): GitBranch {
-  const now = new Date().toISOString();
-  const id = `branch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  const branch: GitBranch = {
-    id,
-    name: data.name,
-    isMain: false,
-    isRemote: false,
-    isProtected: false,
-    createdAt: now,
-    lastCommitAt: now,
-    commitMessage: data.description || `Create branch ${data.name}`,
-    author: data.author || "user",
-    versionId: data.versionId,
-    description: data.description,
-  };
-  branchStore.set(id, branch);
-  branchStore.set(data.name, branch);
-  return branch;
-}
-
-// ========== Route Handlers ==========
-
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, { status: 204, headers: corsHeaders });
-}
+import { NextRequest } from "next/server";
+import { corsHeaders, generateRequestId, jsonSuccess, jsonError, optionsResponse } from "@/lib/api-shared";
+import { getAllBranches, createBranch } from "@/lib/branch-store";
 
 // GET /api/v1/branches
-export async function GET(request: NextRequest): Promise<NextResponse> {
+export async function GET(request: NextRequest) {
   const requestId = generateRequestId();
   try {
     const { searchParams } = new URL(request.url);
@@ -116,7 +29,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 }
 
 // POST /api/v1/branches
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export async function POST(request: NextRequest) {
   const requestId = generateRequestId();
   try {
     const body = await request.json() as { name?: string; author?: string; versionId?: string; baseBranch?: string; description?: string };
@@ -128,10 +41,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return jsonError("分支名称只能包含字母、数字、_、.、/、-", 400, requestId);
     }
 
-    const branch = createBranch(body as { name: string; author?: string; versionId?: string; baseBranch?: string; description?: string });
+    const branch = createBranch(body);
     return jsonSuccess(branch, requestId);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return jsonError(msg, 400, requestId);
   }
 }
+
+export { optionsResponse as OPTIONS };
