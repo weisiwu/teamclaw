@@ -1,6 +1,8 @@
 import express, { Router } from 'express';
 import { join } from 'path';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { success } from './utils/response.js';
 import { requireAdmin } from './middleware/auth.js';
 import { globalErrorHandler, notFoundHandler } from './middleware/errorHandler.js';
@@ -34,8 +36,79 @@ import { registerAutoBumpHook } from './hooks/autoBumpOnTaskDone.js';
 const app = express();
 const PORT = process.env.PORT || 9700;
 
-app.use(cors());
+// ========== Security Headers (Helmet) ==========
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
+
+// ========== CORS Configuration ==========
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',').map(s => s.trim());
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // In development, allow any localhost origin
+    if (process.env.NODE_ENV !== 'production' && origin?.includes('localhost')) return callback(null, true);
+    callback(new Error(`CORS policy violation: origin ${origin} not allowed`));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Request-Id'],
+  exposedHeaders: ['X-Request-Id', 'Content-Disposition'],
+}));
+
 app.use(express.json());
+
+// ========== Rate Limiting ==========
+// 全局默认限流：100 req/min
+const defaultLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({
+      code: 429,
+      data: null,
+      message: '请求过于频繁，请稍后再试'
+    });
+  }
+});
+
+// 严格限流：10 req/min（用于敏感接口）
+const strictLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({
+      code: 429,
+      data: null,
+      message: '请求过于频繁，请稍后再试'
+    });
+  }
+});
+
+// 应用全局限流
+app.use('/api/v1', defaultLimiter);
+
+// 敏感接口单独应用更严格限流
+app.use('/api/v1/auth/login', strictLimiter);
+app.use('/api/v1/users', strictLimiter);
 
 // Static artifact downloads
 app.use('/artifacts', express.static(getArtifactsRootDir(), {

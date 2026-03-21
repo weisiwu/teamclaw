@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { success, error } from '../utils/response.js';
 import { requireAdmin } from '../middleware/auth.js';
+import { requireProjectAccess } from '../middleware/projectAccess.js';
 import { auditService } from '../services/auditService.js';
 import { ScreenshotModel } from '../models/screenshot.js';
 import { VersionSummaryModel } from '../models/versionSummary.js';
@@ -77,6 +79,50 @@ const settings: VersionSettings = {
 /** 导出 settings 访问函数（供 autoBump 服务使用） */
 export function getVersionSettings(): VersionSettings {
   return settings;
+}
+
+// ========== Input Validation Schemas (Zod) ==========
+const idParamSchema = z.string().min(1, 'id is required').max(100).regex(/^[a-zA-Z0-9_-]+$/, 'id contains invalid characters');
+
+const createVersionBodySchema = z.object({
+  version: z.string().min(1, 'version is required').max(50),
+  title: z.string().min(1, 'title is required').max(200),
+  description: z.string().max(50000).optional(),
+  status: z.enum(['draft', 'published', 'archived']).optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
+  branch: z.string().max(100).optional(),
+  projectPath: z.string().max(500).optional(),
+});
+
+const updateVersionBodySchema = z.object({
+  version: z.string().min(1).max(50).optional(),
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().max(50000).optional(),
+  status: z.enum(['draft', 'published', 'archived']).optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
+});
+
+// Validation middleware factory
+function validateIdParam(paramName: string = 'id') {
+  return (req: Request, res: Response, next: Function) => {
+    const result = idParamSchema.safeParse(req.params[paramName]);
+    if (!result.success) {
+      res.status(400).json(error(400, `Invalid ${paramName}: ${result.error.errors[0].message}`));
+      return;
+    }
+    next();
+  };
+}
+
+function validateBody(schema: z.ZodSchema) {
+  return (req: Request, res: Response, next: Function) => {
+    const result = schema.safeParse(req.body);
+    if (!result.success) {
+      res.status(400).json(error(400, `Validation error: ${result.error.errors[0].message}`));
+      return;
+    }
+    next();
+  };
 }
 
 // Initialize with sample data
@@ -255,7 +301,7 @@ router.get('/', (req: Request, res: Response) => {
 });
 
 // GET /api/v1/versions/:id — 详情
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', validateIdParam(), (req: Request, res: Response) => {
   const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
@@ -395,7 +441,7 @@ router.put('/:id/events/:eventId', (req: Request, res: Response) => {
   }
 });
 
-router.post('/', (req: Request, res: Response) => {
+router.post('/', validateBody(createVersionBodySchema), (req: Request, res: Response) => {
   const { version, title, description, status, tags, branch, projectPath } = req.body as {
     version: string;
     title: string;
@@ -503,7 +549,7 @@ router.post('/', (req: Request, res: Response) => {
 });
 
 // PUT /api/v1/versions/:id — 更新版本（含自动 bump 逻辑，仅管理员）
-router.put('/:id', requireAdmin, (req: Request, res: Response) => {
+router.put('/:id', validateIdParam(), requireAdmin, (req: Request, res: Response) => {
   const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
@@ -568,13 +614,25 @@ router.put('/:id', requireAdmin, (req: Request, res: Response) => {
   }));
 });
 
-// DELETE /api/v1/versions/:id — 删除（仅管理员）
-router.delete('/:id', requireAdmin, (req: Request, res: Response) => {
-  const row = db.prepare('SELECT id FROM versions WHERE id = ?').get(req.params.id);
+// DELETE /api/v1/versions/:id — 删除（需要项目权限）
+router.delete('/:id', validateIdParam(), requireProjectAccess, (req: AuthRequest, res: Response) => {
+  const row = db.prepare('SELECT id, version, created_by FROM versions WHERE id = ?').get(req.params.id) as 
+    { id: string; version: string; created_by: string } | undefined;
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
+
+  // 记录审计日志
+  auditService.log({
+    action: 'version_delete',
+    actor: req.user?.id || 'unknown',
+    target: req.params.id,
+    details: { version: row.version, deletedBy: req.user?.id, originalCreator: row.created_by },
+    ipAddress: (req.ip || req.socket.remoteAddress) as string | undefined,
+    userAgent: req.headers['user-agent'] as string | undefined,
+  });
+
   db.prepare('DELETE FROM versions WHERE id = ?').run(req.params.id);
   res.json(success({ deleted: true }));
 });
@@ -1094,9 +1152,9 @@ router.get('/:id/head-status', (req: Request, res: Response) => {
   }));
 });
 
-// POST /api/v1/versions/:id/rollback — Rollback to a tag, branch, or commit（仅管理员）
-router.post('/:id/rollback', requireAdmin, async (req: Request, res: Response) => {
-  const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+// POST /api/v1/versions/:id/rollback — Rollback to a tag, branch, or commit（需要项目权限）
+router.post('/:id/rollback', requireProjectAccess, async (req: AuthRequest, res: Response) => {
+  const row = db.prepare('SELECT id, version, projectPath, created_by FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -1139,7 +1197,7 @@ router.post('/:id/rollback', requireAdmin, async (req: Request, res: Response) =
     backupCreated: shouldCreateBranch || false,
     success: result.success,
     error: result.error,
-    performedBy: 'developer',
+    performedBy: req.user?.id || 'developer',
     performedAt: new Date().toISOString(),
   });
 
@@ -1158,7 +1216,7 @@ router.post('/:id/rollback', requireAdmin, async (req: Request, res: Response) =
       req.params.id,
       target,
       type || 'tag',
-      'developer',
+      req.user?.id || 'developer',
       undefined,
       { success: result.success, backupCreated: shouldCreateBranch || false }
     );
@@ -1189,12 +1247,20 @@ router.post('/:id/rollback', requireAdmin, async (req: Request, res: Response) =
   // Return enriched response with rollback tracking info (iter75)
   const updated = db.prepare('SELECT rollback_count, last_rollback_at FROM versions WHERE id = ?').get(req.params.id) as { rollback_count: number; last_rollback_at: string } | undefined;
 
-  // 审计日志
+  // 审计日志 - 增强版（iter-19）
   auditService.log({
     action: 'version_rollback',
-    actor: (req.headers['x-user-id'] as string) || 'unknown',
+    actor: req.user?.id || (req.headers['x-user-id'] as string) || 'unknown',
     target: req.params.id,
-    details: { target, type: type || 'tag', success: result.success },
+    details: { 
+      target, 
+      type: type || 'tag', 
+      success: result.success,
+      operatorId: req.user?.id,
+      targetResource: `version:${req.params.id}`,
+      originalCreator: row.created_by,
+      timestamp: new Date().toISOString()
+    },
     ipAddress: (req.ip || req.socket.remoteAddress) as string | undefined,
     userAgent: req.headers['user-agent'] as string | undefined,
   });
