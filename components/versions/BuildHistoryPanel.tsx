@@ -227,17 +227,26 @@ export function BuildHistoryPanel({
 
   const [rebuildTarget, setRebuildTarget] = useState<BuildRecord | null>(null);
   const [showRebuildDialog, setShowRebuildDialog] = useState(false);
+  const [downloadConfirmBuild, setDownloadConfirmBuild] = useState<BuildRecord | null>(null);
+  const [showDownloadConfirmDialog, setShowDownloadConfirmDialog] = useState(false);
 
   const builds = data?.builds || [];
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handlePackageDownload = async (build: BuildRecord) => {
-    if (!window.confirm(`将为构建 #${build.buildNumber} 创建 zip 包并下载。`)) return;
+  const handlePackageDownload = (build: BuildRecord) => {
+    setDownloadConfirmBuild(build);
+    setShowDownloadConfirmDialog(true);
+  };
+
+  const confirmPackageDownload = async () => {
+    if (!downloadConfirmBuild) return;
+    setShowDownloadConfirmDialog(false);
     try {
-      await createPackageAPI(build.id, 'zip');
-      window.open(getPackageDownloadUrl(build.id, 'zip'), '_blank');
+      await createPackageAPI(downloadConfirmBuild.id, 'zip');
+      window.open(getPackageDownloadUrl(downloadConfirmBuild.id, 'zip'), '_blank');
     } catch (err) {
       showToast('打包失败: ' + (err instanceof Error ? err.message : String(err)), 'error');
+    } finally {
+      setDownloadConfirmBuild(null);
     }
   };
 
@@ -346,6 +355,27 @@ export function BuildHistoryPanel({
           ))}
         </div>
       )}
+
+      <Dialog open={showDownloadConfirmDialog} onOpenChange={setShowDownloadConfirmDialog}>
+        <DialogContent title="打包下载确认" onClose={() => { setShowDownloadConfirmDialog(false); setDownloadConfirmBuild(null); }}>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              将为构建 <strong>#{downloadConfirmBuild?.buildNumber}</strong> 创建 zip 包并下载。
+            </p>
+            <p className="text-xs text-muted-foreground">
+              首次打包可能需要较长时间，请耐心等待。
+            </p>
+          </div>
+          <div className="flex justify-end gap-3 mt-6">
+            <Button variant="outline" onClick={() => { setShowDownloadConfirmDialog(false); setDownloadConfirmBuild(null); }}>
+              取消
+            </Button>
+            <Button onClick={confirmPackageDownload}>
+              确认打包下载
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showRebuildDialog} onOpenChange={setShowRebuildDialog}>
         <DialogContent title="重新打包" onClose={() => setShowRebuildDialog(false)}>

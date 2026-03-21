@@ -54,6 +54,7 @@ export function RollbackDialog({
   const [toastMsg, setToastMsg] = useState("");
   const [toastType, setToastType] = useState<"success" | "error">("success");
   const [toastVisible, setToastVisible] = useState(false);
+  const [showRollbackConfirm, setShowRollbackConfirm] = useState(false);
   const rollbackMutation = useRollbackVersion();
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
@@ -108,12 +109,11 @@ export function RollbackDialog({
       showToast("请选择要回退到的目标", "error");
       return;
     }
+    setShowRollbackConfirm(true);
+  };
 
-    const confirmed = window.confirm(
-      `确定要将版本 ${version.version} 回退到 ${targetType === "tag" ? "标签" : "分支"} ${targetRef} 吗？`
-    );
-    if (!confirmed) return;
-
+  const confirmRollback = async () => {
+    setShowRollbackConfirm(false);
     try {
       await rollbackMutation.mutateAsync({
         versionId: version.id,
@@ -499,26 +499,57 @@ export function RollbackDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            取消
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={handleRollback}
-            disabled={!targetRef || rollbackMutation.isPending}
-          >
-            {rollbackMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                回退中...
-              </>
-            ) : (
-              <>
-                <RotateCcw className="h-4 w-4 mr-2" />
-                确认回退
-              </>
-            )}
-          </Button>
+          {showRollbackConfirm ? (
+            <>
+              <div className="flex items-center gap-2 text-sm text-amber-600">
+                <AlertTriangle className="h-4 w-4" />
+                确认执行回退操作？
+              </div>
+              <Button variant="outline" onClick={() => setShowRollbackConfirm(false)}>
+                返回
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={confirmRollback}
+                disabled={rollbackMutation.isPending}
+              >
+                {rollbackMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    回退中...
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    确认执行
+                  </>
+                )}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                取消
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleRollback}
+                disabled={!targetRef || rollbackMutation.isPending}
+              >
+                {rollbackMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    回退中...
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    确认回退
+                  </>
+                )}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
 

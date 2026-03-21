@@ -64,6 +64,7 @@ export function VersionDetails(props: VersionDetailsProps) {
   const [rebuilding, setRebuilding] = useState(false);
   const [rollingBack, setRollingBack] = useState(false);
   const [packaging, setPackaging] = useState(false);
+  const [showRollbackConfirm, setShowRollbackConfirm] = useState(false);
 
   // Toast 通知
   const [toastMsg, setToastMsg] = useState("");
@@ -121,7 +122,12 @@ export function VersionDetails(props: VersionDetailsProps) {
 
   const handleRollback = async () => {
     if (!latestBuild?.id || !version) return;
-    if (!window.confirm(`确定要回退到版本 "${version.title}" 的构建状态吗？当前未提交的更改将会丢失。`)) return;
+    setShowRollbackConfirm(true);
+  };
+
+  const confirmRollback = async () => {
+    if (!latestBuild?.id || !version) return;
+    setShowRollbackConfirm(false);
     setRollingBack(true);
     try {
       await rollbackBuild.mutateAsync({
@@ -201,15 +207,37 @@ export function VersionDetails(props: VersionDetailsProps) {
                   <RefreshCw className={`w-4 h-4 mr-1 ${rebuilding || rebuildBuild.isPending ? 'animate-spin' : ''}`} />
                   重新打包
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRollback}
-                  disabled={rollingBack || rollbackBuild.isPending}
-                >
-                  <History className={`w-4 h-4 mr-1 ${rollingBack || rollbackBuild.isPending ? 'animate-spin' : ''}`} />
-                  回退到此版本
-                </Button>
+                {showRollbackConfirm ? (
+                  <>
+                    <span className="text-xs text-amber-600">确认回退？</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowRollbackConfirm(false)}
+                    >
+                      取消
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={confirmRollback}
+                      disabled={rollingBack || rollbackBuild.isPending}
+                    >
+                      <History className={`w-4 h-4 mr-1 ${rollingBack || rollbackBuild.isPending ? 'animate-spin' : ''}`} />
+                      确认
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRollback}
+                    disabled={rollingBack || rollbackBuild.isPending}
+                  >
+                    <History className={`w-4 h-4 mr-1 ${rollingBack || rollbackBuild.isPending ? 'animate-spin' : ''}`} />
+                    回退到此版本
+                  </Button>
+                )}
               </>
             )}
             {serverArtifacts.length > 0 && (
