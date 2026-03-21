@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
-import { Trash2, Image as ImageIcon, Plus, ZoomIn, X, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Trash2, Image as ImageIcon, Plus, ZoomIn, X, ChevronLeft, ChevronRight, Loader2, Check, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { VersionMessageScreenshot } from "@/lib/api/types";
+import { cn } from "@/lib/utils";
 
 interface ScreenshotGalleryProps {
   screenshots: VersionMessageScreenshot[];
@@ -24,6 +25,38 @@ export function ScreenshotGallery({ screenshots, onUnlink, onLink, loading }: Sc
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
   const [lightboxImageLoading, setLightboxImageLoading] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  
+  // Toast 状态
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error">("success");
+
+  // 显示 Toast
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    setToastMessage(message);
+    setToastType(type);
+    setToastVisible(true);
+    setTimeout(() => setToastVisible(false), 2000);
+  };
+
+  // 包装回调函数，添加 toast 通知
+  const handleUnlink = (screenshotId: string) => {
+    try {
+      onUnlink?.(screenshotId);
+      showToast("截图已解除关联", "success");
+    } catch {
+      showToast("解除关联失败，请重试", "error");
+    }
+  };
+
+  const handleLink = () => {
+    try {
+      onLink?.();
+      showToast("打开消息选择器", "success");
+    } catch {
+      showToast("操作失败，请重试", "error");
+    }
+  };
 
   const handleImageError = (id: string) => {
     setImageErrors(prev => new Set(prev).add(id));
@@ -101,7 +134,7 @@ export function ScreenshotGallery({ screenshots, onUnlink, onLink, loading }: Sc
         <div className="flex items-center justify-between">
           <div className="text-sm font-medium">消息截图</div>
           {onLink && (
-            <Button variant="outline" size="sm" onClick={onLink}>
+            <Button variant="outline" size="sm" onClick={handleLink}>
               <Plus className="h-4 w-4 mr-1" />
               关联截图
             </Button>
@@ -111,7 +144,7 @@ export function ScreenshotGallery({ screenshots, onUnlink, onLink, loading }: Sc
           <ImageIcon className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
           <p className="text-sm text-muted-foreground">暂无关联截图</p>
           {onLink && (
-            <Button variant="outline" size="sm" className="mt-3" onClick={onLink}>
+            <Button variant="outline" size="sm" className="mt-3" onClick={handleLink}>
               <Plus className="h-4 w-4 mr-1" />
               关联截图
             </Button>
@@ -126,7 +159,7 @@ export function ScreenshotGallery({ screenshots, onUnlink, onLink, loading }: Sc
       <div className="flex items-center justify-between">
         <div className="text-sm font-medium">消息截图 ({screenshots.length})</div>
         {onLink && (
-          <Button variant="outline" size="sm" onClick={onLink}>
+          <Button variant="outline" size="sm" onClick={handleLink}>
             <Plus className="h-4 w-4 mr-1" />
             关联截图
           </Button>
@@ -333,8 +366,8 @@ export function ScreenshotGallery({ screenshots, onUnlink, onLink, loading }: Sc
             <Button
               variant="destructive"
               onClick={() => {
-                if (pendingDeleteId && onUnlink) {
-                  onUnlink(pendingDeleteId);
+                if (pendingDeleteId) {
+                  handleUnlink(pendingDeleteId);
                 }
                 setPendingDeleteId(null);
               }}
@@ -344,6 +377,25 @@ export function ScreenshotGallery({ screenshots, onUnlink, onLink, loading }: Sc
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Toast 通知 */}
+      {toastVisible && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm",
+              toastType === "success" ? "bg-gray-900 text-white" : "bg-red-600 text-white"
+            )}
+          >
+            {toastType === "success" ? (
+              <Check className="w-4 h-4 text-green-400" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-white" />
+            )}
+            <span>{toastMessage}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -94,6 +94,7 @@ export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }:
   const [pageToken, setPageToken] = useState<string | undefined>(undefined);
   const [loadingMore, setLoadingMore] = useState(false);
   const [isUsingMock, setIsUsingMock] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   // Load chat list when dialog opens
   useEffect(() => {
@@ -234,18 +235,22 @@ export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }:
   };
 
   const handleSelect = () => {
-    if (selectedMessages.length > 0) {
-      selectedMessages.forEach(msg => onSelect(msg));
-      setSelectedMessages([]);
-      setSearchQuery("");
-      onOpenChange(false);
+    if (selectedMessages.length === 0) {
+      setValidationError("请至少选择一条消息");
+      return;
     }
+    setValidationError(null);
+    selectedMessages.forEach(msg => onSelect(msg));
+    setSelectedMessages([]);
+    setSearchQuery("");
+    onOpenChange(false);
   };
 
   const handleClose = () => {
     setSelectedMessages([]);
     setSearchQuery("");
     setError(null);
+    setValidationError(null);
     onOpenChange(false);
   };
 
@@ -414,6 +419,9 @@ export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }:
         </div>
 
         <DialogFooter>
+          {validationError && (
+            <p className="text-sm text-destructive mr-auto">{validationError}</p>
+          )}
           <Button variant="outline" onClick={handleClose}>
             取消
           </Button>

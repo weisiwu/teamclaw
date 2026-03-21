@@ -74,16 +74,34 @@ function BuildStatusLabel({ status }: { status: BuildRecord["status"] }) {
   return <span className="text-xs text-muted-foreground">已取消</span>;
 }
 
+type BuildStatus = BuildRecord["status"];
+
+type FilterTab = "all" | BuildStatus;
+
+const FILTER_TABS: { key: FilterTab; label: string }[] = [
+  { key: "all", label: "全部" },
+  { key: "success", label: "成功" },
+  { key: "failed", label: "失败" },
+  { key: "building", label: "构建中" },
+  { key: "pending", label: "排队中" },
+];
+
 interface BuildRowProps {
   build: BuildRecord;
   onRebuild: (build: BuildRecord) => void;
   onCancel: (build: BuildRecord) => void;
   isLatest?: boolean;
   onPackageDownload: (build: BuildRecord) => void;
+  avgDuration?: number;
 }
 
-function BuildRow({ build, onRebuild, onCancel, isLatest, onPackageDownload }: BuildRowProps) {
+function BuildRow({ build, onRebuild, onCancel, isLatest, onPackageDownload, avgDuration }: BuildRowProps) {
   const [expanded, setExpanded] = useState(false);
+
+  // 计算与平均时长的差异
+  const durationDiff = build.duration && avgDuration != null && avgDuration > 0
+    ? build.duration - avgDuration
+    : null;
 
   return (
     <div className="border rounded-lg p-3 bg-card hover:bg-card/80 transition-colors">
@@ -99,7 +117,20 @@ function BuildRow({ build, onRebuild, onCancel, isLatest, onPackageDownload }: B
           </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
             <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatTime(build.queuedAt)}</span>
-            {build.duration && <span className="flex items-center gap-1"><Activity className="w-3 h-3" />{formatDuration(build.duration)}</span>}
+            {build.duration && (
+              <span className="flex items-center gap-1">
+                <Activity className="w-3 h-3" />
+                {formatDuration(build.duration)}
+                {durationDiff !== null && (
+                  <span className={`flex items-center gap-0.5 ml-0.5 ${durationDiff <= 0 ? "text-green-500" : "text-red-500"}`}>
+                    {durationDiff <= 0
+                      ? <ChevronDown className="w-3 h-3" />
+                      : <ChevronUp className="w-3 h-3" />}
+                    <span>{formatDuration(Math.abs(durationDiff))}</span>
+                  </span>
+                )}
+              </span>
+            )}
             {build.artifactCount != null && build.artifactCount > 0 && (
               <span className="flex items-center gap-1"><Package className="w-3 h-3" />{build.artifactCount} 个产物</span>
             )}
@@ -230,7 +261,23 @@ export function BuildHistoryPanel({
   const [downloadConfirmBuild, setDownloadConfirmBuild] = useState<BuildRecord | null>(null);
   const [showDownloadConfirmDialog, setShowDownloadConfirmDialog] = useState(false);
 
+  const [filterTab, setFilterTab] = useState<FilterTab>("all");
+
   const builds = data?.builds || [];
+
+  // 计算统计数据
+  const totalBuilds = builds.length;
+  const successBuilds = builds.filter(b => b.status === "success").length;
+  const failedBuilds = builds.filter(b => b.status === "failed").length;
+  const successRate = totalBuilds > 0 ? Math.round((successBuilds / totalBuilds) * 100) : 0;
+  const lastBuild = builds[0];
+  const avgDuration = builds.filter(b => b.duration).reduce((sum, b) => sum + (b.duration ?? 0), 0)
+    / builds.filter(b => b.duration).length || undefined;
+
+  // 过滤后的构建列表
+  const filteredBuilds = filterTab === "all"
+    ? builds
+    : builds.filter(b => b.status === filterTab);
 
   const handlePackageDownload = (build: BuildRecord) => {
     setDownloadConfirmBuild(build);
@@ -331,6 +378,59 @@ export function BuildHistoryPanel({
         </div>
       )}
 
+      {/* 改进1：Build Summary Stats Bar */}
+      {builds.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-muted/30 rounded-lg border">
+          <div className="flex flex-col items-center justify-center py-1">
+            <span className="text-lg font-semibold text-foreground">{totalBuilds}</span>
+            <span className="text-xs text-muted-foreground">总构建</span>
+          </div>
+          <div className="flex flex-col items-center justify-center py-1">
+            <div className="flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3 text-green-500" />
+              <span className="text-lg font-semibold text-green-600">{successBuilds}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <XCircle className="w-3 h-3 text-red-500" />
+              <span className="text-lg font-semibold text-red-600">{failedBuilds}</span>
+            </div>
+            <span className="text-xs text-muted-foreground">成功 / 失败</span>
+          </div>
+          <div className="flex flex-col items-center justify-center py-1">
+            <span className={`text-lg font-semibold ${successRate >= 80 ? "text-green-600" : successRate >= 50 ? "text-yellow-600" : "text-red-600"}`}>{successRate}%</span>
+            <span className="text-xs text-muted-foreground">成功率</span>
+          </div>
+          <div className="flex flex-col items-center justify-center py-1">
+            <span className="text-xs font-medium text-foreground">{lastBuild ? formatTime(lastBuild.queuedAt) : "-"}</span>
+            <span className="text-xs text-muted-foreground">最后构建</span>
+          </div>
+        </div>
+      )}
+
+      {/* 改进3：Build Status Quick Filter */}
+      {builds.length > 0 && (
+        <div className="flex items-center gap-1 border rounded-lg p-1 bg-card overflow-x-auto">
+          {FILTER_TABS.map(tab => {
+            const count = tab.key === "all" ? builds.length : builds.filter(b => b.status === tab.key).length;
+            const isActive = filterTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setFilterTab(tab.key)}
+                className={`flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                }`}
+              >
+                {tab.label}
+                <span className={`text-xs rounded px-1 ${isActive ? "bg-primary-foreground/20" : "bg-muted"}`}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {!isLoading && builds.length === 0 && (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground text-sm">
@@ -341,9 +441,9 @@ export function BuildHistoryPanel({
         </Card>
       )}
 
-      {builds.length > 0 && (
+      {filteredBuilds.length > 0 && (
         <div className="space-y-2">
-          {builds.map((build, i) => (
+          {filteredBuilds.map((build, i) => (
             <BuildRow
               key={build.id}
               build={build}
@@ -351,8 +451,15 @@ export function BuildHistoryPanel({
               onCancel={handleCancel}
               isLatest={i === 0}
               onPackageDownload={handlePackageDownload}
+              avgDuration={avgDuration}
             />
           ))}
+        </div>
+      )}
+
+      {filteredBuilds.length === 0 && builds.length > 0 && (
+        <div className="text-sm text-muted-foreground py-4 text-center">
+          当前筛选条件下无构建记录
         </div>
       )}
 

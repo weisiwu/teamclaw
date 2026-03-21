@@ -81,3 +81,66 @@ export function MembersSkeleton() {
     </div>
   );
 }
+
+// Agent 团队页面骨架屏
+export function AgentTeamSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <SkeletonLine className="w-10 h-10 rounded-xl" />
+          <div className="space-y-1">
+            <SkeletonLine className="h-7 w-32" />
+            <SkeletonLine className="h-4 w-24" />
+          </div>
+        </div>
+        <SkeletonLine className="h-9 w-9 rounded-lg" />
+      </div>
+
+      {/* Hierarchy Chart Placeholder */}
+      <SkeletonLine className="h-32 w-full rounded-xl" />
+
+      {/* Agent Cards Grid */}
+      <div>
+        <SkeletonLine className="h-5 w-20 mb-3" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+              {/* Header gradient placeholder */}
+              <SkeletonLine className="h-20 w-full" />
+              <div className="p-4 space-y-3">
+                <SkeletonLine className="h-4 w-full" />
+                <SkeletonLine className="h-4 w-3/4" />
+                <SkeletonLine className="h-16 w-full rounded-lg" />
+                <div className="flex items-center justify-between pt-1">
+                  <div className="flex gap-3">
+                    <SkeletonLine className="h-3 w-12" />
+                    <SkeletonLine className="h-3 w-12" />
+                  </div>
+                  <SkeletonLine className="h-4 w-4" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Dispatch Matrix */}
+      <div className="bg-white rounded-xl border border-gray-100 p-4 space-y-3">
+        <SkeletonLine className="h-5 w-24" />
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <SkeletonLine className="h-4 w-20" />
+            <SkeletonLine className="h-4 w-4" />
+            <div className="flex gap-1.5">
+              <SkeletonLine className="h-5 w-16 rounded" />
+              <SkeletonLine className="h-5 w-16 rounded" />
+            </div>
+          </div>
+        ))}
+        <SkeletonLine className="h-3 w-64" />
+      </div>
+    </div>
+  );
+}

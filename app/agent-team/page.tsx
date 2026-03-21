@@ -5,8 +5,9 @@ import { useAgentList, useTeamOverview } from "@/hooks/useAgents";
 import { AgentCard } from "@/components/agent-team/AgentCard";
 import { HierarchyChart } from "@/components/agent-team/HierarchyChart";
 import { AgentDetailPanel } from "@/components/agent-team/AgentDetailPanel";
-import { Loader2, RefreshCw, Users } from "lucide-react";
+import { RefreshCw, Users } from "lucide-react";
 import { Agent } from "@/lib/api/agents";
+import { AgentTeamSkeleton } from "@/components/ui/projects-skeleton";
 
 export default function AgentTeamPage() {
   const { data: agents, isLoading, error, refetch } = useAgentList();
@@ -51,10 +52,7 @@ export default function AgentTeamPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-          <span className="ml-3 text-gray-500">加载 Agent 数据...</span>
-        </div>
+        <AgentTeamSkeleton />
       ) : (
         <>
           {/* Hierarchy Chart */}
