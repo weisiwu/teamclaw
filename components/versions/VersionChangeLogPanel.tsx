@@ -4,10 +4,10 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, RefreshCw, Image as ImageIcon, FileText } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Image as ImageIcon, FileText, CheckCircle, XCircle } from "lucide-react";
 import { ChangeTimeline } from "./ChangeTimeline";
 import { ScreenshotGallery } from "./ScreenshotGallery";
 import { MessageSelector, MessageItem } from "./MessageSelector";
@@ -46,7 +46,23 @@ export function VersionChangeLogPanel({
   const [messageSelectorOpen, setMessageSelectorOpen] = useState(false);
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error">("success");
+  const [toastVisible, setToastVisible] = useState(false);
   const addNoteMutation = useAddTimelineEvent();
+
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    setToastMsg(msg);
+    setToastType(type);
+    setToastVisible(true);
+  };
+
+  useEffect(() => {
+    if (toastVisible) {
+      const timer = setTimeout(() => setToastVisible(false), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastVisible]);
 
   const loadChangelog = async () => {
     setLoadingChangelog(true);
@@ -104,9 +120,10 @@ export function VersionChangeLogPanel({
       await linkScreenshot(versionId, req);
       await loadScreenshots();
       setMessageSelectorOpen(false);
+      showToast("截图关联成功");
     } catch (e) {
       console.error("Failed to link screenshot:", e);
-      alert("关联截图失败，请重试");
+      showToast("关联截图失败，请重试", "error");
     } finally {
       setLinkLoading(false);
     }
@@ -116,9 +133,10 @@ export function VersionChangeLogPanel({
     try {
       await unlinkScreenshot(screenshotId);
       await loadScreenshots();
+      showToast("截图已解除关联");
     } catch (e) {
       console.error("Failed to unlink screenshot:", e);
-      alert("解除关联失败，请重试");
+      showToast("解除关联失败，请重试", "error");
     }
   };
 
@@ -326,6 +344,24 @@ export function VersionChangeLogPanel({
         onOpenChange={setMessageSelectorOpen}
         onSelect={handleMessageSelected}
       />
+
+      {/* Toast 通知 */}
+      {toastVisible && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm text-white ${
+              toastType === "success" ? "bg-gray-900" : "bg-red-600"
+            }`}
+          >
+            {toastType === "success" ? (
+              <CheckCircle className="w-4 h-4 text-green-400" />
+            ) : (
+              <XCircle className="w-4 h-4 text-white" />
+            )}
+            <span>{toastMsg}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

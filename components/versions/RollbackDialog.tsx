@@ -28,6 +28,8 @@ import {
   RefreshCw,
   ChevronDown,
   ChevronUp,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 
 interface RollbackDialogProps {
@@ -49,7 +51,23 @@ export function RollbackDialog({
   const [previewCollapsed, setPreviewCollapsed] = useState(false);
   const [createBackup, setCreateBackup] = useState(true);
   const [reason, setReason] = useState("");
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error">("success");
+  const [toastVisible, setToastVisible] = useState(false);
   const rollbackMutation = useRollbackVersion();
+
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    setToastMsg(msg);
+    setToastType(type);
+    setToastVisible(true);
+  };
+
+  useEffect(() => {
+    if (toastVisible) {
+      const timer = setTimeout(() => setToastVisible(false), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastVisible]);
   const { data: targets, isLoading: targetsLoading } = useRollbackTargets(version?.id || "");
 
   // Preview fetched when target changes
@@ -87,7 +105,7 @@ export function RollbackDialog({
 
   const handleRollback = async () => {
     if (!targetRef) {
-      alert("请选择要回退到的目标");
+      showToast("请选择要回退到的目标", "error");
       return;
     }
 
@@ -104,12 +122,12 @@ export function RollbackDialog({
         createBackup,
         message: reason || `Rollback to ${targetRef}`,
       });
-      alert(`成功回退到 ${targetRef}`);
       onOpenChange(false);
       setTargetRef("");
+      showToast(`版本回退成功`);
       onRollbackComplete?.();
     } catch (e: unknown) {
-      alert(`回退失败: ${e instanceof Error ? e.message : "请重试"}`);
+      showToast(`回退失败: ${e instanceof Error ? e.message : "请重试"}`, "error");
     }
   };
 
@@ -503,6 +521,24 @@ export function RollbackDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Toast 通知 */}
+      {toastVisible && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm text-white ${
+              toastType === "success" ? "bg-gray-900" : "bg-red-600"
+            }`}
+          >
+            {toastType === "success" ? (
+              <CheckCircle className="w-4 h-4 text-green-400" />
+            ) : (
+              <XCircle className="w-4 h-4 text-white" />
+            )}
+            <span>{toastMsg}</span>
+          </div>
+        </div>
+      )}
     </Dialog>
   );
 }
