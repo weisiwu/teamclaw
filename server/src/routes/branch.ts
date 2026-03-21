@@ -3,6 +3,8 @@
 
 import { Router, Request, Response } from 'express';
 import { success, error } from '../utils/response.js';
+import { requireAdmin } from '../middleware/auth.js';
+import { auditService } from '../services/auditService.js';
 import {
   getAllBranches,
   getBranch,
@@ -75,8 +77,8 @@ router.get('/config', (_req: Request, res: Response) => {
   res.json(success(getBranchConfig()));
 });
 
-// PUT /api/v1/branches/config — 更新分支配置
-router.put('/config', (req: Request, res: Response) => {
+// PUT /api/v1/branches/config — 更新分支配置（仅管理员）
+router.put('/config', requireAdmin, (req: Request, res: Response) => {
   const config = req.body;
   const updated = updateBranchConfig(config);
   res.json(success(updated));
@@ -126,8 +128,8 @@ router.post('/', (req: Request, res: Response) => {
   }
 });
 
-// PUT /api/v1/branches/:id — 更新分支
-router.put('/:id', (req: Request, res: Response) => {
+// PUT /api/v1/branches/:id — 更新分支（仅管理员）
+router.put('/:id', requireAdmin, (req: Request, res: Response) => {
   const branch = getBranch(req.params.id);
   if (!branch) {
     res.status(404).json(error(404, 'Branch not found'));
@@ -153,14 +155,22 @@ router.put('/:id', (req: Request, res: Response) => {
   }
 });
 
-// DELETE /api/v1/branches/:id — 删除分支
-router.delete('/:id', (req: Request, res: Response) => {
+// DELETE /api/v1/branches/:id — 删除分支（仅管理员）
+router.delete('/:id', requireAdmin, (req: Request, res: Response) => {
   try {
     const deleted = deleteBranch(req.params.id);
     if (!deleted) {
       res.status(404).json(error(404, 'Branch not found'));
       return;
     }
+    // 审计日志
+    auditService.log({
+      action: 'branch_delete',
+      actor: (req.headers['x-user-id'] as string) || 'unknown',
+      target: req.params.id,
+      ipAddress: (req.ip || req.socket.remoteAddress) as string | undefined,
+      userAgent: req.headers['user-agent'] as string | undefined,
+    });
     res.json(success({ deleted: true }));
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to delete branch';
@@ -170,8 +180,8 @@ router.delete('/:id', (req: Request, res: Response) => {
 
 // ========== 分支操作 ==========
 
-// PUT /api/v1/branches/:id/main — 设置为主分支
-router.put('/:id/main', (req: Request, res: Response) => {
+// PUT /api/v1/branches/:id/main — 设置为主分支（仅管理员）
+router.put('/:id/main', requireAdmin, (req: Request, res: Response) => {
   const branch = getBranch(req.params.id);
   if (!branch) {
     res.status(404).json(error(404, 'Branch not found'));
@@ -182,8 +192,8 @@ router.put('/:id/main', (req: Request, res: Response) => {
   res.json(success(updated));
 });
 
-// PUT /api/v1/branches/:id/protect — 设置保护状态
-router.put('/:id/protect', (req: Request, res: Response) => {
+// PUT /api/v1/branches/:id/protect — 设置保护状态（仅管理员）
+router.put('/:id/protect', requireAdmin, (req: Request, res: Response) => {
   const { protected: isProtected } = req.body as { protected: boolean };
 
   const branch = getBranch(req.params.id);
@@ -201,8 +211,8 @@ router.put('/:id/protect', (req: Request, res: Response) => {
   }
 });
 
-// PUT /api/v1/branches/:id/rename — 重命名分支
-router.put('/:id/rename', (req: Request, res: Response) => {
+// PUT /api/v1/branches/:id/rename — 重命名分支（仅管理员）
+router.put('/:id/rename', requireAdmin, (req: Request, res: Response) => {
   const { newName } = req.body as { newName: string };
 
   if (!newName || typeof newName !== 'string') {
@@ -228,8 +238,8 @@ router.put('/:id/rename', (req: Request, res: Response) => {
   }
 });
 
-// PUT /api/v1/branches/:id/checkout — 检出（切换到）分支
-router.put('/:id/checkout', (req: Request, res: Response) => {
+// PUT /api/v1/branches/:id/checkout — 检出（切换到）分支（仅管理员）
+router.put('/:id/checkout', requireAdmin, (req: Request, res: Response) => {
   const branch = getBranch(req.params.id);
   if (!branch) {
     res.status(404).json(error(404, 'Branch not found'));

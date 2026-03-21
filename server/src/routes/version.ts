@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { success, error } from '../utils/response.js';
+import { requireAdmin } from '../middleware/auth.js';
+import { auditService } from '../services/auditService.js';
 import { ScreenshotModel } from '../models/screenshot.js';
 import { VersionSummaryModel } from '../models/versionSummary.js';
 import { saveScreenshot, deleteScreenshotFile } from '../services/fileStorage.js';
@@ -500,8 +502,8 @@ router.post('/', (req: Request, res: Response) => {
   }));
 });
 
-// PUT /api/v1/versions/:id — 更新版本（含自动 bump 逻辑）
-router.put('/:id', (req: Request, res: Response) => {
+// PUT /api/v1/versions/:id — 更新版本（含自动 bump 逻辑，仅管理员）
+router.put('/:id', requireAdmin, (req: Request, res: Response) => {
   const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
@@ -566,8 +568,8 @@ router.put('/:id', (req: Request, res: Response) => {
   }));
 });
 
-// DELETE /api/v1/versions/:id — 删除
-router.delete('/:id', (req: Request, res: Response) => {
+// DELETE /api/v1/versions/:id — 删除（仅管理员）
+router.delete('/:id', requireAdmin, (req: Request, res: Response) => {
   const row = db.prepare('SELECT id FROM versions WHERE id = ?').get(req.params.id);
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
@@ -874,8 +876,8 @@ router.get('/:id/artifacts/*', (req: Request, res: Response) => {
   artifactStream.stream.pipe(res);
 });
 
-// DELETE /api/v1/versions/:id/artifacts — Delete all artifacts for a version
-router.delete('/:id/artifacts', (req: Request, res: Response) => {
+// DELETE /api/v1/versions/:id/artifacts — Delete all artifacts for a version（仅管理员）
+router.delete('/:id/artifacts', requireAdmin, (req: Request, res: Response) => {
   const row = db.prepare('SELECT id, version FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
@@ -1059,8 +1061,8 @@ router.get('/:id/rollback-preview', (req: Request, res: Response) => {
   res.json(success(preview));
 });
 
-// POST /api/v1/versions/:id/rollback — Rollback to a tag, branch, or commit
-router.post('/:id/rollback', async (req: Request, res: Response) => {
+// POST /api/v1/versions/:id/rollback — Rollback to a tag, branch, or commit（仅管理员）
+router.post('/:id/rollback', requireAdmin, async (req: Request, res: Response) => {
   const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
@@ -1153,6 +1155,17 @@ router.post('/:id/rollback', async (req: Request, res: Response) => {
 
   // Return enriched response with rollback tracking info (iter75)
   const updated = db.prepare('SELECT rollback_count, last_rollback_at FROM versions WHERE id = ?').get(req.params.id) as { rollback_count: number; last_rollback_at: string } | undefined;
+
+  // 审计日志
+  auditService.log({
+    action: 'version_rollback',
+    actor: (req.headers['x-user-id'] as string) || 'unknown',
+    target: req.params.id,
+    details: { target, type: type || 'tag', success: result.success },
+    ipAddress: (req.ip || req.socket.remoteAddress) as string | undefined,
+    userAgent: req.headers['user-agent'] as string | undefined,
+  });
+
   res.json(success({
     ...result,
     rollbackCount: updated?.rollback_count ?? 1,
@@ -1295,8 +1308,8 @@ router.post('/:id/screenshots', async (req: Request, res: Response) => {
   }
 });
 
-// DELETE /api/v1/versions/:id/screenshots/:screenshotId - Delete a screenshot
-router.delete('/:id/screenshots/:screenshotId', async (req: Request, res: Response) => {
+// DELETE /api/v1/versions/:id/screenshots/:screenshotId - Delete a screenshot（仅管理员）
+router.delete('/:id/screenshots/:screenshotId', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { screenshotId } = req.params;
     const screenshot = ScreenshotModel.findById(screenshotId);
@@ -1401,8 +1414,8 @@ router.put('/:id/summary', (req: Request, res: Response) => {
   }
 });
 
-// DELETE /api/v1/versions/:id/summary - Delete changelog summary
-router.delete('/:id/summary', (req: Request, res: Response) => {
+// DELETE /api/v1/versions/:id/summary - Delete changelog summary（仅管理员）
+router.delete('/:id/summary', requireAdmin, (req: Request, res: Response) => {
   const { id } = req.params;
   const deleted = VersionSummaryModel.delete(id);
   res.json(success({ deleted }));
@@ -1897,8 +1910,8 @@ router.get('/vector/search', async (req: Request, res: Response) => {
   }
 });
 
-// DELETE /api/v1/versions/:id/vector — Delete version from vector store
-router.delete('/:id/vector', async (req: Request, res: Response) => {
+// DELETE /api/v1/versions/:id/vector — Delete version from vector store（仅管理员）
+router.delete('/:id/vector', requireAdmin, async (req: Request, res: Response) => {
   try {
     await deleteVersionVector(req.params.id);
     res.json(success({ deleted: true }));

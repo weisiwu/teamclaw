@@ -3,6 +3,8 @@
 
 import { Router, Request, Response } from 'express';
 import { success, error } from '../utils/response.js';
+import { requireAdmin } from '../middleware/auth.js';
+import { auditService } from '../services/auditService.js';
 import { getTags as gitGetTags, createTag as gitCreateTag, getTagDetails } from '../services/gitService.js';
 import {
   getAllTagRecords,
@@ -219,8 +221,8 @@ router.post('/', (req: Request, res: Response) => {
   res.status(201).json(success({ ...record, gitTagCreated }));
 });
 
-// DELETE /api/v1/tags/:tagName — 删除标签（同时删除 git tag）
-router.delete('/:tagName', (req: Request, res: Response) => {
+// DELETE /api/v1/tags/:tagName — 删除标签（同时删除 git tag，仅管理员）
+router.delete('/:tagName', requireAdmin, (req: Request, res: Response) => {
   const { tagName } = req.params;
   const { projectPath: reqProjectPath } = req.body as { projectPath?: string } || {};
 
@@ -247,11 +249,21 @@ router.delete('/:tagName', (req: Request, res: Response) => {
   }
 
   const deleted = removeTag(record.id, { projectPath });
+
+  // 审计日志
+  auditService.log({
+    action: 'tag_delete',
+    actor: (req.headers['x-user-id'] as string) || 'unknown',
+    target: tagName,
+    ipAddress: (req.ip || req.socket.remoteAddress) as string | undefined,
+    userAgent: req.headers['user-agent'] as string | undefined,
+  });
+
   res.json(success({ deleted }));
 });
 
-// PUT /api/v1/tags/:tagName — 重命名标签（同时更新 git tag + DB）
-router.put('/:tagName', (req: Request, res: Response) => {
+// PUT /api/v1/tags/:tagName — 重命名标签（同时更新 git tag + DB，仅管理员）
+router.put('/:tagName', requireAdmin, (req: Request, res: Response) => {
   const { tagName } = req.params;
   const { name: newName, projectPath: reqProjectPath } = req.body as { name: string; projectPath?: string };
 
@@ -288,8 +300,8 @@ router.put('/:tagName', (req: Request, res: Response) => {
   res.json(success(updated));
 });
 
-// PUT /api/v1/tags/:tagName/rename — 重命名标签（别名路由）
-router.put('/:tagName/rename', (req: Request, res: Response) => {
+// PUT /api/v1/tags/:tagName/rename — 重命名标签（别名路由，仅管理员）
+router.put('/:tagName/rename', requireAdmin, (req: Request, res: Response) => {
   const { tagName } = req.params;
   const { name: newName, projectPath: reqProjectPath } = req.body as { name: string; projectPath?: string };
 
@@ -321,8 +333,8 @@ router.put('/:tagName/rename', (req: Request, res: Response) => {
 
 // ========== 生命周期操作 ==========
 
-// PUT /api/v1/tags/:id/archive — 归档/取消归档标签
-router.put('/:id/archive', (req: Request, res: Response) => {
+// PUT /api/v1/tags/:id/archive — 归档/取消归档标签（仅管理员）
+router.put('/:id/archive', requireAdmin, (req: Request, res: Response) => {
   const { archived } = req.body as { archived: boolean };
 
   const record = getTagRecord(req.params.id);
@@ -340,8 +352,8 @@ router.put('/:id/archive', (req: Request, res: Response) => {
   res.json(success(updated));
 });
 
-// PUT /api/v1/tags/:id/protect — 设置/取消保护标签
-router.put('/:id/protect', (req: Request, res: Response) => {
+// PUT /api/v1/tags/:id/protect — 设置/取消保护标签（仅管理员）
+router.put('/:id/protect', requireAdmin, (req: Request, res: Response) => {
   const { protect } = req.body as { protect: boolean };
 
   const record = getTagRecord(req.params.id);
@@ -354,8 +366,8 @@ router.put('/:id/protect', (req: Request, res: Response) => {
   res.json(success(updated));
 });
 
-// PUT /api/v1/tags/:id — 更新标签记录
-router.put('/:id', (req: Request, res: Response) => {
+// PUT /api/v1/tags/:id — 更新标签记录（仅管理员）
+router.put('/:id', requireAdmin, (req: Request, res: Response) => {
   const { message, name } = req.body as { message?: string; name?: string };
 
   const record = getTagRecord(req.params.id);
@@ -390,8 +402,8 @@ router.get('/config', (_req: Request, res: Response) => {
   res.json(success(getTagConfig()));
 });
 
-// PUT /api/v1/tags/config — 更新 Tag 配置
-router.put('/config', (req: Request, res: Response) => {
+// PUT /api/v1/tags/config — 更新 Tag 配置（仅管理员）
+router.put('/config', requireAdmin, (req: Request, res: Response) => {
   const config = req.body;
   const updated = updateTagConfig(config);
   res.json(success(updated));

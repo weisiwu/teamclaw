@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Shield, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import type { SystemConfig } from '../../../lib/api/adminConfig';
 import { PermissionGuard } from '@/components/layout/PermissionGuard';
 
@@ -10,7 +11,9 @@ export default function AdminConfigPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'llm' | 'features' | 'security'>('llm');
+  const [activeTab, setActiveTab] = useState<'llm' | 'features' | 'security' | 'permissions'>('llm');
+  const [abilities, setAbilities] = useState<Array<{ id: string; name: string; description: string; enabled: boolean; requiredRole: string }>>([]);
+  const [abilitiesLoading, setAbilitiesLoading] = useState(false);
 
   const fetchConfig = async () => {
     try {
@@ -25,6 +28,22 @@ export default function AdminConfigPage() {
   };
 
   useEffect(() => { fetchConfig(); }, []);
+  useEffect(() => { if (activeTab === 'permissions') fetchAbilities(); }, [activeTab]);
+
+  const fetchAbilities = async () => {
+    setAbilitiesLoading(true);
+    try {
+      const res = await fetch('/api/v1/abilities');
+      const data = await res.json();
+      if (data.success && data.data) {
+        setAbilities(Array.isArray(data.data) ? data.data : (data.data as Record<string, unknown>).abilities || []);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setAbilitiesLoading(false);
+    }
+  };
 
   const saveConfig = async () => {
     if (!config) return;
@@ -123,10 +142,10 @@ export default function AdminConfigPage() {
 
         {/* Tabs */}
         <div className="flex border-b mb-6">
-          {(['llm', 'features', 'security'] as const).map(tab => (
+          {(['llm', 'features', 'security', 'permissions'] as const).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${activeTab === tab ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-              {tab === 'llm' ? 'LLM 模型' : tab === 'features' ? '功能开关' : '安全策略'}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px flex items-center gap-1.5 ${activeTab === tab ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              {tab === 'llm' ? 'LLM 模型' : tab === 'features' ? '功能开关' : tab === 'security' ? '安全策略' : <><Shield className="w-3.5 h-3.5" />权限配置</>}
             </button>
           ))}
         </div>
@@ -206,6 +225,71 @@ export default function AdminConfigPage() {
                 onChange={e => setConfig({ ...config, security: { ...config.security, sessionTimeoutMinutes: parseInt(e.target.value) } })}
                 className="w-full border rounded px-3 py-2 text-sm" />
             </div>
+          </div>
+        )}
+
+        {/* 权限配置 */}
+        {activeTab === 'permissions' && (
+          <div className="space-y-4">
+            {abilitiesLoading ? (
+              <div className="flex items-center gap-2 text-gray-500 py-8 justify-center">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-sm">加载中...</span>
+              </div>
+            ) : abilities.length === 0 ? (
+              <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500 text-sm">
+                暂无权限配置数据
+              </div>
+            ) : (
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <div className="p-4 border-b bg-gray-50">
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <Shield className="w-4 h-4" />
+                    角色能力矩阵
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    管理员拥有所有权限，副管理员拥有受限管理权限，成员拥有基础操作权限
+                  </div>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="text-left px-4 py-2 font-medium text-gray-600 w-1/4">功能</th>
+                      <th className="text-center px-3 py-2 font-medium text-gray-600">所有人</th>
+                      <th className="text-center px-3 py-2 font-medium text-gray-600">副管理员</th>
+                      <th className="text-center px-3 py-2 font-medium text-gray-600">管理员</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {abilities.map(ability => (
+                      <tr key={ability.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-2.5">
+                          <div className="font-medium text-gray-800 text-xs">{ability.name}</div>
+                          <div className="text-gray-400 text-xs">{ability.description}</div>
+                        </td>
+                        <td className="text-center px-3 py-2.5">
+                          {ability.requiredRole === 'all' ? (
+                            ability.enabled
+                              ? <CheckCircle className="w-4 h-4 text-emerald-500 mx-auto" />
+                              : <XCircle className="w-4 h-4 text-gray-300 mx-auto" />
+                          ) : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="text-center px-3 py-2.5">
+                          {ability.requiredRole === 'sub_admin' ? (
+                            ability.enabled
+                              ? <CheckCircle className="w-4 h-4 text-emerald-500 mx-auto" />
+                              : <XCircle className="w-4 h-4 text-gray-300 mx-auto" />
+                          ) : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="text-center px-3 py-2.5">
+                          <CheckCircle className="w-4 h-4 text-emerald-500 mx-auto" />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
