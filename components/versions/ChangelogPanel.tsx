@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { RefreshCw, FileText, Sparkles, Loader2, GitCommit, Pencil, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,8 +40,24 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, ver
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
 
+  // 防抖自动保存草稿
+  const saveDraftRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!editing || !versionId || editContent === undefined) return;
+    const key = `changelog_draft_${versionId}`;
+    if (saveDraftRef.current) clearTimeout(saveDraftRef.current);
+    saveDraftRef.current = setTimeout(() => {
+      localStorage.setItem(key, editContent);
+    }, 500);
+    return () => {
+      if (saveDraftRef.current) clearTimeout(saveDraftRef.current);
+    };
+  }, [editContent, editing, versionId]);
+
   const startEditing = () => {
-    setEditContent(changelog?.content || versionSummary || "");
+    const key = versionId ? `changelog_draft_${versionId}` : null;
+    const savedDraft = key ? localStorage.getItem(key) : null;
+    setEditContent(savedDraft || changelog?.content || versionSummary || "");
     setEditing(true);
     setSaveSuccess(null);
     setSaveError(null);
@@ -63,6 +79,8 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, ver
         setSaveSuccess(savedAt);
         setEditing(false);
         onSummarySaved?.(savedAt);
+        // 保存成功后清除草稿
+        localStorage.removeItem(`changelog_draft_${versionId}`);
       }
     } catch (e) {
       console.error("Failed to save changelog:", e);

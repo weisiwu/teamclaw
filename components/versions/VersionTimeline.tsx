@@ -48,6 +48,7 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
   const [filterType, setFilterType] = useState<"all" | "screenshot" | "changelog" | "version" | "manual_note">("all");
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
   const [branchFilter, setBranchFilter] = useState<string>("all");
+  const [showCount, setShowCount] = useState(5);
 
   // API-based timeline (when versionId is provided)
   const { data: apiEvents, isLoading: timelineLoading, isError: timelineError } = useVersionTimeline(versionId ?? null);
@@ -337,10 +338,10 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
             </div>
           ) : (
             <div className="space-y-0">
-              {filteredEvents.map((event, index) => (
+              {filteredEvents.slice(0, showCount).map((event, index) => (
                 <div key={event.id} className="relative flex gap-4 pb-6 last:pb-0">
                   {/* 连接线 */}
-                  {index < filteredEvents.length - 1 && (
+                  {index < Math.min(showCount, filteredEvents.length) - 1 && (
                     <div className="absolute left-[15px] top-8 bottom-0 w-0.5 bg-border" />
                   )}
 
@@ -456,6 +457,20 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
                   </div>
                 </div>
               ))}
+              {/* 展开更多按钮 */}
+              {filteredEvents.length > 5 && (
+                <div className="pt-2 text-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowCount((prev) => prev >= filteredEvents.length ? 5 : prev + 5)}
+                  >
+                    {showCount >= filteredEvents.length
+                      ? "收起"
+                      : `展开更多（已显示 ${showCount} / 共 ${filteredEvents.length}）`}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>
