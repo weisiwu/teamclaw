@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { TagLifecycleRecord } from "@/lib/api/types";
-import { useAllTags, useArchiveTag, useTagProtection, useDeleteTag, useRenameTag } from "@/lib/api/versions";
+import { useAllTags, useArchiveTag, useTagProtection, useDeleteTag, useRenameTag, useCreateGitTag } from "@/lib/api/versions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Archive, Lock, Unlock, Trash2, RefreshCw, Pencil, Check, X, GitCommit, Calendar, MessageSquare, ChevronDown, ChevronRight, Filter } from "lucide-react";
+import { Archive, Lock, Unlock, Trash2, RefreshCw, Pencil, Check, X, GitCommit, Calendar, MessageSquare, ChevronDown, ChevronRight, Filter, Loader2 } from "lucide-react";
 
 interface TagLifecyclePanelProps {
   versionId?: string;
@@ -19,6 +19,13 @@ export function TagLifecyclePanel({ versionId }: TagLifecyclePanelProps) {
   const setProtection = useTagProtection();
   const deleteTag = useDeleteTag();
   const renameTag = useRenameTag();
+  const createGitTag = useCreateGitTag();
+
+  // Batch selection
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [createTagName, setCreateTagName] = useState("");
+  const [createVersionId, setCreateVersionId] = useState(versionId || "");
 
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -162,9 +169,70 @@ export function TagLifecyclePanel({ versionId }: TagLifecyclePanelProps) {
             </Button>
           )}
         </div>
-        <Button variant="ghost" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {selectedTags.size > 0 && (
+            <div className="flex items-center gap-1 mr-2">
+              <span className="text-xs text-muted-foreground">{selectedTags.size} 已选</span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => setSelectedTags(new Set())}
+              >
+                取消
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs text-amber-600 border-amber-200 hover:bg-amber-50"
+                onClick={async () => {
+                  for (const id of Array.from(selectedTags)) {
+                    const tag = tags.find(t => t.id === id);
+                    if (tag && !tag.archived && !tag.protected) {
+                      await archiveTag.mutateAsync({ tagId: id, archive: true });
+                    }
+                  }
+                  setSelectedTags(new Set());
+                  refetch();
+                }}
+                disabled={archiveTag.isPending}
+              >
+                <Archive className="h-3 w-3 mr-1" />
+                批量归档
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                onClick={async () => {
+                  for (const id of Array.from(selectedTags)) {
+                    const tag = tags.find(t => t.id === id);
+                    if (tag && !tag.protected) {
+                      await deleteTag.mutateAsync(id);
+                    }
+                  }
+                  setSelectedTags(new Set());
+                  refetch();
+                }}
+                disabled={deleteTag.isPending}
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                批量删除
+              </Button>
+            </div>
+          )}
+          <Button variant="ghost" size="sm" onClick={() => refetch()}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-2 text-xs gap-1"
+            onClick={() => setShowCreateDialog(true)}
+          >
+            <span className="text-xs">+ 新建标签</span>
+          </Button>
+        </div>
       </CardHeader>
 
       <CardContent>
@@ -206,6 +274,22 @@ export function TagLifecyclePanel({ versionId }: TagLifecyclePanelProps) {
                   {/* Main row */}
                   <div className="flex items-center justify-between p-2 hover:bg-muted/30 transition-colors">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
+                      {/* Batch select checkbox */}
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        checked={selectedTags.has(tag.id)}
+                        onChange={(e) => {
+                          const next = new Set(selectedTags);
+                          if (e.target.checked) {
+                            next.add(tag.id);
+                          } else {
+                            next.delete(tag.id);
+                          }
+                          setSelectedTags(next);
+                        }}
+                      />
+
                       {/* Expand button */}
                       {hasCommitInfo && (
                         <button
@@ -383,6 +467,84 @@ export function TagLifecyclePanel({ versionId }: TagLifecyclePanelProps) {
             <X className="w-4 h-4 text-white" />
           )}
           <span>{toastMsg}</span>
+        </div>
+      </div>
+    )}
+
+    {/* Create Tag Dialog */}
+    {showCreateDialog && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+        onClick={() => setShowCreateDialog(false)}
+      >
+        <div
+          className="bg-white rounded-lg shadow-xl w-full mx-4 max-w-md"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between px-4 py-3 border-b">
+            <h3 className="font-semibold text-gray-900">新建 Git Tag</h3>
+            <Button variant="ghost" size="sm" onClick={() => setShowCreateDialog(false)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="p-4 space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-gray-700">版本</label>
+              <Input
+                placeholder="输入版本 ID（如 v1.0.0）"
+                value={createVersionId}
+                onChange={(e) => setCreateVersionId(e.target.value)}
+                className="w-full font-mono"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-gray-700">Tag 名称</label>
+              <Input
+                placeholder="如：v1.0.0"
+                value={createTagName}
+                onChange={(e) => setCreateTagName(e.target.value)}
+                className="w-full font-mono"
+              />
+              <p className="text-xs text-gray-400">留空则自动使用版本号前加 v</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2 px-4 py-3 border-t bg-gray-50 rounded-b-lg">
+            <Button variant="outline" size="sm" onClick={() => setShowCreateDialog(false)}>
+              取消
+            </Button>
+            <Button
+              size="sm"
+              onClick={async () => {
+                if (!createVersionId.trim()) {
+                  showToast("请输入版本", "error");
+                  return;
+                }
+                try {
+                  const result = await createGitTag.mutateAsync({
+                    versionId: createVersionId.trim(),
+                    request: createTagName.trim() ? { versionId: createVersionId.trim(), tagName: createTagName.trim() } : undefined,
+                  });
+                  if (result.success) {
+                    showToast(`标签 ${result.tagName} 创建成功`);
+                    setShowCreateDialog(false);
+                    setCreateTagName("");
+                    setCreateVersionId("");
+                    refetch();
+                  } else {
+                    showToast(result.error || "创建失败", "error");
+                  }
+                } catch {
+                  showToast("创建失败，请重试", "error");
+                }
+              }}
+              disabled={createGitTag.isPending}
+            >
+              {createGitTag.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : null}
+              创建标签
+            </Button>
+          </div>
         </div>
       </div>
     )}

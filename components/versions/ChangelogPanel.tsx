@@ -12,6 +12,10 @@ interface ChangelogPanelProps {
   onGenerate: () => void;
   loading?: boolean;
   generating?: boolean;
+  /** AI 生成进度 0-100，未定义时只显示 spinner */
+  progress?: number;
+  /** 取消生成回调 */
+  onCancel?: () => void;
   versionSummary?: string;
   summaryGeneratedAt?: string;
   summaryGeneratedBy?: string;
@@ -32,7 +36,7 @@ const changeTypeLabels: Record<ChangelogChange["type"], { label: string; variant
   other: { label: "其他", variant: "default" },
 };
 
-export function ChangelogPanel({ changelog, onGenerate, loading, generating, versionSummary, summaryGeneratedAt, summaryGeneratedBy, versionId, onSummarySaved, changedFiles }: ChangelogPanelProps) {
+export function ChangelogPanel({ changelog, onGenerate, loading, generating, progress, onCancel, versionSummary, summaryGeneratedAt, summaryGeneratedBy, versionId, onSummarySaved, changedFiles }: ChangelogPanelProps) {
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState(false);
@@ -110,20 +114,47 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, ver
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="text-sm font-medium">版本摘要</div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowConfirm(true)}
-            disabled={generating}
-          >
-            {generating ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowConfirm(true)}
+              disabled={generating}
+            >
+              {generating ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              {generating ? "刷新中..." : "刷新摘要"}
+            </Button>
+            {generating && onCancel && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onCancel}
+                className="text-red-500"
+              >
+                <X className="h-4 w-4 mr-1" />
+                取消
+              </Button>
             )}
-            {generating ? "刷新中..." : "刷新摘要"}
-          </Button>
+          </div>
         </div>
+        {generating && progress !== undefined && (
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>AI 正在分析变更...</span>
+              <span>{progress}%</span>
+            </div>
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        )}
         <div className="p-4 rounded-lg border bg-card space-y-3">
           <p className="text-sm whitespace-pre-wrap">{versionSummary}</p>
           {(summaryGeneratedAt || summaryGeneratedBy) && (
@@ -142,20 +173,47 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, ver
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="text-sm font-medium">变更摘要</div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowConfirm(true)}
-            disabled={generating}
-          >
-            {generating ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4 mr-2" />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowConfirm(true)}
+              disabled={generating}
+            >
+              {generating ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4 mr-2" />
+              )}
+              {generating ? "生成中..." : "生成变更摘要"}
+            </Button>
+            {generating && onCancel && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onCancel}
+                className="text-red-500"
+              >
+                <X className="h-4 w-4 mr-1" />
+                取消
+              </Button>
             )}
-            {generating ? "生成中..." : "生成变更摘要"}
-          </Button>
+          </div>
         </div>
+        {generating && progress !== undefined && (
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>AI 正在分析变更...</span>
+              <span>{progress}%</span>
+            </div>
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        )}
         <div className="border-2 border-dashed rounded-lg p-8 text-center">
           <FileText className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
           <p className="text-sm text-muted-foreground">暂无变更摘要</p>
@@ -222,9 +280,34 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, ver
                 )}
                 {generating ? "生成中..." : "重新生成"}
               </Button>
+              {generating && onCancel && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onCancel}
+                  className="text-red-500"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  取消
+                </Button>
+              )}
             </>
           )}
         </div>
+        {generating && progress !== undefined && (
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>AI 正在分析变更...</span>
+              <span>{progress}%</span>
+            </div>
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 保存成功提示 */}

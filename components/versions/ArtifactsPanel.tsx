@@ -21,6 +21,7 @@ import {
   Clock,
   Trash2,
   History,
+  X,
 } from "lucide-react";
 import { useTriggerBuild, useRebuildVersion } from "@/lib/api/versions";
 import type { ArtifactInfo } from "@/lib/api/artifacts";
@@ -53,6 +54,9 @@ export function ArtifactsPanel({ versionId, versionName }: ArtifactsPanelProps) 
   const [buildId, setBuildId] = useState<string | null>(null);
   const [buildMessage, setBuildMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [downloadMessage, setDownloadMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [previewArtifact, setPreviewArtifact] = useState<ArtifactInfo | null>(null);
+  const [previewContent, setPreviewContent] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const triggerBuild = useTriggerBuild();
   const rebuildVersion = useRebuildVersion();
@@ -126,6 +130,39 @@ export function ArtifactsPanel({ versionId, versionName }: ArtifactsPanelProps) 
       setDownloadMessage({ type: "error", text: `下载失败: ${msg}` });
     } finally {
       setTimeout(() => setDownloading(null), 2000);
+    }
+  };
+
+  const isPreviewableImage = (artifact: ArtifactInfo) =>
+    ["png", "jpg", "jpeg", "gif", "svg", "ico", "webp"].includes(artifact.name.split(".").pop()?.toLowerCase() || "");
+
+  const isPreviewableText = (artifact: ArtifactInfo) =>
+    ["json", "xml", "yaml", "yml", "txt", "md", "csv", "js", "ts", "jsx", "tsx", "css", "html"].includes(artifact.name.split(".").pop()?.toLowerCase() || "");
+
+  const handlePreview = async (artifact: ArtifactInfo) => {
+    if (!isPreviewableImage(artifact) && !isPreviewableText(artifact)) return;
+    setPreviewArtifact(artifact);
+    setPreviewContent(null);
+    setPreviewLoading(true);
+    try {
+      const res = await fetch(artifact.url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (isPreviewableImage(artifact)) {
+        // Images: load as data URL
+        const blob = await res.blob();
+        const reader = new FileReader();
+        reader.onload = () => setPreviewContent(reader.result as string);
+        reader.onerror = () => { setPreviewContent(null); };
+        reader.readAsDataURL(blob);
+      } else {
+        // Text files: load as text
+        const text = await res.text();
+        setPreviewContent(text.slice(0, 50000)); // cap at 50k chars
+      }
+    } catch {
+      setPreviewContent(null);
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -360,9 +397,13 @@ export function ArtifactsPanel({ versionId, versionName }: ArtifactsPanelProps) 
               >
                 {getFileIcon(artifact.name)}
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-gray-800 truncate" title={artifact.name}>
+                  <button
+                    className="text-sm font-medium text-gray-800 truncate hover:text-blue-600 cursor-pointer text-left w-full"
+                    title={artifact.name}
+                    onClick={() => handlePreview(artifact)}
+                  >
                     {artifact.name}
-                  </div>
+                  </button>
                   <div className="text-xs text-gray-400 truncate" title={artifact.path}>
                     {artifact.path}
                   </div>
@@ -461,6 +502,77 @@ export function ArtifactsPanel({ versionId, versionName }: ArtifactsPanelProps) 
                 </Button>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Artifact Preview Modal */}
+      {previewArtifact && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          onClick={() => { setPreviewArtifact(null); setPreviewContent(null); }}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <div className="flex items-center gap-2 min-w-0">
+                {getFileIcon(previewArtifact.name)}
+                <div className="min-w-0">
+                  <div className="text-sm font-medium truncate">{previewArtifact.name}</div>
+                  <div className="text-xs text-gray-400">{previewArtifact.sizeFormatted} · {previewArtifact.path}</div>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setPreviewArtifact(null); setPreviewContent(null); }}
+                className="shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            {/* Modal content */}
+            <div className="flex-1 overflow-auto p-4">
+              {previewLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : previewContent === null ? (
+                <div className="text-center py-12 text-gray-400">
+                  <AlertCircle className="h-8 w-8 mx-auto mb-2" />
+                  <p className="text-sm">预览加载失败</p>
+                </div>
+              ) : isPreviewableImage(previewArtifact) ? (
+                <div className="flex justify-center">
+                  <img
+                    src={previewContent}
+                    alt={previewArtifact.name}
+                    className="max-w-full max-h-[60vh] object-contain rounded"
+                  />
+                </div>
+              ) : (
+                <pre className="text-xs font-mono bg-gray-50 rounded p-3 overflow-auto max-h-[60vh] whitespace-pre-wrap break-all">
+                  {previewContent}
+                </pre>
+              )}
+            </div>
+            {/* Modal footer */}
+            <div className="flex items-center justify-end gap-2 px-4 py-2 border-t">
+              <a
+                href={previewArtifact.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-600 hover:underline"
+              >
+                在新窗口打开 →
+              </a>
+              <Button size="sm" variant="outline" onClick={() => { setPreviewArtifact(null); setPreviewContent(null); }}>
+                关闭
+              </Button>
+            </div>
           </div>
         </div>
       )}
