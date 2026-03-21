@@ -99,6 +99,7 @@ export function VersionDetails(props: VersionDetailsProps) {
       });
     } catch (err) {
       console.error('Rebuild failed:', err);
+      showToast('重新构建失败: ' + (err instanceof Error ? err.message : String(err)), 'error');
     } finally {
       setRebuilding(false);
     }

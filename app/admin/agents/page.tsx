@@ -16,6 +16,7 @@ import {
   CheckCircle,
   XCircle,
   WifiOff,
+  Loader2,
 } from "lucide-react";
 
 const AGENT_NAMES = ["main", "pm", "reviewer", "coder1", "coder2"];
@@ -243,7 +244,7 @@ export default function AgentMonitorPage() {
 
       {/* Agent 健康卡片网格 */}
       {loading ? (
-        <div className="text-center py-12 text-gray-500">加载中...</div>
+        <div className="page-loading"><Loader2 className="w-6 h-6 animate-spin" /><span>加载中...</span></div>
       ) : healthReport?.agents ? (
         <div className="grid grid-cols-2 gap-4">
           {healthReport.agents.map((agent: AgentHealthData) => (
