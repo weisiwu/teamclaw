@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect, useCallback } from "react";
 import { Search, MessageSquare, User, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -330,9 +331,11 @@ export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }:
                   <div className="flex items-start gap-3">
                     <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                       {msg.senderAvatar ? (
-                        <img
+                        <Image
                           src={msg.senderAvatar}
                           alt={msg.senderName}
+                          width={32}
+                          height={32}
                           className="h-8 w-8 rounded-full object-cover"
                           onError={(e) => {
                             (e.target as HTMLImageElement).style.display = 'none';

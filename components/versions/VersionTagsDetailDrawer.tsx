@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { GitTag } from "@/lib/api/types";
 import { X, Tag, Copy, Check, Link2, FileText, Plus, Zap, RefreshCw, GitCommit, Files, ArrowUp, ArrowDown, Play, Package, Loader2, CheckCircle2, XCircle, Clock, RotateCcw, Activity, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -600,9 +601,11 @@ export function VersionTagsDetailDrawer({
                     className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100"
                   >
                     <div className="w-16 h-10 rounded bg-gray-200 flex-shrink-0 overflow-hidden">
-                      <img
+                      <Image
                         src={screenshot.thumbnailUrl || screenshot.screenshotUrl}
                         alt="screenshot"
+                        width={64}
+                        height={40}
                         className="w-full h-full object-cover"
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = 'none';
@@ -635,12 +638,13 @@ export function VersionTagsDetailDrawer({
                     {screenshots.slice(0, 6).map((screenshot) => (
                       <div
                         key={screenshot.id}
-                        className="aspect-video rounded overflow-hidden bg-gray-100 border border-gray-200"
+                        className="aspect-video rounded overflow-hidden bg-gray-100 border border-gray-200 relative"
                       >
-                        <img
+                        <Image
                           src={screenshot.thumbnailUrl || screenshot.screenshotUrl}
                           alt="screenshot"
-                          className="w-full h-full object-cover hover:opacity-80 cursor-pointer transition-opacity"
+                          fill
+                          className="object-cover hover:opacity-80 cursor-pointer transition-opacity"
                           onError={(e) => {
                             (e.target as HTMLImageElement).style.display = 'none';
                           }}

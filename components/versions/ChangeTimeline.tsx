@@ -4,6 +4,7 @@
  */
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -232,9 +233,11 @@ function ScreenshotTimeline({
                   <ImageIcon className="w-6 h-6 text-gray-400" />
                 </div>
               ) : (
-                <img 
+                <Image 
                   src={screenshot.thumbnailUrl || screenshot.screenshotUrl} 
                   alt="Screenshot" 
+                  width={200}
+                  height={96}
                   className="w-full h-24 object-cover rounded"
                   onError={() => handleImageError(screenshot.id)}
                 />

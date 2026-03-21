@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 import { Trash2, Image as ImageIcon, Plus, ZoomIn, X, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -144,10 +145,13 @@ export function ScreenshotGallery({ screenshots, onUnlink, onLink, loading }: Sc
             >
               {/* 真实图片或占位符 */}
               {!hasError && imageUrl ? (
-                <img
+                <Image
                   src={imageUrl}
                   alt={`截图 ${index + 1}`}
-                  className="w-full h-full object-cover"
+                  fill
+                  className="object-cover"
+                  placeholder="blur"
+                  blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
                   onError={() => handleImageError(screenshot.id)}
                 />
               ) : (
@@ -252,13 +256,17 @@ export function ScreenshotGallery({ screenshots, onUnlink, onLink, loading }: Sc
 
             {/* 图片 */}
             {selectedImage && (
-              <img
+              <Image
                 src={selectedImage}
                 alt="截图预览"
+                width={1200}
+                height={800}
                 className="max-w-full max-h-[80vh] object-contain"
                 style={{ visibility: lightboxImageLoading ? "hidden" : "visible" }}
                 onLoad={() => setLightboxImageLoading(false)}
                 onError={() => setLightboxImageLoading(false)}
+                placeholder="blur"
+                blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
               />
             )}
 

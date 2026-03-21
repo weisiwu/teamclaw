@@ -5,18 +5,12 @@ const nextConfig = {
     // 性能优化：优化包导入，提升 tree-shaking 效果
     optimizePackageImports: [
       'lucide-react',
-      '@radix-ui/react-dialog',
-      '@radix-ui/react-dropdown-menu',
-      '@radix-ui/react-select',
-      '@radix-ui/react-tabs',
-      '@radix-ui/react-avatar',
-      '@radix-ui/react-slot',
       'recharts',
       'clsx',
     ],
   },
   images: {
-    unoptimized: true,
+    // enabled default image optimization (LCP improvement)
   },
   // 生产环境移除 console.log，减少包体积
   compiler: {
