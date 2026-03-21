@@ -14,7 +14,7 @@ interface TagLifecyclePanelProps {
 }
 
 export function TagLifecyclePanel({ versionId }: TagLifecyclePanelProps) {
-  const { data: tags = [], isLoading, refetch } = useAllTags();
+  const { data: tags = [], isLoading, isError, refetch } = useAllTags();
   const archiveTag = useArchiveTag();
   const setProtection = useTagProtection();
   const deleteTag = useDeleteTag();
@@ -153,6 +153,23 @@ export function TagLifecyclePanel({ versionId }: TagLifecyclePanelProps) {
         </CardHeader>
         <CardContent>
           <div className="text-sm text-muted-foreground">Loading tags...</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Tag Lifecycle</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-sm text-red-500">加载标签失败</div>
+          <Button variant="ghost" size="sm" onClick={() => refetch()} className="mt-2 h-7">
+            <RefreshCw className="w-3 h-3 mr-1" />
+            重试
+          </Button>
         </CardContent>
       </Card>
     );

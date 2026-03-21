@@ -43,16 +43,23 @@ export function SimilarVersionsPanel({
   // 获取相似版本数据（从缓存或重新计算）
   const [similarVersions, setSimilarVersions] = useState<SimilarVersion[]>([]);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   // 模拟从 localStorage 加载数据
   const loadSimilarVersions = async () => {
     if (!versionId) return;
     
     setHasLoaded(true);
-    // 动态导入以避免 SSR 问题
-    const { findSimilarVersions } = await import('@/lib/api/versions');
-    const results = findSimilarVersions(versionId, 5);
-    setSimilarVersions(results);
+    setLoadError(false);
+    try {
+      // 动态导入以避免 SSR 问题
+      const { findSimilarVersions } = await import('@/lib/api/versions');
+      const results = findSimilarVersions(versionId, 5);
+      setSimilarVersions(results);
+    } catch (err) {
+      console.error('[SimilarVersionsPanel] Failed to load:', err);
+      setLoadError(true);
+    }
   };
 
   // 首次展开时加载数据
@@ -108,6 +115,18 @@ export function SimilarVersionsPanel({
             <div className="flex items-center justify-center py-8">
               <Loader2 className="w-6 h-6 animate-spin text-purple-500" />
               <span className="ml-2 text-sm text-gray-500">正在分析...</span>
+            </div>
+          ) : loadError ? (
+            <div className="text-center py-6">
+              <Sparkles className="w-8 h-8 mx-auto mb-2 text-red-300" />
+              <p className="text-sm text-red-500">加载相似版本失败</p>
+              <p className="text-xs text-gray-400 mt-1">请稍后重试</p>
+              <button
+                className="mt-2 text-xs text-purple-600 hover:text-purple-700 underline"
+                onClick={loadSimilarVersions}
+              >
+                重新加载
+              </button>
             </div>
           ) : similarVersions.length === 0 ? (
             <div className="text-center py-6 text-gray-500">
