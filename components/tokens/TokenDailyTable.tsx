@@ -11,8 +11,14 @@ interface TokenDailyTableProps {
   isLoading?: boolean;
 }
 
-// 格式化数字
+// 格式化数字（支持 K/M/万）
 function formatNumber(num: number): string {
+  if (num >= 1_000_000) {
+    return (num / 1_000_000).toFixed(1) + "M";
+  }
+  if (num >= 1000) {
+    return (num / 1000).toFixed(1) + "K";
+  }
   if (num >= 10000) {
     return (num / 10000).toFixed(1) + "万";
   }

@@ -11,7 +11,7 @@ import { MembersSkeleton } from "@/components/ui/projects-skeleton";
 import { useMemberList, useCreateMember, useUpdateMember, useDeleteMember, useBatchDeleteMembers } from "@/hooks/useMembers";
 import { usePermission } from "@/hooks/usePermission";
 import { Member, ROLE_LABELS, MEMBER_ROLE_OPTIONS, MemberRole, MemberStatus, CreateMemberRequest, UpdateMemberRequest } from "@/lib/api/types";
-import { Pencil, Trash2, UserPlus, Loader2, Search, Users, ArrowUpDown, ArrowUp, ArrowDown, Download, Upload, X, Power, PowerOff, Eye } from "lucide-react";
+import { Pencil, Trash2, UserPlus,  Search, Users, ArrowUpDown, ArrowUp, ArrowDown, Download, Upload, X, Power, PowerOff, Eye } from "lucide-react";
 import * as XLSX from "xlsx";
 
 type SortField = "name" | "role" | "weight" | "createdAt";
@@ -413,7 +413,7 @@ export default function MembersPage() {
               </thead>
               <tbody className="divide-y dark:divide-slate-700">
                 {filteredMembers.map((member, idx) => (
-                  <tr key={member.id} className={`hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60 dark:bg-slate-800/20' : ''}`}>
+                  <tr key={member.id} className={`hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors ${idx % 2 === 1 ? 'bg-gray-50 dark:bg-slate-800/30' : ''}`}>
                     <td className="px-4 py-3">
                       <input
                         type="checkbox"

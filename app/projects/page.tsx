@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useRef, useCallback } from 'react';
-import { Loader2, Package } from 'lucide-react';
+import { Package } from 'lucide-react';
 import { useProjects, useDeleteProject } from '../../hooks/useProjects';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ProjectsSkeleton } from '@/components/ui/projects-skeleton';
