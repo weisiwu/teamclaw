@@ -4,6 +4,8 @@ import { use, useState } from 'react';
 import Link from 'next/link';
 import { useProject, useProjectTree } from '../../../hooks/useProjects';
 import { FileTreeView } from '../../../components/FileTree';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 // ========== 分支管理面板 ==========
 
@@ -27,6 +29,7 @@ function BranchesPanel() {
   const [creating, setCreating] = useState(false);
   const [settingMain, setSettingMain] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Branch | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   const showToast = (type: 'success' | 'error', msg: string) => {
@@ -88,14 +91,15 @@ function BranchesPanel() {
     setSettingMain(null);
   };
 
-  const deleteBranch = async (branch: Branch) => {
-    if (!confirm(`确定删除分支 "${branch.name}" 吗？`)) return;
-    setDeleting(branch.id);
+  const deleteBranch = async () => {
+    if (!deleteTarget) return;
+    setDeleting(deleteTarget.id);
+    setDeleteTarget(null);
     try {
-      const res = await fetch(`/api/v1/branches/${branch.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/v1/branches/${deleteTarget.id}`, { method: 'DELETE' });
       const json = await res.json();
       if (json.code === 0) {
-        showToast('success', `分支 ${branch.name} 已删除`);
+        showToast('success', `分支 ${deleteTarget.name} 已删除`);
         loadBranches();
       } else {
         showToast('error', json.message || '删除失败');
@@ -113,6 +117,24 @@ function BranchesPanel() {
           {toast.msg}
         </div>
       )}
+
+      {/* Delete branch confirmation dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认删除分支</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            确定要删除分支 <span className="font-mono font-medium">{deleteTarget?.name}</span> 吗？此操作无法撤销。
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>取消</Button>
+            <Button variant="destructive" onClick={deleteBranch} disabled={!!deleting}>
+              {deleting ? '删除中...' : '删除'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">🌿 分支管理</h2>
@@ -205,7 +227,7 @@ function BranchesPanel() {
                       )}
                       {!branch.isProtected && (
                         <button
-                          onClick={() => deleteBranch(branch)}
+                          onClick={() => setDeleteTarget(branch)}
                           disabled={deleting === branch.id}
                           className="px-2 py-1 text-xs bg-red-50 hover:bg-red-100 text-red-600 rounded transition-colors disabled:opacity-50"
                         >
@@ -252,6 +274,7 @@ export default function ProjectDetailPage({ params }: Props) {
   const [gitHistory, setGitHistory] = useState<unknown[]>([]);
   const [loadingSub, setLoadingSub] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [showRefreshConfirm, setShowRefreshConfirm] = useState(false);
 
   // Toast 通知
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
@@ -293,7 +316,7 @@ export default function ProjectDetailPage({ params }: Props) {
   };
 
   const handleRefresh = async () => {
-    if (!confirm('确定要刷新此项目吗？这将重新解析项目文件。')) return;
+    setShowRefreshConfirm(false);
     setRefreshing(true);
     try {
       const res = await fetch(`/api/v1/projects/${id}/refresh`, { method: 'POST' });
@@ -436,7 +459,7 @@ export default function ProjectDetailPage({ params }: Props) {
                 版本管理
               </Link>
               <button
-                onClick={handleRefresh}
+                onClick={() => setShowRefreshConfirm(true)}
                 disabled={refreshing}
                 className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors"
               >
@@ -583,6 +606,24 @@ export default function ProjectDetailPage({ params }: Props) {
           {toast.msg}
         </div>
       )}
+
+      {/* Refresh project confirmation dialog */}
+      <Dialog open={showRefreshConfirm} onOpenChange={setShowRefreshConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认刷新项目</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            确定要刷新此项目吗？这将重新解析项目文件，可能需要一些时间。
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRefreshConfirm(false)}>取消</Button>
+            <Button onClick={handleRefresh} disabled={refreshing}>
+              {refreshing ? '刷新中...' : '确认刷新'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

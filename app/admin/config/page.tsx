@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { Shield, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import type { SystemConfig } from '../../../lib/api/adminConfig';
 import { PermissionGuard } from '@/components/layout/PermissionGuard';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export default function AdminConfigPage() {
   const [config, setConfig] = useState<SystemConfig | null>(null);
@@ -14,6 +16,7 @@ export default function AdminConfigPage() {
   const [activeTab, setActiveTab] = useState<'llm' | 'features' | 'security' | 'permissions'>('llm');
   const [abilities, setAbilities] = useState<Array<{ id: string; name: string; description: string; enabled: boolean; requiredRole: string }>>([]);
   const [abilitiesLoading, setAbilitiesLoading] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const fetchConfig = async () => {
     try {
@@ -70,7 +73,7 @@ export default function AdminConfigPage() {
   };
 
   const resetConfig = async () => {
-    if (!confirm('确定要重置为默认配置吗？')) return;
+    setShowResetConfirm(false);
     try {
       const res = await fetch('/api/v1/admin/config/reset', { method: 'POST' });
       const data = await res.json();
@@ -130,7 +133,7 @@ export default function AdminConfigPage() {
           <div className="flex gap-2">
             <button onClick={importConfig} className="px-4 py-2 text-sm border rounded hover:bg-gray-100">导入</button>
             <button onClick={exportConfig} className="px-4 py-2 text-sm border rounded hover:bg-gray-100">导出</button>
-            <button onClick={resetConfig} className="px-4 py-2 text-sm border border-red-300 text-red-600 rounded hover:bg-red-50">重置</button>
+            <button onClick={() => setShowResetConfirm(true)} className="px-4 py-2 text-sm border border-red-300 text-red-600 rounded hover:bg-red-50">重置</button>
             <button onClick={saveConfig} disabled={saving} className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
               {saving ? '保存中...' : '保存'}
             </button>
@@ -298,6 +301,22 @@ export default function AdminConfigPage() {
         </div>
       </div>
     </div>
+
+    {/* Reset config confirmation dialog */}
+    <Dialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>确认重置配置</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-gray-600 dark:text-gray-300">
+          确定要将所有配置重置为默认值吗？此操作无法撤销。
+        </p>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowResetConfirm(false)}>取消</Button>
+          <Button variant="destructive" onClick={resetConfig}>确认重置</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </PermissionGuard>
   );
 }

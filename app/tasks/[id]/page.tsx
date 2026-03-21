@@ -3,6 +3,7 @@
 import { use, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
@@ -64,6 +65,10 @@ export default function TaskDetailPage({
   const completeTask = useCompleteTask();
   const cancelTask = useCancelTask();
   const reopenTask = useReopenTask();
+
+  // 确认对话框状态
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [deleteCommentId, setDeleteCommentId] = useState<string | null>(null);
   
   // 处理完成
   const handleComplete = async () => {
@@ -72,9 +77,8 @@ export default function TaskDetailPage({
   
   // 处理取消
   const handleCancel = async () => {
-    if (confirm("确定要取消这个任务吗？")) {
-      await cancelTask.mutateAsync(id);
-    }
+    setShowCancelConfirm(false);
+    await cancelTask.mutateAsync(id);
   };
   
   // 处理重新打开
@@ -99,10 +103,10 @@ export default function TaskDetailPage({
   };
 
   // 处理删除评论
-  const handleDeleteComment = async (commentId: string) => {
-    if (confirm("确定要删除这条评论吗？")) {
-      await deleteComment.mutateAsync({ commentId, taskId: id });
-    }
+  const handleDeleteComment = async () => {
+    if (!deleteCommentId) return;
+    await deleteComment.mutateAsync({ commentId: deleteCommentId, taskId: id });
+    setDeleteCommentId(null);
   };
 
   if (isLoading) {
@@ -177,7 +181,7 @@ export default function TaskDetailPage({
                 </Button>
               )}
               {(task.status === "pending" || task.status === "in_progress") && (
-                <Button variant="outline" onClick={handleCancel} disabled={isPending}>
+                <Button variant="outline" onClick={() => setShowCancelConfirm(true)} disabled={isPending}>
                   取消
                 </Button>
               )}
@@ -368,7 +372,7 @@ export default function TaskDetailPage({
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDeleteComment(comment.id)}
+                      onClick={() => setDeleteCommentId(comment.id)}
                       className="text-red-500 hover:text-red-700 h-6 px-2"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -405,6 +409,42 @@ export default function TaskDetailPage({
           </form>
         </CardContent>
       </Card>
+
+      {/* Cancel task confirmation dialog */}
+      <Dialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认取消任务</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            确定要取消这个任务吗？取消后任务状态将变为「已取消」。
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCancelConfirm(false)}>取消</Button>
+            <Button variant="destructive" onClick={handleCancel} disabled={cancelTask.isPending}>
+              {cancelTask.isPending ? '取消中...' : '确认取消'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete comment confirmation dialog */}
+      <Dialog open={!!deleteCommentId} onOpenChange={(open) => !open && setDeleteCommentId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认删除评论</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            确定要删除这条评论吗？此操作无法撤销。
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteCommentId(null)}>取消</Button>
+            <Button variant="destructive" onClick={handleDeleteComment} disabled={deleteComment.isPending}>
+              {deleteComment.isPending ? '删除中...' : '确认删除'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
