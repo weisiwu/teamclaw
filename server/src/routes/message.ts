@@ -37,6 +37,7 @@
 
 import { Router } from 'express';
 import { success, error } from '../utils/response.js';
+import { requireAuth } from '../middleware/auth.js';
 import { messageQueueService } from '../services/messageQueue.js';
 import { enrichMessagePriority } from '../services/priorityCalculator.js';
 import { manualPreempt, buildPreemptionNotification } from '../services/preemptionService.js';
@@ -346,7 +347,7 @@ router.get('/dlq/:messageId', (req, res) => {
 // ============================================
 // POST /api/v1/messages/dlq/:messageId/requeue - 从 DLQ 重新入队
 // ============================================
-router.post('/dlq/:messageId/requeue', (req, res) => {
+router.post('/dlq/:messageId/requeue', requireAuth, (req, res) => {
   try {
     const { messageId } = req.params;
     const msg = messageDLQService.requeue(messageId);
@@ -380,7 +381,7 @@ router.post('/dlq/:messageId/requeue', (req, res) => {
 // ============================================
 // DELETE /api/v1/messages/dlq/:messageId - 从 DLQ 丢弃消息
 // ============================================
-router.delete('/dlq/:messageId', (req, res) => {
+router.delete('/dlq/:messageId', requireAuth, (req, res) => {
   try {
     const { messageId } = req.params;
     const discarded = messageDLQService.discard(messageId);
@@ -455,7 +456,7 @@ router.get('/ratelimit/check', (req, res) => {
 // ============================================
 // PUT /api/v1/messages/ratelimit/config - 更新限流配置
 // ============================================
-router.put('/ratelimit/config', (req, res) => {
+router.put('/ratelimit/config', requireAuth, (req, res) => {
   try {
     const { key, maxMessages, windowMs } = req.body;
     if (!key) return res.status(400).json(error(400, '缺少 key 参数'));
@@ -482,9 +483,9 @@ router.get('/circuit/stats', (req, res) => {
 });
 
 // ============================================
-// POST /api/v1/messages/circuit/:channel/reset - 重置断路器
+// POST /api/v1/messages/circuit/:channel/reset - 重置断路器（需要身份认证）
 // ============================================
-router.post('/circuit/:channel/reset', (req, res) => {
+router.post('/circuit/:channel/reset', requireAuth, (req, res) => {
   try {
     const { channel } = req.params;
     messageCircuitBreakerService.reset(channel);
@@ -550,7 +551,7 @@ router.get('/unified/sessions/:userGlobalId', (req, res) => {
 // ============================================
 // POST /api/v1/messages/unified/read - 标记已读
 // ============================================
-router.post('/unified/read', (req, res) => {
+router.post('/unified/read', requireAuth, (req, res) => {
   try {
     const { globalId, userGlobalId } = req.body;
     let marked = 0;
@@ -581,9 +582,9 @@ router.get('/router/rules', (req, res) => {
 });
 
 // ============================================
-// POST /api/v1/messages/router/rules - 添加路由规则
+// POST /api/v1/messages/router/rules - 添加路由规则（需要身份认证）
 // ============================================
-router.post('/router/rules', (req, res) => {
+router.post('/router/rules', requireAuth, (req, res) => {
   try {
     const rule = req.body;
     if (!rule.id || !rule.name) {
@@ -598,9 +599,9 @@ router.post('/router/rules', (req, res) => {
 });
 
 // ============================================
-// PUT /api/v1/messages/router/rules/:ruleId - 更新路由规则
+// PUT /api/v1/messages/router/rules/:ruleId - 更新路由规则（需要身份认证）
 // ============================================
-router.put('/router/rules/:ruleId', (req, res) => {
+router.put('/router/rules/:ruleId', requireAuth, (req, res) => {
   try {
     const { ruleId } = req.params;
     const rule = req.body;
@@ -614,9 +615,9 @@ router.put('/router/rules/:ruleId', (req, res) => {
 });
 
 // ============================================
-// DELETE /api/v1/messages/router/rules/:ruleId - 删除路由规则
+// DELETE /api/v1/messages/router/rules/:ruleId - 删除路由规则（需要身份认证）
 // ============================================
-router.delete('/router/rules/:ruleId', (req, res) => {
+router.delete('/router/rules/:ruleId', requireAuth, (req, res) => {
   try {
     const { ruleId } = req.params;
     const deleted = messageRouterService.deleteRule(ruleId);

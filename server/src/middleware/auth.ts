@@ -80,6 +80,28 @@ export function optionalAuth(req: AuthRequest, _res: Response, next: NextFunctio
 }
 
 /**
+ * 身份认证中间件
+ * 要求请求必须携带有效的用户身份信息（X-User-Id + X-User-Role）
+ * 不检查特定 Agent 权限，只验证身份有效
+ */
+export function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void {
+  const userId = req.headers["x-user-id"] as string | undefined;
+  const role = req.headers["x-user-role"] as string | undefined;
+
+  if (!userId || !role) {
+    res.status(401).json({
+      code: 401,
+      data: null,
+      message: "未提供身份信息，请检查 X-User-Id 和 X-User-Role 请求头",
+    });
+    return;
+  }
+
+  req.user = { id: userId, role: role as Role };
+  next();
+}
+
+/**
  * 检查管理员权限
  */
 export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction): void {

@@ -1,6 +1,13 @@
 /**
  * 权限规则定义
  * TeamClaw 人员与权限模块 - 基于资源的 CRUD 权限矩阵
+ *
+ * ⚠️ [DEPRECATED] 此文件已废弃，请使用 server/src/constants/roles.ts
+ * Role 类型已统一为：admin | vice_admin | member
+ * 此文件仅保留用于兼容现有引用，后续将移除。
+ *
+ * 迁移指南：
+ * - 使用 @/lib/auth/roles（admin/vice_admin/member）替代此处的 Role
  */
 
 import { Role } from './roles';

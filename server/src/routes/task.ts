@@ -5,6 +5,8 @@
 
 import { Router } from 'express';
 import { success, error } from '../utils/response.js';
+import { requireAuth } from '../middleware/auth.js';
+import { requireAdmin } from '../middleware/auth.js';
 import { taskLifecycle } from '../services/taskLifecycle.js';
 import { taskFlow } from '../services/taskFlow.js';
 import { taskMemory } from '../services/taskMemory.js';
@@ -22,8 +24,8 @@ const router = Router();
 
 // ============ 任务 CRUD ============
 
-// POST /api/v1/tasks - 创建任务
-router.post('/', async (req, res) => {
+// POST /api/v1/tasks - 创建任务（需要身份认证）
+router.post('/', requireAuth, async (req, res) => {
   try {
     const body = req.body as CreateTaskRequest;
     if (!body.sessionId || !body.title) {
@@ -148,8 +150,8 @@ router.get('/:taskId', (req, res) => {
   }
 });
 
-// PATCH /api/v1/tasks/:taskId - 更新任务
-router.patch('/:taskId', async (req, res) => {
+// PATCH /api/v1/tasks/:taskId - 更新任务（需要身份认证）
+router.patch('/:taskId', requireAuth, async (req, res) => {
   try {
     const taskId = req.params.taskId;
     const body = req.body as UpdateTaskRequest;
@@ -215,8 +217,8 @@ router.patch('/:taskId', async (req, res) => {
   }
 });
 
-// DELETE /api/v1/tasks/:taskId - 删除任务
-router.delete('/:taskId', (req, res) => {
+// DELETE /api/v1/tasks/:taskId - 删除任务（需要身份认证）
+router.delete('/:taskId', requireAuth, (req, res) => {
   try {
     const taskId = req.params.taskId;
     if (!taskLifecycle.deleteTask(taskId)) {
@@ -663,7 +665,7 @@ router.get('/webhooks', (_req, res) => {
 });
 
 // POST /api/v1/tasks/webhooks - 创建webhook端点
-router.post('/webhooks', (req, res) => {
+router.post('/webhooks', requireAuth, (req, res) => {
   try {
     const { name, url, secret, events } = req.body;
     if (!name || !url || !events) return res.status(400).json(error(400, 'name, url, events required'));
@@ -676,7 +678,7 @@ router.post('/webhooks', (req, res) => {
 });
 
 // DELETE /api/v1/tasks/webhooks/:id - 删除webhook
-router.delete('/webhooks/:id', (req, res) => {
+router.delete('/webhooks/:id', requireAuth, (req, res) => {
   const ok = deleteWebhookEndpoint(req.params.id);
   res.json(success(null));
 });
@@ -694,7 +696,7 @@ router.get('/notifications/rules', (_req, res) => {
 });
 
 // POST /api/v1/tasks/notifications/rules - 创建通知规则
-router.post('/notifications/rules', (req, res) => {
+router.post('/notifications/rules', requireAuth, (req, res) => {
   try {
     const { name, eventType, filter, channels, webhookEndpointId } = req.body;
     const rule = createNotificationRule({ name, eventType, filter, channels, webhookEndpointId });
