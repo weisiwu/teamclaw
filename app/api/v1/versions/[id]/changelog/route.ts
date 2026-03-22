@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
+/** Backend server URL — proxy to the Node.js backend on port 9700 */
+const BACKEND_URL = process.env.BACKEND_API_URL || "http://localhost:9700";
+
+/** CORS headers for cross-origin API access */
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
@@ -7,131 +11,152 @@ const corsHeaders = {
   "Access-Control-Max-Age": "86400",
 };
 
+/** Generate a short unique request ID */
 function generateRequestId(): string {
   return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function jsonSuccess(data: unknown, requestId?: string): NextResponse {
-  return NextResponse.json({ code: 0, data, requestId }, {
-    headers: { ...corsHeaders },
-  });
+/**
+ * Transform backend VersionSummary format to frontend VersionChangelog format.
+ * Backend: { features[], fixes[], changes[], breaking[], changes_detail[] }
+ * Frontend: { changes: ChangelogChange[] }
+ */
+function transformToFrontend(data: Record<string, unknown>): Record<string, unknown> {
+  const changes_detail = data.changes_detail as Array<{ type: string; description: string; files?: string[] }> | undefined;
+  const changes = changes_detail && changes_detail.length > 0
+    ? changes_detail
+    : [
+        ...((data.features as string[] || []).map((d: string) => ({ type: "feature", description: d }))),
+        ...((data.fixes as string[] || []).map((d: string) => ({ type: "fix", description: d }))),
+        ...((data.changes as string[] || []).map((d: string) => ({ type: "improvement", description: d }))),
+        ...((data.breaking as string[] || []).map((d: string) => ({ type: "breaking", description: d }))),
+      ];
+
+  return {
+    id: data.id,
+    versionId: data.versionId,
+    title: data.title || "",
+    content: data.content || "",
+    changes,
+    generatedAt: data.generatedAt || data.generated_at || new Date().toISOString(),
+    generatedBy: data.generatedBy || data.generated_by || "system",
+  };
 }
 
-function jsonError(message: string, status: number, requestId?: string): NextResponse {
-  return NextResponse.json({ code: status, message, requestId }, { status });
-}
+/**
+ * Proxy helper — forwards requests to the backend server and returns transformed response.
+ */
+async function proxyToBackend(
+  req: NextRequest,
+  backendPath: string,
+  options: { method?: string; body?: BodyInit; transform?: (data: Record<string, unknown>) => Record<string, unknown> } = {}
+): Promise<NextResponse> {
+  const url = `${BACKEND_URL}${backendPath}`;
+  const requestId = generateRequestId();
+  try {
+    const headers: HeadersInit = {
+      "Content-Type": req.headers.get("content-type") || "application/json",
+      "X-Request-ID": requestId,
+    };
+    const auth = req.headers.get("authorization");
+    if (auth) headers["Authorization"] = auth;
 
-/** In-memory changelog store (keyed by versionId) */
-interface VersionChangelog {
-  id: string;
-  versionId: string;
-  title: string;
-  content: string;
-  changes: ChangelogChange[];
-  generatedAt: string;
-  generatedBy: string;
-}
+    const fetchOptions: RequestInit = {
+      method: options.method || req.method,
+      headers,
+    };
+    if (options.body !== undefined) {
+      fetchOptions.body = options.body;
+    } else if (req.method !== "GET" && req.method !== "HEAD") {
+      const clone = req.clone();
+      fetchOptions.body = await clone.text();
+    }
 
-interface ChangelogChange {
-  type: "feature" | "fix" | "improvement" | "breaking" | "docs" | "refactor" | "other";
-  description: string;
-  files?: string[];
-}
+    const resp = await fetch(url, fetchOptions);
+    const data = await resp.json() as Record<string, unknown>;
 
-const changelogStore = new Map<string, VersionChangelog>();
+    // Apply transformation if provided (mutate data.data in-place since data is const)
+    if (options.transform && data.data) {
+      const transformed = options.transform(data.data as Record<string, unknown>);
+      (data as Record<string, unknown>).data = transformed;
+    }
 
-// Pre-populate with sample data
-changelogStore.set("v1", {
-  id: "cl-1",
-  versionId: "v1",
-  title: "v1.0.0 变更日志",
-  content: "初始版本发布，包含核心功能",
-  changes: [
-    { type: "feature", description: "任务管理基础功能", files: ["app/tasks/page.tsx", "lib/api/tasks.ts"] },
-    { type: "feature", description: "用户认证系统", files: ["app/auth/page.tsx", "lib/auth.ts"] },
-    { type: "improvement", description: "优化页面加载性能", files: [] },
-  ],
-  generatedAt: "2026-01-15T10:00:00Z",
-  generatedBy: "system",
-});
-
-changelogStore.set("v2", {
-  id: "cl-2",
-  versionId: "v2",
-  title: "v1.1.0 变更日志",
-  content: "任务管理增强版本",
-  changes: [
-    { type: "feature", description: "新增任务筛选功能", files: ["components/TaskFilter.tsx"] },
-    { type: "feature", description: "新增任务排序功能", files: ["components/TaskSort.tsx"] },
-    { type: "fix", description: "修复任务详情页加载慢的问题", files: ["app/tasks/[id]/page.tsx"] },
-  ],
-  generatedAt: "2026-02-01T14:30:00Z",
-  generatedBy: "system",
-});
-
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, { status: 204, headers: corsHeaders });
+    return NextResponse.json(data, {
+      status: resp.status,
+      headers: {
+        ...corsHeaders,
+        "X-Request-ID": requestId,
+      },
+    });
+  } catch (err) {
+    console.error(`[changelog proxy] Failed to reach backend at ${url}:`, err);
+    return NextResponse.json(
+      { code: 503, message: "Backend server unavailable", requestId },
+      { status: 503, headers: corsHeaders }
+    );
+  }
 }
 
 /**
  * GET /api/v1/versions/:id/changelog
- * 获取版本变更摘要
+ * Proxy to backend: GET /api/v1/versions/:id/summary
  */
 export async function GET(
-  request: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-): Promise<NextResponse> {
-  const requestId = generateRequestId();
-  try {
-    const { id } = await params;
-    const changelog = changelogStore.get(id);
-    if (!changelog) {
-      return jsonSuccess({ data: null, notice: `版本 ${id} 暂无变更摘要` }, requestId);
-    }
-    return jsonSuccess({ data: changelog }, requestId);
-  } catch (err) {
-    return jsonError(`获取变更摘要失败: ${err instanceof Error ? err.message : String(err)}`, 500, requestId);
+) {
+  const { id } = await params;
+  if (!id || id.trim() === "") {
+    return NextResponse.json(
+      { code: 400, message: "版本 ID 不能为空" },
+      { status: 400, headers: corsHeaders }
+    );
   }
+  return proxyToBackend(req, `/api/v1/versions/${id}/summary`, {
+    transform: transformToFrontend,
+  });
 }
 
 /**
  * PUT /api/v1/versions/:id/changelog
- * 保存手动编辑的变更摘要
+ * Proxy to backend: PUT /api/v1/versions/:id/summary
  */
 export async function PUT(
-  request: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-): Promise<NextResponse> {
-  const requestId = generateRequestId();
-  try {
-    const { id } = await params;
-    const body = await request.json() as { content?: string; title?: string; changes?: ChangelogChange[] };
-    
-    if (!body.content && !body.title && !body.changes) {
-      return jsonError("请求体不能为空", 400, requestId);
-    }
-
-    const existing = changelogStore.get(id);
-    const updated: VersionChangelog = existing ? {
-      ...existing,
-      title: body.title ?? existing.title,
-      content: body.content ?? existing.content,
-      changes: body.changes ?? existing.changes,
-      generatedAt: new Date().toISOString(),
-      generatedBy: "manual",
-    } : {
-      id: `cl-${Date.now()}`,
-      versionId: id,
-      title: body.title ?? "变更摘要",
-      content: body.content ?? "",
-      changes: body.changes ?? [],
-      generatedAt: new Date().toISOString(),
-      generatedBy: "manual",
-    };
-
-    changelogStore.set(id, updated);
-    return jsonSuccess({ data: updated }, requestId);
-  } catch (err) {
-    return jsonError(`保存变更摘要失败: ${err instanceof Error ? err.message : String(err)}`, 500, requestId);
+) {
+  const { id } = await params;
+  if (!id || id.trim() === "") {
+    return NextResponse.json(
+      { code: 400, message: "版本 ID 不能为空" },
+      { status: 400, headers: corsHeaders }
+    );
   }
+  const body = await req.json();
+  // Transform frontend changelog format to backend summary format
+  const backendBody: Record<string, unknown> = {};
+  if (body.content !== undefined) backendBody.content = body.content;
+  if (body.title !== undefined) backendBody.title = body.title;
+  if (body.changes !== undefined) {
+    // Reverse transform: frontend ChangelogChange[] → backend fields
+    const changes = body.changes as Array<{ type: string; description: string }>;
+    backendBody.features = changes.filter(c => c.type === "feature").map(c => c.description);
+    backendBody.fixes = changes.filter(c => c.type === "fix").map(c => c.description);
+    backendBody.changes = changes.filter(c => c.type === "improvement").map(c => c.description);
+    backendBody.breaking = changes.filter(c => c.type === "breaking").map(c => c.description);
+    backendBody.createdBy = "manual";
+  }
+  return proxyToBackend(req, `/api/v1/versions/${id}/summary`, {
+    method: "PUT",
+    body: JSON.stringify(backendBody),
+    transform: transformToFrontend,
+  });
+}
+
+/**
+ * OPTIONS /api/v1/versions/:id/changelog
+ * CORS preflight
+ */
+export async function OPTIONS(): Promise<NextResponse> {
+  return new NextResponse(null, { status: 204, headers: corsHeaders });
 }

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
+/** Backend server URL — proxy to the Node.js backend on port 9700 */
+const BACKEND_URL = process.env.BACKEND_API_URL || "http://localhost:9700";
+
 /** CORS headers for cross-origin API access */
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,155 +16,92 @@ function generateRequestId(): string {
   return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function jsonSuccess(data: unknown, requestId?: string): NextResponse {
-  return NextResponse.json({ code: 0, data, requestId }, {
-    headers: { ...corsHeaders },
-  });
+/**
+ * Proxy helper — forwards requests to the backend server and returns the response.
+ */
+async function proxyToBackend(
+  req: NextRequest,
+  path: string,
+  options: { method?: string; body?: BodyInit } = {}
+): Promise<NextResponse> {
+  const url = `${BACKEND_URL}${path}`;
+  const requestId = generateRequestId();
+  try {
+    const headers: HeadersInit = {
+      "Content-Type": req.headers.get("content-type") || "application/json",
+      "X-Request-ID": requestId,
+    };
+    const auth = req.headers.get("authorization");
+    if (auth) headers["Authorization"] = auth;
+
+    const fetchOptions: RequestInit = {
+      method: options.method || req.method,
+      headers,
+    };
+    if (options.body !== undefined) {
+      fetchOptions.body = options.body;
+    } else if (req.method !== "GET" && req.method !== "HEAD") {
+      const clone = req.clone();
+      fetchOptions.body = await clone.text();
+    }
+
+    const resp = await fetch(url, fetchOptions);
+    const data = await resp.text();
+    return new NextResponse(data, {
+      status: resp.status,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": resp.headers.get("content-type") || "application/json",
+        "X-Request-ID": requestId,
+      },
+    });
+  } catch (err) {
+    console.error(`[screenshots proxy] Failed to reach backend at ${url}:`, err);
+    return NextResponse.json(
+      { code: 503, message: "Backend server unavailable", requestId },
+      { status: 503, headers: corsHeaders }
+    );
+  }
 }
-
-function jsonError(message: string, status: number, requestId?: string): NextResponse {
-  return NextResponse.json(
-    { code: status, message, requestId },
-    { status }
-  );
-}
-
-/** In-memory screenshot store (keyed by versionId) */
-interface VersionMessageScreenshot {
-  id: string;
-  versionId: string;
-  messageId: string;
-  messageContent: string;
-  senderName: string;
-  senderAvatar?: string;
-  screenshotUrl: string;
-  thumbnailUrl?: string;
-  createdAt: string;
-}
-
-const screenshotStore = new Map<string, VersionMessageScreenshot[]>();
-
-// Pre-populate with sample data
-screenshotStore.set("v1", [
-  {
-    id: "ss-1",
-    versionId: "v1",
-    messageId: "msg-001",
-    messageContent: "完成了任务管理模块的开发，新增筛选、排序功能",
-    senderName: "张三",
-    screenshotUrl: "https://internal.feishu.cn/avatar/placeholder.png",
-    thumbnailUrl: "https://internal.feishu.cn/avatar/placeholder.png",
-    createdAt: "2026-01-12T10:00:00Z",
-  },
-  {
-    id: "ss-2",
-    versionId: "v1",
-    messageId: "msg-002",
-    messageContent: "修复了登录页面的样式问题，优化了响应式布局",
-    senderName: "李四",
-    screenshotUrl: "https://internal.feishu.cn/avatar/placeholder.png",
-    thumbnailUrl: "https://internal.feishu.cn/avatar/placeholder.png",
-    createdAt: "2026-01-13T14:30:00Z",
-  },
-]);
-screenshotStore.set("v2", [
-  {
-    id: "ss-3",
-    versionId: "v2",
-    messageId: "msg-003",
-    messageContent: "新增 Cron 定时任务管理界面，支持配置多个定时任务",
-    senderName: "王五",
-    screenshotUrl: "https://internal.feishu.cn/avatar/placeholder.png",
-    thumbnailUrl: "https://internal.feishu.cn/avatar/placeholder.png",
-    createdAt: "2026-02-15T09:00:00Z",
-  },
-]);
 
 /**
  * GET /api/v1/versions/[id]/screenshots
- * 获取版本关联的截图列表
+ * Proxy to backend: GET /api/v1/versions/:id/screenshots
  */
 export async function GET(
-  request: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const requestId = generateRequestId();
   const { id } = await params;
-
   if (!id || id.trim() === "") {
-    return jsonError("版本 ID 不能为空", 400, requestId);
+    return NextResponse.json(
+      { code: 400, message: "版本 ID 不能为空" },
+      { status: 400, headers: corsHeaders }
+    );
   }
-
-  const screenshots = screenshotStore.get(id) || [];
-
-  return jsonSuccess(
-    {
-      data: screenshots,
-      total: screenshots.length,
-      versionId: id,
-    },
-    requestId
-  );
+  return proxyToBackend(req, `/api/v1/versions/${id}/screenshots`);
 }
 
 /**
  * POST /api/v1/versions/[id]/screenshots
- * 关联截图到版本
+ * Proxy to backend: POST /api/v1/versions/:id/screenshots
  */
 export async function POST(
-  request: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const requestId = generateRequestId();
   const { id } = await params;
-
   if (!id || id.trim() === "") {
-    return jsonError("版本 ID 不能为空", 400, requestId);
+    return NextResponse.json(
+      { code: 400, message: "版本 ID 不能为空" },
+      { status: 400, headers: corsHeaders }
+    );
   }
-
-  let body: Record<string, unknown>;
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError("请求体必须是有效的 JSON", 400, requestId);
-  }
-
-  const { messageId, messageContent, senderName, senderAvatar, screenshotUrl, thumbnailUrl } = body;
-
-  // Validate required fields
-  if (!messageId || typeof messageId !== "string") {
-    return jsonError("messageId 不能为空", 400, requestId);
-  }
-  if (!screenshotUrl || typeof screenshotUrl !== "string") {
-    return jsonError("screenshotUrl 不能为空", 400, requestId);
-  }
-  // Validate URL format
-  try {
-    const url = new URL(screenshotUrl);
-    if (!["http:", "https:"].includes(url.protocol)) {
-      return jsonError("screenshotUrl 必须是有效的 HTTP/HTTPS URL", 400, requestId);
-    }
-  } catch {
-    return jsonError("screenshotUrl 格式无效", 400, requestId);
-  }
-
-  const newScreenshot: VersionMessageScreenshot = {
-    id: `ss-${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    versionId: id,
-    messageId,
-    messageContent: (messageContent as string) || "",
-    senderName: (senderName as string) || "未知用户",
-    senderAvatar: senderAvatar as string | undefined,
-    screenshotUrl,
-    thumbnailUrl: (thumbnailUrl as string) || screenshotUrl,
-    createdAt: new Date().toISOString(),
-  };
-
-  const existing = screenshotStore.get(id) || [];
-  existing.unshift(newScreenshot);
-  screenshotStore.set(id, existing);
-
-  return jsonSuccess(newScreenshot, requestId);
+  const body = await req.json();
+  return proxyToBackend(req, `/api/v1/versions/${id}/screenshots`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 /**

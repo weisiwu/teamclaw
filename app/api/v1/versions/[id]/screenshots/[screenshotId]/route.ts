@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
+/** Backend server URL — proxy to the Node.js backend on port 9700 */
+const BACKEND_URL = process.env.BACKEND_API_URL || "http://localhost:9700";
+
 /** CORS headers for cross-origin API access */
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,126 +16,81 @@ function generateRequestId(): string {
   return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function jsonSuccess(data: unknown, requestId?: string): NextResponse {
-  return NextResponse.json({ code: 0, data, requestId }, {
-    headers: { ...corsHeaders },
-  });
-}
-
-function jsonError(message: string, status: number, requestId?: string): NextResponse {
-  return NextResponse.json(
-    { code: status, message, requestId },
-    { status }
-  );
-}
-
-/** In-memory screenshot store — shared with the parent screenshots route via module-level singleton */
-interface VersionMessageScreenshot {
-  id: string;
-  versionId: string;
-  messageId: string;
-  messageContent: string;
-  senderName: string;
-  senderAvatar?: string;
-  screenshotUrl: string;
-  thumbnailUrl?: string;
-  createdAt: string;
-}
-
-// NOTE: This is a separate in-memory store for this route.
-// In production this would be a database. The store is keyed by versionId.
-const screenshotStore = new Map<string, VersionMessageScreenshot[]>();
-
-// Pre-populate so deletes can be tested
-screenshotStore.set("v1", [
-  {
-    id: "ss-1",
-    versionId: "v1",
-    messageId: "msg-001",
-    messageContent: "完成了任务管理模块的开发，新增筛选、排序功能",
-    senderName: "张三",
-    screenshotUrl: "https://internal.feishu.cn/avatar/placeholder.png",
-    thumbnailUrl: "https://internal.feishu.cn/avatar/placeholder.png",
-    createdAt: "2026-01-12T10:00:00Z",
-  },
-  {
-    id: "ss-2",
-    versionId: "v1",
-    messageId: "msg-002",
-    messageContent: "修复了登录页面的样式问题，优化了响应式布局",
-    senderName: "李四",
-    screenshotUrl: "https://internal.feishu.cn/avatar/placeholder.png",
-    thumbnailUrl: "https://internal.feishu.cn/avatar/placeholder.png",
-    createdAt: "2026-01-13T14:30:00Z",
-  },
-]);
-screenshotStore.set("v2", [
-  {
-    id: "ss-3",
-    versionId: "v2",
-    messageId: "msg-003",
-    messageContent: "新增 Cron 定时任务管理界面",
-    senderName: "王五",
-    screenshotUrl: "https://internal.feishu.cn/avatar/placeholder.png",
-    thumbnailUrl: "https://internal.feishu.cn/avatar/placeholder.png",
-    createdAt: "2026-02-15T09:00:00Z",
-  },
-]);
-
 /**
- * DELETE /api/v1/versions/[id]/screenshots/[screenshotId]
- * 解绑截图
+ * Proxy helper — forwards requests to the backend server and returns the response.
  */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string; screenshotId: string }> }
-) {
+async function proxyToBackend(
+  req: NextRequest,
+  backendPath: string,
+  options: { method?: string } = {}
+): Promise<NextResponse> {
+  const url = `${BACKEND_URL}${backendPath}`;
   const requestId = generateRequestId();
-  const { id, screenshotId } = await params;
+  try {
+    const headers: HeadersInit = {
+      "Content-Type": req.headers.get("content-type") || "application/json",
+      "X-Request-ID": requestId,
+    };
+    const auth = req.headers.get("authorization");
+    if (auth) headers["Authorization"] = auth;
 
-  if (!id || id.trim() === "") {
-    return jsonError("版本 ID 不能为空", 400, requestId);
+    const resp = await fetch(url, {
+      method: options.method || req.method,
+      headers,
+    });
+
+    const data = await resp.text();
+    return new NextResponse(data, {
+      status: resp.status,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": resp.headers.get("content-type") || "application/json",
+        "X-Request-ID": requestId,
+      },
+    });
+  } catch (err) {
+    console.error(`[screenshot/:id proxy] Failed to reach backend at ${url}:`, err);
+    return NextResponse.json(
+      { code: 503, message: "Backend server unavailable", requestId },
+      { status: 503, headers: corsHeaders }
+    );
   }
-  if (!screenshotId || screenshotId.trim() === "") {
-    return jsonError("截图 ID 不能为空", 400, requestId);
-  }
-
-  const screenshots = screenshotStore.get(id) || [];
-  const index = screenshots.findIndex((s) => s.id === screenshotId);
-
-  if (index === -1) {
-    return jsonError("截图不存在", 404, requestId);
-  }
-
-  const [removed] = screenshots.splice(index, 1);
-  screenshotStore.set(id, screenshots);
-
-  return jsonSuccess({ success: true, removedId: removed.id, versionId: id }, requestId);
 }
 
 /**
  * GET /api/v1/versions/[id]/screenshots/[screenshotId]
- * 获取单个截图详情
+ * Proxy to backend: GET /api/v1/versions/:id/screenshots/:screenshotId
  */
 export async function GET(
-  request: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string; screenshotId: string }> }
 ) {
-  const requestId = generateRequestId();
   const { id, screenshotId } = await params;
-
   if (!id || !screenshotId) {
-    return jsonError("版本 ID 和截图 ID 都不能为空", 400, requestId);
+    return NextResponse.json(
+      { code: 400, message: "版本 ID 和截图 ID 都不能为空" },
+      { status: 400, headers: corsHeaders }
+    );
   }
+  return proxyToBackend(req, `/api/v1/versions/${id}/screenshots/${screenshotId}`);
+}
 
-  const screenshots = screenshotStore.get(id) || [];
-  const screenshot = screenshots.find((s) => s.id === screenshotId);
-
-  if (!screenshot) {
-    return jsonError("截图不存在", 404, requestId);
+/**
+ * DELETE /api/v1/versions/[id]/screenshots/[screenshotId]
+ * Proxy to backend: DELETE /api/v1/versions/:id/screenshots/:screenshotId
+ */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string; screenshotId: string }> }
+) {
+  const { id, screenshotId } = await params;
+  if (!id || !screenshotId) {
+    return NextResponse.json(
+      { code: 400, message: "版本 ID 和截图 ID 都不能为空" },
+      { status: 400, headers: corsHeaders }
+    );
   }
-
-  return jsonSuccess(screenshot, requestId);
+  return proxyToBackend(req, `/api/v1/versions/${id}/screenshots/${screenshotId}`, { method: "DELETE" });
 }
 
 /**
