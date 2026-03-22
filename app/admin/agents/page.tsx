@@ -161,7 +161,11 @@ export default function AgentMonitorPage() {
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData(); // initial fetch
+    const interval = setInterval(fetchData, 30000); // poll every 30s for real-time health data
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   const handleHealthCheck = async () => {
     setIsChecking(true);

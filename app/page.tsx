@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Layers,
@@ -42,18 +42,16 @@ function formatNumber(n: number): string {
 }
 
 export default function Home() {
-  const [overview, setOverview] = useState<OverviewData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: overviewData, isLoading } = useQuery({
+    queryKey: ['dashboard-overview'],
+    queryFn: () => fetch('/api/v1/dashboard/overview').then(r => r.json()),
+    staleTime: 60000, // 60s - dashboard data doesn't change frequently
+    gcTime: 300000,   // 5min - keep in cache
+    refetchOnWindowFocus: true,
+  });
 
-  useEffect(() => {
-    fetch('/api/v1/dashboard/overview')
-      .then((r) => r.json())
-      .then((d) => {
-        setOverview(d.data || null);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
+  const overview = overviewData?.data as OverviewData | null;
+  const loading = isLoading;
 
   return (
     <div className="page-container">
