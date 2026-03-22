@@ -25,12 +25,14 @@ export const messageKeys = {
 };
 
 // 消息队列状态 Hook
+// 实时性要求高，保持5秒轮询
 export function useQueueStatus() {
   return useQuery<QueueStatus>({
     queryKey: messageKeys.queue(),
     queryFn: getQueueStatus,
-    staleTime: 5000, // 5秒内数据视为新鲜（实时性要求高）
-    refetchInterval: 5000, // 每5秒自动刷新
+    staleTime: 5000,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false, // 标签页不可见时停止轮询，节省资源
   });
 }
 
@@ -110,8 +112,9 @@ export function useMessageStats() {
   return useQuery<MessageStats>({
     queryKey: [...messageKeys.all, "stats"] as const,
     queryFn: () => fetch('/api/v1/messages/stats').then(r => r.json()).then(d => d.data),
-    staleTime: 5000,
-    refetchInterval: 5000,
+    staleTime: 15000, // stats 变化不频繁，15秒足够
+    refetchInterval: 15000,
+    refetchIntervalInBackground: false, // 标签页不可见时停止轮询
   });
 }
 
@@ -137,7 +140,9 @@ export function useDLQStats() {
   return useQuery<DLQStats>({
     queryKey: [...messageKeys.all, "dlq", "stats"] as const,
     queryFn: () => fetch('/api/v1/messages/dlq/stats').then(r => r.json()).then(d => d.data),
-    staleTime: 10000,
+    staleTime: 30000, // DLQ 变化不频繁，30秒足够
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -151,7 +156,9 @@ export function useDLQEntries(params?: { page?: number; pageSize?: number; chann
   return useQuery({
     queryKey: [...messageKeys.all, "dlq", "entries", params] as const,
     queryFn: () => fetch(`/api/v1/messages/dlq${qs ? '?' + qs : ''}`).then(r => r.json()).then(d => d.data),
-    staleTime: 10000,
+    staleTime: 30000,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -185,6 +192,8 @@ export function useRetryStats() {
   return useQuery({
     queryKey: [...messageKeys.all, "retry", "stats"] as const,
     queryFn: () => fetch('/api/v1/messages/retry/stats').then(r => r.json()).then(d => d.data),
-    staleTime: 10000,
+    staleTime: 30000,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 }

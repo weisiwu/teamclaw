@@ -123,7 +123,9 @@ router.get('/health', async (req: Request, res: Response) => {
   };
 
   const statusCode = health.status === 'ok' ? 200 : health.status === 'degraded' ? 200 : 503;
-  res.status(statusCode).json({
+  res.status(statusCode)
+    .setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=60')
+    .json({
     code: statusCode,
     data: health,
     message: health.status === 'ok' ? 'All services healthy' : 'Some services degraded',
@@ -147,7 +149,9 @@ router.get('/health/detailed', async (req: Request, res: Response) => {
 
   const statusCode = allOk ? 200 : anyError ? 503 : 200;
   
-  res.status(statusCode).json({
+  res.status(statusCode)
+    .setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=60')
+    .json({
     code: statusCode,
     data: {
       status: allOk ? 'ok' : anyError ? 'error' : 'degraded',
