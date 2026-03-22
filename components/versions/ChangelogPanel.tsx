@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { RefreshCw, FileText, Sparkles, Loader2, GitCommit, Pencil, Save, X, Eye, PenLine } from "lucide-react";
+import { RefreshCw, FileText, Sparkles, Loader2, GitCommit, Pencil, Save, X, Eye, PenLine, Filter } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VersionChangelog, ChangelogChange } from "@/lib/api/types";
 import { saveVersionSummary } from "@/lib/api/versions";
+import { cn } from "@/lib/utils";
 
 interface ChangelogPanelProps {
   changelog: VersionChangelog | null;
@@ -51,6 +52,9 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, pro
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [activeTypeFilter, setActiveTypeFilter] = useState<string>("all");
+
+  const allChangeTypes = ["all", "feature", "fix", "improvement", "breaking", "docs", "refactor", "other"] as const;
 
   // 防抖自动保存草稿
   const saveDraftRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -441,9 +445,44 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, pro
             </div>
           </div>
 
+          {/* 变更类型过滤芯片 */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            {allChangeTypes.map((type) => (
+              <button
+                key={type}
+                onClick={() => setActiveTypeFilter(type)}
+                className={cn(
+                  "px-2 py-0.5 rounded-full text-xs font-medium transition-colors border",
+                  activeTypeFilter === type
+                    ? type === "all"
+                      ? "bg-gray-700 text-white border-gray-700"
+                      : type === "feature"
+                      ? "bg-emerald-600 text-white border-emerald-600"
+                      : type === "fix"
+                      ? "bg-red-600 text-white border-red-600"
+                      : type === "improvement"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : type === "breaking"
+                      ? "bg-red-800 text-white border-red-800"
+                      : type === "docs"
+                      ? "bg-slate-600 text-white border-slate-600"
+                      : type === "refactor"
+                      ? "bg-orange-600 text-white border-orange-600"
+                      : "bg-gray-500 text-white border-gray-500"
+                    : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
+                )}
+              >
+                {type === "all" ? "全部" : changeTypeLabels[type]?.label ?? type}
+              </button>
+            ))}
+          </div>
+
           {/* 变更列表 */}
           <div className="space-y-3">
-            {changelog.changes.map((change, index) => (
+            {changelog.changes
+              .filter((change) => activeTypeFilter === "all" || change.type === activeTypeFilter)
+              .map((change, index) => (
               <div
                 key={index}
                 className="p-3 rounded-lg border bg-card"

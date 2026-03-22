@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { History, MessageSquare, FileText, Search, Filter, Download, ChevronDown, ChevronRight, MessageSquarePlus, Trash2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { VersionMessageScreenshot, VersionChangelog, TimelineEvent as ApiTimelineEvent } from "@/lib/api/types";
 import { useVersionTimeline, useAddTimelineEvent, useDeleteTimelineEvent, useUpdateTimelineEvent } from "@/lib/api/versions";
+import { cn } from "@/lib/utils";
 
 interface VersionTimelineProps {
   screenshots?: VersionMessageScreenshot[];
@@ -49,6 +50,24 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
   const [branchFilter, setBranchFilter] = useState<string>("all");
   const [showCount, setShowCount] = useState(5);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const eventListRef = useRef<HTMLDivElement>(null);
+
+  // 滚动到选中项
+  useEffect(() => {
+    if (selectedIndex >= 0 && eventListRef.current) {
+      const items = eventListRef.current.querySelectorAll("[data-timeline-item]");
+      const item = items[selectedIndex] as HTMLElement;
+      if (item) {
+        item.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+    }
+  }, [selectedIndex]);
+
+  // 重置选中状态
+  useEffect(() => {
+    setSelectedIndex(-1);
+  }, [isOpen, filterType, branchFilter, searchQuery, showCount]);
 
   // API-based timeline (when versionId is provided)
   const { data: apiEvents, isLoading: timelineLoading, isError: timelineError } = useVersionTimeline(versionId ?? null);
@@ -184,6 +203,29 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
     });
   };
 
+  // 键盘导航
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    const visibleEvents = filteredEvents.slice(0, showCount);
+    if (visibleEvents.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelectedIndex((prev) => Math.min(prev + 1, visibleEvents.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelectedIndex((prev) => Math.max(prev - 1, 0));
+    } else if (e.key === "Enter") {
+      if (selectedIndex >= 0 && selectedIndex < visibleEvents.length) {
+        const event = visibleEvents[selectedIndex];
+        if (event.data) {
+          toggleExpand(event.id);
+        }
+      }
+    } else if (e.key === "Escape") {
+      onClose();
+    }
+  };
+
   // 导出为 Markdown
   const exportToMarkdown = () => {
     const md = generateMarkdown();
@@ -257,10 +299,11 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent 
         title="变更历史时间线"
         className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col"
+        onKeyDown={handleKeyDown}
       >
         <div className="flex items-center gap-2 pb-4 border-b">
           <History className="h-5 w-5" />
@@ -344,9 +387,25 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
               <p className="text-xs text-gray-400 mt-2">关联截图或生成摘要有助于记录变更历史</p>
             </div>
           ) : (
-            <div className="space-y-0">
+            <div className="space-y-0" ref={eventListRef}>
               {filteredEvents.slice(0, showCount).map((event, index) => (
-                <div key={event.id} className="relative flex gap-4 pb-6 last:pb-0">
+                <div
+                  key={event.id}
+                  data-timeline-item
+                  tabIndex={0}
+                  className={cn(
+                    "relative flex gap-4 pb-6 last:pb-0 rounded-md outline-none transition-colors cursor-pointer",
+                    selectedIndex === index && "bg-primary/5 ring-2 ring-primary/30"
+                  )}
+                  onClick={() => setSelectedIndex(index)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedIndex(index);
+                      if (event.data) toggleExpand(event.id);
+                    }
+                  }}
+                >
                   {/* 连接线 */}
                   {index < Math.min(showCount, filteredEvents.length) - 1 && (
                     <div className="absolute left-[15px] top-8 bottom-0 w-0.5 bg-border" />
@@ -476,6 +535,14 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
                       ? "收起"
                       : `展开更多（已显示 ${showCount} / 共 ${filteredEvents.length}）`}
                   </Button>
+                </div>
+              )}
+              {/* 键盘导航提示 */}
+              {filteredEvents.length > 1 && (
+                <div className="pt-1 text-center">
+                  <span className="text-xs text-muted-foreground">
+                    ↑↓ 导航 · Enter 展开/折叠 · Esc 关闭
+                  </span>
                 </div>
               )}
             </div>
