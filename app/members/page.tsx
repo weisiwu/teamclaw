@@ -31,6 +31,9 @@ export default function MembersPage() {
   const [batchDeleteConfirm, setBatchDeleteConfirm] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [viewingMember, setViewingMember] = useState<Member | null>(null);
+  // Inline weight editing
+  const [editingWeightId, setEditingWeightId] = useState<string | null>(null);
+  const [editingWeightValue, setEditingWeightValue] = useState<string>("");
 
   const { data, isLoading, error } = useMemberList();
   const createMember = useCreateMember();
@@ -178,6 +181,31 @@ export default function MembersPage() {
       await updateMember.mutateAsync({ id: member.id, data: { status: newStatus } });
     } catch (err) {
       console.error("Failed to toggle member status:", err);
+    }
+  };
+
+  const handleWeightClick = (member: Member) => {
+    if (!isAdminOrAbove()) return;
+    setEditingWeightId(member.id);
+    setEditingWeightValue(String(member.weight));
+  };
+
+  const handleWeightSave = async (memberId: string) => {
+    const weight = parseInt(editingWeightValue, 10);
+    if (isNaN(weight) || weight < 0) return;
+    try {
+      await updateMember.mutateAsync({ id: memberId, data: { weight } });
+      setEditingWeightId(null);
+    } catch (err) {
+      console.error("Failed to update weight:", err);
+    }
+  };
+
+  const handleWeightKeyDown = (e: React.KeyboardEvent, memberId: string) => {
+    if (e.key === "Enter") {
+      handleWeightSave(memberId);
+    } else if (e.key === "Escape") {
+      setEditingWeightId(null);
     }
   };
 
@@ -397,7 +425,7 @@ export default function MembersPage() {
                     onClick={() => handleSort("weight")}
                   >
                     <div className="flex items-center">
-                      权重
+                      权重{isAdminOrAbove() && <span className="ml-1 text-xs text-blue-400">(可点击编辑)</span>}
                       {getSortIcon("weight")}
                     </div>
                   </th>
@@ -431,7 +459,28 @@ export default function MembersPage() {
                         {ROLE_LABELS[member.role]}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{member.weight}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                      {editingWeightId === member.id ? (
+                        <input
+                          type="number"
+                          min={0}
+                          value={editingWeightValue}
+                          onChange={(e) => setEditingWeightValue(e.target.value)}
+                          onBlur={() => handleWeightSave(member.id)}
+                          onKeyDown={(e) => handleWeightKeyDown(e, member.id)}
+                          className="w-16 px-2 py-1 text-sm border rounded dark:bg-slate-700 dark:border-slate-600 dark:text-white"
+                          autoFocus
+                        />
+                      ) : (
+                        <span
+                          onClick={() => handleWeightClick(member)}
+                          className={`cursor-pointer px-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 ${isAdminOrAbove() ? "text-blue-600 dark:text-blue-400" : ""}`}
+                          title={isAdminOrAbove() ? "点击修改权重" : undefined}
+                        >
+                          {member.weight}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{member.createdAt}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">

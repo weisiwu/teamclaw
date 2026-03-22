@@ -82,6 +82,7 @@ const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: "all", label: "全部" },
   { key: "success", label: "成功" },
   { key: "failed", label: "失败" },
+  { key: "cancelled", label: "已取消" },
   { key: "building", label: "构建中" },
   { key: "pending", label: "排队中" },
 ];

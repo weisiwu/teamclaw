@@ -339,7 +339,7 @@ export interface UpdateCapabilityRequest {
 // ========== 版本管理类型 ==========
 
 export type VersionStatus = "draft" | "published" | "archived" | "rolled_back";
-export type BuildStatus = "pending" | "building" | "success" | "failed";
+export type BuildStatus = "pending" | "building" | "success" | "failed" | "cancelled";
 
 // 预设标签
 export const VERSION_TAG_OPTIONS = [
@@ -483,13 +483,15 @@ export const BUILD_STATUS_LABELS: Record<BuildStatus, string> = {
   building: "构建中",
   success: "构建成功",
   failed: "构建失败",
+  cancelled: "已取消",
 };
 
-export const BUILD_STATUS_BADGE_VARIANT: Record<BuildStatus, "default" | "info" | "success" | "error"> = {
+export const BUILD_STATUS_BADGE_VARIANT: Record<BuildStatus, "default" | "info" | "success" | "error" | "warning"> = {
   pending: "default",
   building: "info",
   success: "success",
   failed: "error",
+  cancelled: "warning",
 };
 
 // ============ 自动升级类型定义 ============

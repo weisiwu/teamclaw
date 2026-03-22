@@ -276,13 +276,31 @@ export function VersionTagsDetailDrawer({
           />
 
           {/* Commit message */}
-          <DetailItem label="提交信息" value={tag.subject} />
+          <DetailItem
+            label="提交信息"
+            value={tag.subject}
+            copyValue={tag.subject}
+            onCopy={handleCopy}
+            copied={copiedField === "提交信息"}
+          />
 
           {/* Author */}
-          <DetailItem label="作者" value={tag.author} />
+          <DetailItem
+            label="作者"
+            value={tag.author}
+            copyValue={tag.author}
+            onCopy={handleCopy}
+            copied={copiedField === "作者"}
+          />
 
           {/* Email */}
-          <DetailItem label="邮箱" value={tag.authorEmail} />
+          <DetailItem
+            label="邮箱"
+            value={tag.authorEmail}
+            copyValue={tag.authorEmail}
+            onCopy={handleCopy}
+            copied={copiedField === "邮箱"}
+          />
 
           {/* Date */}
           <DetailItem
