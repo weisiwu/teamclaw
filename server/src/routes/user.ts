@@ -28,6 +28,7 @@ import {
 } from "../services/permissionFineGrained";
 import { AgentName, Role } from "../constants/roles";
 import { success, error } from "../utils/response";
+import { requireAuth, requireAdmin } from "../middleware/auth";
 
 const router = Router();
 
@@ -95,7 +96,7 @@ router.get("/:userId", async (req: Request, res: Response) => {
 
 // ============ POST /api/v1/users ============
 // 创建用户（增强：记录角色变更历史）
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", requireAdmin, async (req: Request, res: Response) => {
   try {
     const { name, role, wechatId, feishuId, remark, changedBy, reason } = req.body;
 
@@ -123,7 +124,7 @@ router.post("/", async (req: Request, res: Response) => {
 
 // ============ PUT /api/v1/users/:userId ============
 // 更新用户信息（增强：记录角色变更历史）
-router.put("/:userId", async (req: Request, res: Response) => {
+router.put("/:userId", requireAuth, async (req: Request, res: Response) => {
   try {
     const { name, role, wechatId, feishuId, remark, changedBy, reason } = req.body;
 
@@ -162,7 +163,7 @@ router.put("/:userId", async (req: Request, res: Response) => {
 
 // ============ DELETE /api/v1/users/:userId ============
 // 删除用户
-router.delete("/:userId", async (req: Request, res: Response) => {
+router.delete("/:userId", requireAdmin, async (req: Request, res: Response) => {
   try {
     const deleted = await deleteUser(req.params.userId);
     if (!deleted) {
@@ -217,7 +218,7 @@ router.get("/role-stats", async (req: Request, res: Response) => {
 
 // ============ POST /api/v1/users/delegations ============
 // 授予权限委托
-router.post("/delegations", async (req: Request, res: Response) => {
+router.post("/delegations", requireAuth, async (req: Request, res: Response) => {
   try {
     const { delegatorId, delegateId, permissions, expiresAt } = req.body;
 
@@ -236,7 +237,7 @@ router.post("/delegations", async (req: Request, res: Response) => {
 
 // ============ DELETE /api/v1/users/delegations ============
 // 撤销权限委托
-router.delete("/delegations", async (req: Request, res: Response) => {
+router.delete("/delegations", requireAuth, async (req: Request, res: Response) => {
   try {
     const { delegatorId, delegateId } = req.body;
 

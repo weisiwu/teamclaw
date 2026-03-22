@@ -7,11 +7,12 @@ import { Router } from 'express';
 import { success } from '../utils/response.js';
 import { configService } from '../services/configService.js';
 import { UpdateConfigRequest } from '../models/systemConfig.js';
+import { requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
 // GET /api/v1/admin/config - 获取系统配置
-router.get('/', async (req, res) => {
+router.get('/', requireAdmin, async (req, res) => {
   try {
     const config = await configService.get();
     res.json(success(config));
@@ -21,7 +22,7 @@ router.get('/', async (req, res) => {
 });
 
 // PUT /api/v1/admin/config - 更新配置
-router.put('/', async (req, res) => {
+router.put('/', requireAdmin, async (req, res) => {
   try {
     const body = req.body as UpdateConfigRequest;
     const config = await configService.update(body, req.headers['x-admin-id'] as string || 'admin');
@@ -32,7 +33,7 @@ router.put('/', async (req, res) => {
 });
 
 // POST /api/v1/admin/config/reset - 重置为默认配置
-router.post('/reset', async (req, res) => {
+router.post('/reset', requireAdmin, async (req, res) => {
   try {
     const config = await configService.reset(req.headers['x-admin-id'] as string || 'admin');
     res.json(success(config));
@@ -42,7 +43,7 @@ router.post('/reset', async (req, res) => {
 });
 
 // POST /api/v1/admin/config/export - 导出配置
-router.get('/export', async (req, res) => {
+router.get('/export', requireAdmin, async (req, res) => {
   try {
     const json = await configService.export();
     res.json(success({ config: JSON.parse(json) }));
@@ -52,7 +53,7 @@ router.get('/export', async (req, res) => {
 });
 
 // POST /api/v1/admin/config/import - 导入配置
-router.post('/import', async (req, res) => {
+router.post('/import', requireAdmin, async (req, res) => {
   try {
     const body = req.body as { config?: unknown };
     if (!body.config) {
