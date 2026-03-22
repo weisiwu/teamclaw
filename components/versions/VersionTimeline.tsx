@@ -328,7 +328,14 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
           ) : timelineError ? (
             <div className="text-center py-12 text-muted-foreground">
               <History className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p className="text-red-500">加载时间线失败</p>
+              <p className="text-red-500 mb-3">加载时间线失败</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => versionId && queryClient.invalidateQueries({ queryKey: ["versionTimeline", versionId] })}
+              >
+                重试
+              </Button>
             </div>
           ) : filteredEvents.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
