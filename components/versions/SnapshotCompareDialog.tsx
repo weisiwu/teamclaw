@@ -217,7 +217,13 @@ export function SnapshotCompareDialog({
               })}
             </div>
 
-            {snapshots.length < 2 && (
+            {snapshots.length === 0 ? (
+              <div className="text-center py-8">
+                <GitCompare className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+                <p className="text-sm font-medium text-gray-600 mb-1">暂无快照数据</p>
+                <p className="text-xs text-gray-400">创建快照后可进行版本对比</p>
+              </div>
+            ) : snapshots.length < 2 && (
               <div className="text-center py-4 text-gray-500 text-sm">
                 需要至少 2 个快照才能进行对比
               </div>

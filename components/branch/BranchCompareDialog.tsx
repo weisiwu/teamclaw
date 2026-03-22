@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { GitCompare, X, Loader2, ArrowRight, FileDiff, Plus, Minus, RotateCcw } from "lucide-react";
+import { GitCompare, GitBranch, X, Loader2, ArrowRight, FileDiff, Plus, Minus, RotateCcw } from "lucide-react";
 
 interface Branch {
   id: string;
@@ -90,6 +90,13 @@ export function BranchCompareDialog({
         {/* 对比选择 */}
         {!diffResult ? (
           <div className="p-6">
+            {branches.length === 0 && (
+              <div className="text-center py-8 mb-4">
+                <GitBranch className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+                <p className="text-sm font-medium text-gray-600 mb-1">暂无分支数据</p>
+                <p className="text-xs text-gray-400">创建分支后即可进行对比</p>
+              </div>
+            )}
             <div className="flex items-center justify-center gap-4 mb-6">
               <div className="flex-1">
                 <label className="text-sm font-medium mb-2 block">源分支</label>

@@ -16,7 +16,10 @@ import {
   CheckCircle2,
   XCircle,
   CheckSquare,
-  Square
+  Square,
+  Loader2,
+  AlertCircle,
+  Package
 } from "lucide-react";
 
 function Checkbox({ 
@@ -41,7 +44,7 @@ function Checkbox({
 }
 
 export function BatchTagOperations() {
-  const { data: versionsData } = useVersions(1, 100, "all");
+  const { data: versionsData, isLoading, isError, refetch } = useVersions(1, 100, "all");
   const versions = versionsData?.data || [];
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [action, setAction] = useState<BatchTagRequest["action"]>("create");
@@ -187,24 +190,51 @@ export function BatchTagOperations() {
 
           {/* Version List */}
           <div className="space-y-1 max-h-60 overflow-y-auto border rounded-md p-2">
-            {versions.map((version) => (
-              <div
-                key={version.id}
-                className="flex items-center gap-2 p-2 hover:bg-muted rounded-md"
-              >
-                <Checkbox
-                  checked={selectedIds.includes(version.id)}
-                  onCheckedChange={() => handleSelect(version.id)}
-                />
-                <Badge variant="default">{version.version}</Badge>
-                <span className="text-sm truncate flex-1">{version.title}</span>
-                {version.gitTag && (
-                  <Badge variant="info" className="text-xs">
-                    {version.gitTag}
-                  </Badge>
-                )}
+            {isLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="flex items-center gap-2 p-2 animate-pulse">
+                    <div className="w-4 h-4 bg-gray-200 rounded" />
+                    <div className="h-4 w-12 bg-gray-200 rounded" />
+                    <div className="h-4 flex-1 bg-gray-100 rounded" />
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : isError ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <AlertCircle className="w-8 h-8 text-red-400 mb-2" />
+                <p className="text-sm text-red-500 mb-3">加载版本失败</p>
+                <Button variant="outline" size="sm" onClick={() => refetch()}>
+                  <Loader2 className="w-3 h-3 mr-1.5" />
+                  重试
+                </Button>
+              </div>
+            ) : versions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <Package className="w-8 h-8 text-gray-300 mb-2" />
+                <p className="text-sm text-gray-500">暂无版本数据</p>
+                <p className="text-xs text-gray-400 mt-1">创建版本后即可批量操作</p>
+              </div>
+            ) : (
+              versions.map((version) => (
+                <div
+                  key={version.id}
+                  className="flex items-center gap-2 p-2 hover:bg-muted rounded-md"
+                >
+                  <Checkbox
+                    checked={selectedIds.includes(version.id)}
+                    onCheckedChange={() => handleSelect(version.id)}
+                  />
+                  <Badge variant="default">{version.version}</Badge>
+                  <span className="text-sm truncate flex-1">{version.title}</span>
+                  {version.gitTag && (
+                    <Badge variant="info" className="text-xs">
+                      {version.gitTag}
+                    </Badge>
+                  )}
+                </div>
+              ))
+            )}
           </div>
 
           {/* Result */}
