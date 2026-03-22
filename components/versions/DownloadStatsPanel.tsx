@@ -134,15 +134,23 @@ export function DownloadStatsPanel() {
       {stats.downloadsByFormat.length > 0 && (
         <div>
           <div className="text-sm text-gray-600 mb-2">格式分布</div>
-          <div className="flex flex-wrap gap-2">
-            {stats.downloadsByFormat.map((item) => (
-              <span
-                key={item.format}
-                className="px-2 py-1 bg-gray-100 rounded text-xs"
-              >
-                {item.format}: {item.count}
-              </span>
-            ))}
+          <div className="space-y-2">
+            {stats.downloadsByFormat.map((item) => {
+              const maxCount = Math.max(...stats.downloadsByFormat.map(d => d.count), 1);
+              const pct = Math.round((item.count / maxCount) * 100);
+              return (
+                <div key={item.format} className="flex items-center gap-2 text-xs">
+                  <span className="w-12 font-mono text-gray-500 shrink-0">{item.format}</span>
+                  <div className="flex-1 h-3 bg-gray-100 rounded overflow-hidden">
+                    <div
+                      className="h-full bg-blue-400 rounded transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span className="w-8 text-right text-gray-500 shrink-0">{item.count}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

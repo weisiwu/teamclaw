@@ -276,6 +276,18 @@ export function ChangeTimeline({
   onLinkScreenshot,
 }: ChangeTimelineProps) {
   const [viewMode, setViewMode] = useState<"timeline" | "stats" | "screenshots">("timeline");
+  const [typeFilter, setTypeFilter] = useState<ChangelogChange["type"] | "all">("all");
+
+  // Get available types from changelog for filter chips
+  const availableTypes = changelog
+    ? Array.from(new Set(changelog.changes.map(c => c.type)))
+    : [];
+
+  const filteredChanges = changelog
+    ? typeFilter === "all"
+      ? changelog.changes
+      : changelog.changes.filter(c => c.type === typeFilter)
+    : [];
   
   return (
     <div className="space-y-4">
@@ -320,12 +332,12 @@ export function ChangeTimeline({
       {viewMode === "stats" && (
         <ChangeStatistics changelog={changelog} />
       )}
-      
+
       {/* 截图视图 */}
       {viewMode === "screenshots" && (
         <ScreenshotTimeline screenshots={screenshots} onLink={onLinkScreenshot} />
       )}
-      
+
       {/* 时间线视图 */}
       {viewMode === "timeline" && (
         <>
@@ -343,15 +355,55 @@ export function ChangeTimeline({
               </Button>
             </div>
           )}
-          
-          {changelog && (
-            <div className="space-y-1">
-              {changelog.changes.map((change, index) => (
-                <ChangeItem key={index} change={change} index={index} />
-              ))}
+
+          {changelog && availableTypes.length > 1 && (
+            /* 类型筛选 */
+            <div className="flex items-center gap-1 flex-wrap">
+              <button
+                onClick={() => setTypeFilter("all")}
+                className={`px-2 py-1 rounded-full text-xs border transition-colors ${
+                  typeFilter === "all"
+                    ? "bg-gray-800 text-white border-gray-800"
+                    : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                全部 ({changelog.changes.length})
+              </button>
+              {availableTypes.map(type => {
+                const config = changeTypeConfig[type];
+                const count = changelog.changes.filter(c => c.type === type).length;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => setTypeFilter(type)}
+                    className={`px-2 py-1 rounded-full text-xs border transition-colors flex items-center gap-1 ${
+                      typeFilter === type
+                        ? `${config.bgColor} ${config.color} border-current`
+                        : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                    }`}
+                  >
+                    {config.icon}
+                    {config.label} ({count})
+                  </button>
+                );
+              })}
             </div>
           )}
-          
+
+          {changelog && (
+            <div className="space-y-1">
+              {filteredChanges.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">
+                  没有符合筛选条件的变更记录
+                </p>
+              ) : (
+                filteredChanges.map((change, index) => (
+                  <ChangeItem key={index} change={change} index={index} />
+                ))
+              )}
+            </div>
+          )}
+
           {!changelog && !onGenerateChangelog && (
             <p className="text-sm text-gray-500 text-center py-4">暂无变更记录</p>
           )}
