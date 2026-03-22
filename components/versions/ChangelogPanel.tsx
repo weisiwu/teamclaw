@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { RefreshCw, FileText, Sparkles, Loader2, GitCommit, Pencil, Save, X } from "lucide-react";
+import { RefreshCw, FileText, Sparkles, Loader2, GitCommit, Pencil, Save, X, Eye, PenLine } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VersionChangelog, ChangelogChange } from "@/lib/api/types";
 import { saveVersionSummary } from "@/lib/api/versions";
 
@@ -43,6 +46,7 @@ const changeTypeLabels: Record<ChangelogChange["type"], { label: string; variant
 export function ChangelogPanel({ changelog, onGenerate, loading, generating, progress, onCancel, versionSummary, summaryGeneratedAt, summaryGeneratedBy, versionId, onSummarySaved, changedFiles, progressStep, generationError }: ChangelogPanelProps) {
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
+  const [editTab, setEditTab] = useState<"edit" | "preview">("edit");
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -67,6 +71,7 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, pro
     const savedDraft = key ? localStorage.getItem(key) : null;
     setEditContent(savedDraft || changelog?.content || versionSummary || "");
     setEditing(true);
+    setEditTab("edit");
     setSaveSuccess(null);
     setSaveError(null);
   };
@@ -74,6 +79,7 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, pro
   const cancelEditing = () => {
     setEditing(false);
     setEditContent("");
+    setEditTab("edit");
     setSaveSuccess(null);
   };
 
@@ -386,15 +392,40 @@ export function ChangelogPanel({ changelog, onGenerate, loading, generating, pro
       {/* 编辑模式 */}
       {editing ? (
         <div className="space-y-3">
-          <textarea
-            className="w-full min-h-[200px] p-3 text-sm border rounded-lg bg-background resize-y font-mono"
-            value={editContent}
-            onChange={(e) => setEditContent(e.target.value)}
-            placeholder="在此编辑变更摘要内容（支持 Markdown）..."
-          />
-          <p className="text-xs text-muted-foreground">
-            支持 Markdown 格式。保存后将覆盖现有变更摘要。
-          </p>
+          <Tabs value={editTab} onValueChange={(v) => setEditTab(v as typeof editTab)} className="w-full">
+            <TabsList className="grid w-40 grid-cols-2">
+              <TabsTrigger value="edit" className="flex items-center gap-1">
+                <PenLine className="h-3 w-3" />
+                编辑
+              </TabsTrigger>
+              <TabsTrigger value="preview" className="flex items-center gap-1">
+                <Eye className="h-3 w-3" />
+                预览
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {editTab === "edit" ? (
+            <>
+              <textarea
+                className="w-full min-h-[200px] p-3 text-sm border rounded-lg bg-background resize-y font-mono"
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                placeholder="在此编辑变更摘要内容（支持 Markdown）..."
+              />
+              <p className="text-xs text-muted-foreground">
+                支持 Markdown 格式。保存后将覆盖现有变更摘要。
+              </p>
+            </>
+          ) : (
+            <div className="min-h-[200px] p-3 text-sm border rounded-lg bg-muted/30 prose prose-sm dark:prose-invert max-w-none">
+              {editContent ? (
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{editContent}</ReactMarkdown>
+              ) : (
+                <p className="text-muted-foreground italic">预览为空，请先在编辑模式下输入内容</p>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <>
