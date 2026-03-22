@@ -54,32 +54,35 @@ export function BuildRetrySettingsDialog({ open, onOpenChange }: BuildRetrySetti
               min={0}
               max={3}
               value={maxRetries}
+              disabled={maxRetries === 0}
               onChange={(e) => setMaxRetries(Math.min(3, Math.max(0, parseInt(e.target.value) || 0)))}
             />
             <p className="text-sm text-muted-foreground">设置为 0 禁用自动重试，最多 3 次</p>
           </div>
 
-          <div className="space-y-2">
-            <Label>重试延迟（秒）</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {retryDelays.map((delay, i) => (
-                <div key={i}>
-                  <Label className="text-xs">第{i + 1}次</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={60}
-                    value={delay}
-                    onChange={(e) => {
-                      const newDelays = [...retryDelays];
-                      newDelays[i] = Math.min(60, Math.max(1, parseInt(e.target.value) || 3));
-                      setRetryDelays(newDelays);
-                    }}
-                  />
-                </div>
-              ))}
+          {maxRetries > 0 && (
+            <div className="space-y-2">
+              <Label>重试延迟（秒）</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {retryDelays.map((delay, i) => (
+                  <div key={i}>
+                    <Label className="text-xs">第{i + 1}次</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={60}
+                      value={delay}
+                      onChange={(e) => {
+                        const newDelays = [...retryDelays];
+                        newDelays[i] = Math.min(60, Math.max(1, parseInt(e.target.value) || 3));
+                        setRetryDelays(newDelays);
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>

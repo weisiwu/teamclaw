@@ -179,7 +179,20 @@ export function BatchDownloadDialog({
           {/* Download Results */}
           {downloadResults && (
             <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-              <h4 className="text-sm font-medium mb-2">下载结果</h4>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-medium">
+                  下载结果
+                  <span className="ml-2 text-muted-foreground font-normal">
+                    ({downloadResults.filter(r => r.success).length}/{downloadResults.length} 成功)
+                  </span>
+                </h4>
+                <button
+                  onClick={() => setDownloadResults(null)}
+                  className="text-xs text-gray-500 hover:text-gray-700"
+                >
+                  清除结果
+                </button>
+              </div>
               <div className="space-y-1">
                 {downloadResults.map((result) => (
                   <div

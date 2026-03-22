@@ -79,6 +79,11 @@ export function BranchManager({ compact = false }: BranchManagerProps) {
     }
   }, [toastVisible]);
 
+  // Reset create dialog input when opening
+  useEffect(() => {
+    if (showCreateDialog) setNewBranchName("");
+  }, [showCreateDialog]);
+
   const branches = branchData?.data || [];
   const mainBranch = branches.find((b) => b.isMain);
 

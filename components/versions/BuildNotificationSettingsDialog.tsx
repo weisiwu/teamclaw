@@ -19,6 +19,7 @@ export function BuildNotificationSettingsDialog({ open, onOpenChange }: BuildNot
   const [notifyOn, setNotifyOn] = useState<NotifyOn>('failure');
   const [notifyChannels, setNotifyChannels] = useState<NotifyChannel[]>(['feishu']);
   const [notifyEmails, setNotifyEmails] = useState<string>('');
+  const [emailError, setEmailError] = useState<string>('');
 
   useEffect(() => {
     if (open) {
@@ -32,12 +33,30 @@ export function BuildNotificationSettingsDialog({ open, onOpenChange }: BuildNot
   const handleChannelToggle = (channel: NotifyChannel) => {
     if (notifyChannels.includes(channel)) {
       setNotifyChannels(notifyChannels.filter(c => c !== channel));
+      if (channel === 'email') setEmailError('');
     } else {
       setNotifyChannels([...notifyChannels, channel]);
     }
   };
 
+  const validateEmails = (value: string): boolean => {
+    if (!value.trim()) {
+      setEmailError('请输入通知邮箱');
+      return false;
+    }
+    const emails = value.split(',').map(e => e.trim()).filter(Boolean);
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const invalidEmails = emails.filter(e => !emailRegex.test(e));
+    if (invalidEmails.length > 0) {
+      setEmailError(`邮箱格式无效：${invalidEmails.join(', ')}`);
+      return false;
+    }
+    setEmailError('');
+    return true;
+  };
+
   const handleSave = () => {
+    if (notifyChannels.includes('email') && !validateEmails(notifyEmails)) return;
     saveBuildEnhancementSettings({
       notification: {
         notifyOn,
@@ -98,9 +117,11 @@ export function BuildNotificationSettingsDialog({ open, onOpenChange }: BuildNot
               <Input
                 id="notify-emails"
                 value={notifyEmails}
-                onChange={(e) => setNotifyEmails(e.target.value)}
+                onChange={(e) => { setNotifyEmails(e.target.value); if (emailError) validateEmails(e.target.value); }}
                 placeholder="example@example.com, another@example.com"
+                className={emailError ? 'border-red-500 focus:ring-red-500' : ''}
               />
+              {emailError && <p className="text-sm text-red-500">{emailError}</p>}
             </div>
           )}
         </div>
