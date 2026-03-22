@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { corsHeaders, generateRequestId, jsonSuccess, jsonError, optionsResponse } from "@/lib/api-shared";
+import { generateRequestId, jsonSuccess, jsonError, optionsResponse } from "@/lib/api-shared";
 import { getAllBranches, createBranch } from "@/lib/branch-store";
 
 // GET /api/v1/branches

@@ -277,6 +277,44 @@ router.post('/:taskId/cancel', async (req, res) => {
   }
 });
 
+// POST /api/v1/tasks/bulk/cancel — 批量取消任务（iter-34 API优化）
+router.post('/bulk/cancel', requireAuth, async (req, res) => {
+  const { taskIds } = req.body as { taskIds: string[] };
+
+  if (!Array.isArray(taskIds) || taskIds.length === 0) {
+    res.status(400).json(error(400, 'taskIds must be a non-empty array'));
+    return;
+  }
+
+  if (taskIds.length > 50) {
+    res.status(400).json(error(400, 'Cannot cancel more than 50 tasks at once'));
+    return;
+  }
+
+  const results: Array<{ taskId: string; success: boolean; error?: string }> = [];
+
+  for (const taskId of taskIds) {
+    try {
+      await taskLifecycle.transition(taskId, 'cancelled');
+      await taskFlow.cascadeCancel(taskId);
+      results.push({ taskId, success: true });
+    } catch (err) {
+      results.push({ taskId, success: false, error: err instanceof Error ? err.message : 'Unknown error' });
+    }
+  }
+
+  const succeeded = results.filter(r => r.success).length;
+  const failed = results.filter(r => !r.success).length;
+
+  res.json(success({
+    total: taskIds.length,
+    succeeded,
+    failed,
+    results,
+    message: failed === 0 ? `All ${succeeded} tasks cancelled` : `${succeeded} succeeded, ${failed} failed`,
+  }));
+});
+
 // POST /api/v1/tasks/:taskId/trigger-bump — 手动触发版本升级
 router.post('/:taskId/trigger-bump', async (req, res) => {
   try {

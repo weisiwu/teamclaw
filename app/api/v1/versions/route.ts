@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { versionStore, type Version } from "./version-store";
-import { corsHeaders, generateRequestId, jsonSuccess, jsonError, optionsResponse } from "@/lib/api-shared";
+import { generateRequestId, jsonSuccess, jsonError, optionsResponse } from "@/lib/api-shared";
 
 /**
  * GET /api/v1/versions

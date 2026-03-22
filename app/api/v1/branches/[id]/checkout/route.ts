@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { corsHeaders, generateRequestId, jsonSuccess, jsonError, optionsResponse } from "@/lib/api-shared";
+import { generateRequestId, jsonSuccess, jsonError, optionsResponse } from "@/lib/api-shared";
 import { getBranch, updateBranch } from "@/lib/branch-store";
 
 // PUT /api/v1/branches/[id]/checkout — 检出（切换到）分支

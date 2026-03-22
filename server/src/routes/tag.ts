@@ -433,4 +433,211 @@ router.get('/versions/:versionId', (req: Request, res: Response) => {
   res.json(success({ data: tags, total: tags.length }));
 });
 
+// ========== Bulk Tag 操作（iter-34 API优化）==========
+
+// POST /api/v1/tags/bulk — 批量归档/取消归档标签
+router.post('/bulk', requireAdmin, (req: Request, res: Response) => {
+  const { tagNames, action } = req.body as {
+    tagNames: string[];
+    action: 'archive' | 'unarchive';
+  };
+
+  if (!Array.isArray(tagNames) || tagNames.length === 0) {
+    res.status(400).json(error(400, 'tagNames must be a non-empty array'));
+    return;
+  }
+
+  if (!['archive', 'unarchive'].includes(action)) {
+    res.status(400).json(error(400, 'action must be "archive" or "unarchive"'));
+    return;
+  }
+
+  const results: Array<{ name: string; success: boolean; error?: string }> = [];
+
+  for (const tagName of tagNames) {
+    try {
+      const record = getTagByName(tagName);
+      if (!record) {
+        results.push({ name: tagName, success: false, error: 'Tag record not found' });
+        continue;
+      }
+
+      if (action === 'archive') {
+        archiveTag(record.id);
+      } else {
+        // Unarchive: update record to not archived
+        updateTagRecord(record.id, { archived: false } as Parameters<typeof updateTagRecord>[1]);
+      }
+      results.push({ name: tagName, success: true });
+    } catch (err) {
+      results.push({ name: tagName, success: false, error: err instanceof Error ? err.message : 'Unknown error' });
+    }
+  }
+
+  const succeeded = results.filter(r => r.success).length;
+  const failed = results.filter(r => !r.success).length;
+
+  res.json(success({
+    total: tagNames.length,
+    succeeded,
+    failed,
+    results,
+    message: failed === 0
+      ? `All ${succeeded} tags ${action}d successfully`
+      : `${succeeded} succeeded, ${failed} failed`,
+  }));
+});
+
+// DELETE /api/v1/tags/bulk — 批量删除标签
+router.delete('/bulk', requireAdmin, (req: Request, res: Response) => {
+  const { tagNames, force } = req.body as {
+    tagNames: string[];
+    force?: boolean;
+  };
+
+  if (!Array.isArray(tagNames) || tagNames.length === 0) {
+    res.status(400).json(error(400, 'tagNames must be a non-empty array'));
+    return;
+  }
+
+  if (tagNames.length > 50) {
+    res.status(400).json(error(400, 'Cannot delete more than 50 tags at once'));
+    return;
+  }
+
+  const results: Array<{ name: string; success: boolean; error?: string }> = [];
+
+  for (const tagName of tagNames) {
+    try {
+      const record = getTagByName(tagName);
+      if (!record) {
+        results.push({ name: tagName, success: false, error: 'Tag record not found' });
+        continue;
+      }
+
+      if (record.protected && !force) {
+        results.push({ name: tagName, success: false, error: 'Tag is protected. Use force=true to override.' });
+        continue;
+      }
+
+      removeTag(record.id);
+      results.push({ name: tagName, success: true });
+    } catch (err) {
+      results.push({ name: tagName, success: false, error: err instanceof Error ? err.message : 'Unknown error' });
+    }
+  }
+
+  const succeeded = results.filter(r => r.success).length;
+  const failed = results.filter(r => !r.success).length;
+
+  res.json(success({
+    total: tagNames.length,
+    succeeded,
+    failed,
+    results,
+    message: failed === 0
+      ? `All ${succeeded} tags deleted successfully`
+      : `${succeeded} succeeded, ${failed} failed`,
+  }));
+});
+
+// GET /api/v1/tags/search — 标签搜索（支持名称/日期范围过滤）
+router.get('/search', (req: Request, res: Response) => {
+  const { q, source, hasScreenshot, hasChangelog, protected: isProtected, dateFrom, dateTo, page, pageSize } = req.query;
+
+  // Get all DB tag records
+  const dbTags = getAllTagRecords();
+  const projectPath = (req.query.projectPath as string) || DEFAULT_PROJECT_PATH;
+  const gitTags = projectPath ? gitGetTags(projectPath) : [];
+
+  // Build merged tags
+  const tagVersionIdMap = new Map<string, string>();
+  for (const t of dbTags) {
+    tagVersionIdMap.set(t.name, t.versionId);
+  }
+
+  const screenshotIndex = new Set<string>();
+  for (const shot of ScreenshotModel.getAllScreenshots()) {
+    screenshotIndex.add(shot.versionId);
+  }
+
+  const db = getDb();
+  const summaryRows = db.prepare('SELECT version_id FROM version_summaries').all() as Array<{ version_id: string }>;
+  const summaryIndex = new Set<string>();
+  for (const row of summaryRows) {
+    summaryIndex.add(row.version_id);
+  }
+
+  const protectedMap = new Map<string, boolean>();
+  const sourceMap = new Map<string, 'auto' | 'manual'>();
+  for (const t of dbTags) {
+    protectedMap.set(t.name, t.protected);
+    sourceMap.set(t.name, t.source);
+  }
+
+  let mergedTags = gitTags.map(t => {
+    const versionId = tagVersionIdMap.get(t.name);
+    return {
+      name: t.name,
+      commit: t.commit,
+      date: t.date,
+      annotation: t.message,
+      protected: protectedMap.get(t.name) || false,
+      source: sourceMap.get(t.name) || 'manual' as 'auto' | 'manual',
+      hasScreenshot: versionId ? screenshotIndex.has(versionId) : false,
+      hasChangelog: versionId ? summaryIndex.has(versionId) : false,
+    };
+  });
+
+  // Apply filters
+  if (q) {
+    const query = (q as string).toLowerCase();
+    mergedTags = mergedTags.filter(t => t.name.toLowerCase().includes(query));
+  }
+
+  if (source && source !== 'all') {
+    mergedTags = mergedTags.filter(t => t.source === source);
+  }
+
+  if (isProtected !== undefined) {
+    mergedTags = mergedTags.filter(t => t.protected === (isProtected === 'true'));
+  }
+
+  if (hasScreenshot === 'true') {
+    mergedTags = mergedTags.filter(t => t.hasScreenshot);
+  } else if (hasScreenshot === 'false') {
+    mergedTags = mergedTags.filter(t => !t.hasScreenshot);
+  }
+
+  if (hasChangelog === 'true') {
+    mergedTags = mergedTags.filter(t => t.hasChangelog);
+  } else if (hasChangelog === 'false') {
+    mergedTags = mergedTags.filter(t => !t.hasChangelog);
+  }
+
+  if (dateFrom) {
+    const from = new Date(dateFrom as string).getTime();
+    mergedTags = mergedTags.filter(t => new Date(t.date).getTime() >= from);
+  }
+
+  if (dateTo) {
+    const to = new Date(dateTo as string).getTime();
+    mergedTags = mergedTags.filter(t => new Date(t.date).getTime() <= to);
+  }
+
+  const total = mergedTags.length;
+  const p = parseInt(page as string) || 1;
+  const ps = parseInt(pageSize as string) || 50;
+  const start = (p - 1) * ps;
+  const data = mergedTags.slice(start, start + ps);
+
+  res.json(success({
+    data,
+    total,
+    page: p,
+    pageSize: ps,
+    totalPages: Math.ceil(total / ps),
+  }));
+});
+
 export default router;

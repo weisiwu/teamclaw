@@ -301,6 +301,120 @@ router.get('/', (req: Request, res: Response) => {
   }));
 });
 
+// GET /api/v1/versions/search — 高级搜索（iter-34 API优化）
+router.get('/search', (req: Request, res: Response) => {
+  const {
+    q,              // 关键词搜索（version/title/description）
+    status,         // draft|published|archived
+    buildStatus,    // pending|building|success|failed
+    branch,         // 分支名
+    tag,            // 标签名
+    hasScreenshot,
+    hasSummary,
+    dateFrom,
+    dateTo,
+    page = '1',
+    pageSize = '20',
+  } = req.query;
+
+  let sql = 'SELECT * FROM versions WHERE 1=1';
+  const params: Record<string, unknown> = {};
+
+  if (q) {
+    sql += ' AND (version LIKE @q OR title LIKE @q OR description LIKE @q)';
+    params.q = `%${q}%`;
+  }
+  if (status && status !== 'all') {
+    sql += ' AND status = @status';
+    params.status = status;
+  }
+  if (buildStatus && buildStatus !== 'all') {
+    sql += ' AND build_status = @buildStatus';
+    params.buildStatus = buildStatus;
+  }
+  if (branch) {
+    sql += ' AND branch = @branch';
+    params.branch = branch;
+  }
+  if (dateFrom) {
+    sql += ' AND created_at >= @dateFrom';
+    params.dateFrom = dateFrom;
+  }
+  if (dateTo) {
+    sql += ' AND created_at <= @dateTo';
+    params.dateTo = dateTo;
+  }
+
+  sql += ' ORDER BY created_at DESC';
+
+  const allRows = db.prepare(sql).all(params) as Array<Record<string, unknown>>;
+
+  // Build screenshot index
+  const screenshotIndex = new Map<string, boolean>();
+  for (const shot of ScreenshotModel.getAllScreenshots()) {
+    screenshotIndex.set(shot.versionId, true);
+  }
+
+  // Build summary index
+  const summaryIndex = new Set<string>();
+  const summaryRows = db.prepare('SELECT version_id FROM version_summaries').all() as Array<{ version_id: string }>;
+  for (const row of summaryRows) {
+    summaryIndex.add(row.version_id);
+  }
+
+  // Build tag index
+  let filteredRows = allRows;
+  if (hasScreenshot === 'true') {
+    filteredRows = filteredRows.filter(r => screenshotIndex.get(r.id as string));
+  } else if (hasScreenshot === 'false') {
+    filteredRows = filteredRows.filter(r => !screenshotIndex.get(r.id as string));
+  }
+  if (hasSummary === 'true') {
+    filteredRows = filteredRows.filter(r => summaryIndex.has(r.id as string));
+  } else if (hasSummary === 'false') {
+    filteredRows = filteredRows.filter(r => !summaryIndex.has(r.id as string));
+  }
+
+  // Tag filter (requires join)
+  if (tag) {
+    const db = getDb();
+    const tagRows = db.prepare(
+      'SELECT version_id FROM version_tags WHERE tag_name = ?'
+    ).all(tag) as Array<{ version_id: string }>;
+    const taggedVersionIds = new Set(tagRows.map(r => r.version_id));
+    filteredRows = filteredRows.filter(r => taggedVersionIds.has(r.id as string));
+  }
+
+  const total = filteredRows.length;
+  const p = parseInt(page as string);
+  const ps = parseInt(pageSize as string);
+  const start = (p - 1) * ps;
+  const paginatedRows = filteredRows.slice(start, start + ps);
+
+  const data = paginatedRows.map(row => ({
+    id: row.id,
+    version: row.version,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    branch: row.branch,
+    buildStatus: row.build_status,
+    gitTag: (row.git_tag as string) || undefined,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    hasScreenshot: !!screenshotIndex.get(row.id as string),
+    hasSummary: summaryIndex.has(row.id as string),
+  }));
+
+  res.json(success({
+    data,
+    total,
+    page: p,
+    pageSize: ps,
+    totalPages: Math.ceil(total / ps),
+  }));
+});
+
 // GET /api/v1/versions/:id — 详情
 router.get('/:id', validateIdParam(), (req: Request, res: Response) => {
   const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
