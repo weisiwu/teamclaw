@@ -12,7 +12,8 @@ import { useMemberList, useCreateMember, useUpdateMember, useDeleteMember, useBa
 import { usePermission } from "@/hooks/usePermission";
 import { Member, ROLE_LABELS, MEMBER_ROLE_OPTIONS, MemberRole, MemberStatus, CreateMemberRequest, UpdateMemberRequest } from "@/lib/api/types";
 import { Pencil, Trash2, UserPlus,  Search, Users, ArrowUpDown, ArrowUp, ArrowDown, Download, Upload, X, Power, PowerOff, Eye } from "lucide-react";
-import * as XLSX from "xlsx";
+// xlsx lazy loaded — only needed for import/export, saves ~500KB from initial bundle
+type XLSXModule = typeof import("xlsx");
 
 type SortField = "name" | "role" | "weight" | "createdAt";
 type SortOrder = "asc" | "desc";
@@ -116,7 +117,8 @@ export default function MembersPage() {
     setSelectedIds(newSelected);
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
+    const XLSX = (await import("xlsx")) as XLSXModule;
     const exportData = filteredMembers.map(m => ({
       姓名: m.name,
       角色: ROLE_LABELS[m.role],
@@ -124,7 +126,7 @@ export default function MembersPage() {
       状态: m.status === "active" ? "启用" : "禁用",
       加入时间: m.createdAt,
     }));
-    
+
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "成员列表");
@@ -133,8 +135,9 @@ export default function MembersPage() {
 
   const handleImport = async () => {
     if (!importFile) return;
-    
+
     try {
+      const XLSX = (await import("xlsx")) as XLSXModule;
       const data = await importFile.arrayBuffer();
       const workbook = XLSX.read(data);
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
