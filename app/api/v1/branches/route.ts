@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       return jsonError("分支名称只能包含字母、数字、_、.、/、-", 400, requestId);
     }
 
-    const branch = createBranch(body);
+    const branch = createBranch({ name: body.name, author: body.author, versionId: body.versionId, baseBranch: body.baseBranch, description: body.description });
     return jsonSuccess(branch, requestId);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

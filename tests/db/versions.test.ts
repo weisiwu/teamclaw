@@ -121,7 +121,7 @@ function getAllVersions(db: DatabaseSync, filters?: {
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  return db.prepare(`SELECT * FROM versions ${where} ORDER BY created_at DESC`).all(...params) as VersionRow[];
+  return db.prepare(`SELECT * FROM versions ${where} ORDER BY created_at DESC`).all(...params) as unknown as VersionRow[];
 }
 
 function updateVersion(db: DatabaseSync, id: string, updates: {
