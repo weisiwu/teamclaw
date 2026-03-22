@@ -54,6 +54,7 @@ versions/
 artifacts/
 !app/api/v1/build/artifacts/
 !app/api/v1/versions/
+!app/api/v1/tasks/
 
 # docker
 docker-compose.override.yml
