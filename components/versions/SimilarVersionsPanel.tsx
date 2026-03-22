@@ -143,9 +143,23 @@ export function SimilarVersionsPanel({
                   key={similar.versionId}
                   className="flex items-center gap-3 p-3 rounded-lg border hover:bg-gray-50 transition-colors"
                 >
-                  {/* 相似度指示器 */}
-                  <div className={`px-2 py-1 rounded text-sm font-medium ${similarityColor(similar.similarity)}`}>
-                    {(similar.similarity * 100).toFixed(0)}%
+                  {/* 相似度进度条 */}
+                  <div className="flex flex-col items-center gap-1 w-14 shrink-0">
+                    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          similar.similarity >= 0.8
+                            ? 'bg-green-500'
+                            : similar.similarity >= 0.5
+                            ? 'bg-blue-500'
+                            : 'bg-gray-400'
+                        }`}
+                        style={{ width: `${(similar.similarity * 100).toFixed(0)}%` }}
+                      />
+                    </div>
+                    <span className={`text-xs font-medium ${similarityColor(similar.similarity)}`}>
+                      {(similar.similarity * 100).toFixed(0)}%
+                    </span>
                   </div>
                   
                   {/* 版本信息 */}

@@ -129,6 +129,7 @@ export function BumpHistoryPanel({ versionId }: BumpHistoryPanelProps) {
   const statsMajor = records.filter(r => r.bumpType === "major").length;
   const statsMinor = records.filter(r => r.bumpType === "minor").length;
   const statsPatch = records.filter(r => r.bumpType === "patch").length;
+  const total = statsMajor + statsMinor + statsPatch || 1; // avoid divide by zero
 
   if (records.length === 0) {
     return (
@@ -143,7 +144,7 @@ export function BumpHistoryPanel({ versionId }: BumpHistoryPanelProps) {
   return (
     <div>
       {/* 统计摘要 */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
+      <div className="grid grid-cols-3 gap-2 mb-2">
         <div className="p-2 rounded-lg text-center bg-red-50">
           <div className="text-lg font-bold text-red-600">{statsMajor}</div>
           <div className="text-xs text-gray-500">Major</div>
@@ -157,6 +158,40 @@ export function BumpHistoryPanel({ versionId }: BumpHistoryPanelProps) {
           <div className="text-xs text-gray-500">Patch</div>
         </div>
       </div>
+
+      {/* Bump 类型分布柱状图 */}
+      {total > 0 && (
+        <div className="mb-3">
+          <div className="flex h-3 rounded-full overflow-hidden gap-px bg-gray-100">
+            {statsMajor > 0 && (
+              <div
+                className="bg-red-400 rounded-l-full transition-all"
+                style={{ width: `${(statsMajor / total) * 100}%` }}
+                title={`Major: ${statsMajor}`}
+              />
+            )}
+            {statsMinor > 0 && (
+              <div
+                className="bg-yellow-400 transition-all"
+                style={{ width: `${(statsMinor / total) * 100}%` }}
+                title={`Minor: ${statsMinor}`}
+              />
+            )}
+            {statsPatch > 0 && (
+              <div
+                className={`bg-green-400 rounded-r-full transition-all ${statsMajor === 0 && statsMinor === 0 ? 'rounded-l-full' : ''}`}
+                style={{ width: `${(statsPatch / total) * 100}%` }}
+                title={`Patch: ${statsPatch}`}
+              />
+            )}
+          </div>
+          <div className="flex justify-between mt-1 text-xs text-gray-400">
+            <span>Major {statsMajor > 0 ? `${Math.round((statsMajor / total) * 100)}%` : ''}</span>
+            <span>Minor {statsMinor > 0 ? `${Math.round((statsMinor / total) * 100)}%` : ''}</span>
+            <span>Patch {statsPatch > 0 ? `${Math.round((statsPatch / total) * 100)}%` : ''}</span>
+          </div>
+        </div>
+      )}
 
       {/* 搜索框 */}
       <div className="relative mb-3">

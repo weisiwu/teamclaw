@@ -1,21 +1,26 @@
 import { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, Download, FileArchive, Calendar } from 'lucide-react';
+import { BarChart3, TrendingUp, Download, FileArchive, Calendar, AlertCircle, RefreshCw } from 'lucide-react';
 import { getDownloadStats, type DownloadStats } from '@/lib/api/versions';
 
 export function DownloadStatsPanel() {
   const [stats, setStats] = useState<DownloadStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadStats();
   }, []);
 
   const loadStats = async () => {
+    setLoading(true);
+    setError(null);
     try {
       const data = await getDownloadStats();
       setStats(data);
-    } catch (error) {
-      console.error('Failed to load download stats:', error);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '加载失败';
+      setError(msg);
+      console.error('Failed to load download stats:', err);
     } finally {
       setLoading(false);
     }
@@ -28,6 +33,22 @@ export function DownloadStatsPanel() {
           <div className="h-4 bg-gray-200 rounded w-1/3"></div>
           <div className="h-20 bg-gray-200 rounded"></div>
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-white rounded-lg border flex flex-col items-center justify-center py-10 text-center">
+        <AlertCircle className="w-8 h-8 text-red-400 mb-2" />
+        <p className="text-sm text-gray-600 mb-3">{error}</p>
+        <button
+          onClick={loadStats}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" />
+          重试
+        </button>
       </div>
     );
   }
