@@ -192,6 +192,50 @@ function FilterBar({
   );
 }
 
+// 快速创建任务表单
+function QuickAddTaskForm({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const createTask = useCreateTask();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    await createTask.mutateAsync({ title: title.trim(), description: "", priority: 5 });
+    setTitle("");
+    onCreated();
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="border rounded-lg p-3 bg-card">
+      <div className="flex items-center gap-2">
+        <Input
+          autoFocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="输入任务标题，按回车快速创建..."
+          disabled={createTask.isPending}
+          className="flex-1"
+          onKeyDown={(e) => {
+            if (e.key === "Escape") onClose();
+          }}
+        />
+        <Button type="submit" size="sm" disabled={!title.trim() || createTask.isPending}>
+          {createTask.isPending ? "创建中..." : "创建"}
+        </Button>
+        <Button type="button" variant="ghost" size="icon" onClick={onClose}>
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 // 任务卡片组件
 function TaskCard({
   task,
@@ -461,6 +505,13 @@ function TasksContent() {
   // 批量删除状态
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
   const [batchDeleteConfirm, setBatchDeleteConfirm] = useState(false);
+
+  // 单个操作确认弹窗
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
+
+  // 快速创建展开状态
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   
   // 从 URL 获取筛选参数
   const search = searchParams.get("search") || "";
@@ -641,9 +692,13 @@ function TasksContent() {
   };
   
   const handleDelete = async (id: string) => {
-    if (confirm("确定要删除这个任务吗？")) {
-      await deleteTask.mutateAsync(id);
-    }
+    setDeleteConfirmId(id);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmId) return;
+    await deleteTask.mutateAsync(deleteConfirmId);
+    setDeleteConfirmId(null);
   };
   
   const handleComplete = async (id: string) => {
@@ -651,9 +706,13 @@ function TasksContent() {
   };
   
   const handleCancel = async (id: string) => {
-    if (confirm("确定要取消这个任务吗？")) {
-      await cancelTask.mutateAsync(id);
-    }
+    setCancelConfirmId(id);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!cancelConfirmId) return;
+    await cancelTask.mutateAsync(cancelConfirmId);
+    setCancelConfirmId(null);
   };
   
   const handleReopen = async (id: string) => {
@@ -683,6 +742,53 @@ function TasksContent() {
               创建任务
             </Button>
           </div>
+        </div>
+
+        {/* 任务统计摘要栏 */}
+        {taskStats && (
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+            <div className="bg-card rounded-lg border p-3 text-center">
+              <div className="text-2xl font-bold text-foreground">{taskStats.total}</div>
+              <div className="text-xs text-muted-foreground">全部任务</div>
+            </div>
+            <div className="bg-card rounded-lg border p-3 text-center">
+              <div className="text-2xl font-bold text-blue-500">{taskStats.pending + taskStats.inProgress}</div>
+              <div className="text-xs text-muted-foreground">进行中</div>
+            </div>
+            <div className="bg-card rounded-lg border p-3 text-center">
+              <div className="text-2xl font-bold text-green-500">{taskStats.completed}</div>
+              <div className="text-xs text-muted-foreground">已完成</div>
+            </div>
+            <div className="bg-card rounded-lg border p-3 text-center">
+              <div className="text-2xl font-bold text-red-400">{taskStats.cancelled}</div>
+              <div className="text-xs text-muted-foreground">已取消</div>
+            </div>
+            <div className="bg-card rounded-lg border p-3 text-center">
+              <div className="text-2xl font-bold text-orange-500">{taskStats.avgPriority.toFixed(1)}</div>
+              <div className="text-xs text-muted-foreground">平均优先级</div>
+            </div>
+          </div>
+        )}
+
+        {/* 快速创建任务 */}
+        <div className="mb-4">
+          {!isQuickAddOpen ? (
+            <button
+              onClick={() => setIsQuickAddOpen(true)}
+              className="w-full py-2 px-4 border-2 border-dashed border-border rounded-lg text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              快速添加任务
+            </button>
+          ) : (
+            <QuickAddTaskForm
+              onClose={() => setIsQuickAddOpen(false)}
+              onCreated={() => {
+                setIsQuickAddOpen(false);
+                refetch();
+              }}
+            />
+          )}
         </div>
 
         {/* 筛选栏 */}
@@ -1112,6 +1218,72 @@ function TasksContent() {
                 disabled={deleteTask.isPending}
               >
                 {deleteTask.isPending ? "删除中..." : "确认删除"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 单个删除确认弹窗 */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div 
+            className="absolute inset-0 bg-black/50" 
+            onClick={() => setDeleteConfirmId(null)}
+          />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">确认删除</h2>
+              <Button variant="ghost" size="icon" onClick={() => setDeleteConfirmId(null)}>
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              确定要删除这个任务吗？此操作不可恢复。
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>
+                取消
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleConfirmDelete}
+                disabled={deleteTask.isPending}
+              >
+                {deleteTask.isPending ? "删除中..." : "确认删除"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 单个取消确认弹窗 */}
+      {cancelConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div 
+            className="absolute inset-0 bg-black/50" 
+            onClick={() => setCancelConfirmId(null)}
+          />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">确认取消任务</h2>
+              <Button variant="ghost" size="icon" onClick={() => setCancelConfirmId(null)}>
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              确定要取消这个任务吗？取消后可重新开启。
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setCancelConfirmId(null)}>
+                取消
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleConfirmCancel}
+                disabled={cancelTask.isPending}
+              >
+                {cancelTask.isPending ? "处理中..." : "确认取消"}
               </Button>
             </div>
           </div>
