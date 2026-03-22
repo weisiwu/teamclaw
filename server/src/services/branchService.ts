@@ -1,71 +1,53 @@
-// Branch 分支服务
-// 提供分支的 CRUD、设置主分支、保护等业务逻辑
-
+// Branch 分支服务 — SQLite 持久化版 (iter-49)
+import { getDb } from '../db/sqlite.js';
 import { BranchRecord, BranchConfig } from '../models/branch.js';
 
-// ========== In-Memory Storage ==========
-const branches: Map<string, BranchRecord> = new Map();
-let nextId = 1;
-
-// 默认配置
-const defaultConfig: BranchConfig = {
-  defaultBranch: 'main',
-  protectedBranches: ['main', 'master', 'release/*'],
-  allowForcePush: false,
-  autoCleanupMerged: false,
-};
-
-let config: BranchConfig = { ...defaultConfig };
-
-// ========== 初始化默认分支 ==========
-function initDefaultBranch() {
-  if (branches.size === 0) {
-    const mainBranch: BranchRecord = {
-      id: `branch_${nextId++}`,
-      name: 'main',
-      isMain: true,
-      isRemote: false,
-      isProtected: true,
-      createdAt: new Date().toISOString(),
-      lastCommitAt: new Date().toISOString(),
-      commitMessage: 'Initial commit',
-      author: 'system',
-      description: 'Default main branch',
-    };
-    branches.set(mainBranch.id, mainBranch);
-  }
+function toRecord(row: Record<string, unknown>): BranchRecord {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    isMain: Boolean(row.is_main),
+    isRemote: Boolean(row.is_remote),
+    isProtected: Boolean(row.is_protected),
+    createdAt: String(row.created_at),
+    lastCommitAt: String(row.last_commit_at),
+    commitMessage: String(row.commit_message ?? ''),
+    author: String(row.author ?? 'system'),
+    versionId: row.version_id ? String(row.version_id) : undefined,
+    baseBranch: row.base_branch ? String(row.base_branch) : undefined,
+    description: row.description ? String(row.description) : undefined,
+  };
 }
-
-initDefaultBranch();
 
 // ========== 分支 CRUD ==========
 
-// 获取所有分支
 export function getAllBranches(): BranchRecord[] {
-  return Array.from(branches.values()).sort((a, b) => {
-    // 主分支排在最前
-    if (a.isMain) return -1;
-    if (b.isMain) return 1;
-    return a.name.localeCompare(b.name);
-  });
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT * FROM branches
+    ORDER BY is_main DESC, name ASC
+  `).all() as Record<string, unknown>[];
+  return rows.map(toRecord);
 }
 
-// 获取单个分支
 export function getBranch(id: string): BranchRecord | undefined {
-  return branches.get(id);
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM branches WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  return row ? toRecord(row) : undefined;
 }
 
-// 按名称获取分支
 export function getBranchByName(name: string): BranchRecord | undefined {
-  return Array.from(branches.values()).find(b => b.name === name);
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM branches WHERE name = ?').get(name) as Record<string, unknown> | undefined;
+  return row ? toRecord(row) : undefined;
 }
 
-// 获取主分支
 export function getMainBranch(): BranchRecord | undefined {
-  return Array.from(branches.values()).find(b => b.isMain);
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM branches WHERE is_main = 1 LIMIT 1').get() as Record<string, unknown> | undefined;
+  return row ? toRecord(row) : undefined;
 }
 
-// 创建分支
 export function createBranch(data: {
   name: string;
   author?: string;
@@ -73,37 +55,39 @@ export function createBranch(data: {
   baseBranch?: string;
   description?: string;
 }): BranchRecord {
-  // 检查名称是否已存在
+  const db = getDb();
   const existing = getBranchByName(data.name);
   if (existing) {
     throw new Error(`Branch ${data.name} already exists`);
   }
 
-  const branch: BranchRecord = {
-    id: `branch_${nextId++}`,
-    name: data.name,
-    isMain: false,
-    isRemote: false,
-    isProtected: false,
-    createdAt: new Date().toISOString(),
-    lastCommitAt: new Date().toISOString(),
-    commitMessage: `Created branch ${data.name}`,
-    author: data.author || 'user',
-    versionId: data.versionId,
-    baseBranch: data.baseBranch,
-    description: data.description,
-  };
+  const id = `branch_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const now = new Date().toISOString();
 
-  branches.set(branch.id, branch);
-  return branch;
+  db.prepare(`
+    INSERT INTO branches (id, name, is_main, is_remote, is_protected, is_current,
+      created_at, last_commit_at, commit_message, author, version_id, base_branch, description)
+    VALUES (?, ?, 0, 0, 0, 0, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    data.name,
+    now,
+    now,
+    `Created branch ${data.name}`,
+    data.author || 'user',
+    data.versionId ?? null,
+    data.baseBranch ?? null,
+    data.description ?? null
+  );
+
+  return getBranch(id)!;
 }
 
-// 更新分支
 export function updateBranch(id: string, updates: Partial<BranchRecord>): BranchRecord | undefined {
-  const branch = branches.get(id);
+  const db = getDb();
+  const branch = getBranch(id);
   if (!branch) return undefined;
 
-  // 名称冲突检查
   if (updates.name && updates.name !== branch.name) {
     const existing = getBranchByName(updates.name);
     if (existing && existing.id !== id) {
@@ -111,114 +95,123 @@ export function updateBranch(id: string, updates: Partial<BranchRecord>): Branch
     }
   }
 
-  // 主分支强制保护
-  if (branch.isMain) {
-    updates.isProtected = true;
-  }
+  const isMain = updates.isMain ?? branch.isMain;
+  const isProtected = isMain ? true : (updates.isProtected ?? branch.isProtected);
 
-  const updated: BranchRecord = { ...branch, ...updates };
-  branches.set(id, updated);
+  db.prepare(`
+    UPDATE branches SET
+      name = ?, is_main = ?, is_protected = ?,
+      last_commit_at = ?, commit_message = ?, author = ?,
+      version_id = ?, base_branch = ?, description = ?
+    WHERE id = ?
+  `).run(
+    updates.name ?? branch.name,
+    isMain ? 1 : 0,
+    isProtected ? 1 : 0,
+    updates.lastCommitAt ?? branch.lastCommitAt,
+    updates.commitMessage ?? branch.commitMessage,
+    updates.author ?? branch.author,
+    updates.versionId ?? branch.versionId ?? null,
+    updates.baseBranch ?? branch.baseBranch ?? null,
+    updates.description ?? branch.description ?? null,
+    id
+  );
+
+  return getBranch(id);
+}
+
+export function deleteBranch(id: string): boolean {
+  const db = getDb();
+  const branch = getBranch(id);
+  if (!branch) return false;
+  if (branch.isProtected) throw new Error('Cannot delete protected branch');
+  if (branch.isMain) throw new Error('Cannot delete main branch');
+
+  const result = db.prepare('DELETE FROM branches WHERE id = ?').run(id);
+  return result.changes > 0;
+}
+
+export function setMainBranch(id: string): BranchRecord | undefined {
+  const db = getDb();
+  const branch = getBranch(id);
+  if (!branch) return undefined;
+
+  db.prepare('UPDATE branches SET is_main = 0').run();
+  db.prepare('UPDATE branches SET is_main = 1, is_protected = 1 WHERE id = ?').run(id);
+  return getBranch(id);
+}
+
+export function setBranchProtection(id: string, protect: boolean): BranchRecord | undefined {
+  const db = getDb();
+  const branch = getBranch(id);
+  if (!branch) return undefined;
+  if (branch.isMain && !protect) throw new Error('Main branch must always be protected');
+
+  db.prepare('UPDATE branches SET is_protected = ? WHERE id = ?').run(protect ? 1 : 0, id);
+  return getBranch(id);
+}
+
+export function renameBranch(id: string, newName: string): BranchRecord | undefined {
+  const db = getDb();
+  const branch = getBranch(id);
+  if (!branch) return undefined;
+  if (branch.isProtected) throw new Error('Protected branch cannot be renamed');
+
+  db.prepare('UPDATE branches SET name = ? WHERE id = ?').run(newName, id);
+  return getBranch(id);
+}
+
+export function getBranchConfig(): BranchConfig {
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM branch_config WHERE id = 1').get() as Record<string, unknown> | undefined;
+  if (!row) {
+    return { defaultBranch: 'main', protectedBranches: ['main', 'master', 'release/*'], allowForcePush: false, autoCleanupMerged: false };
+  }
+  return {
+    defaultBranch: String(row.default_branch),
+    protectedBranches: JSON.parse(String(row.protected_branches)),
+    allowForcePush: Boolean(row.allow_force_push),
+    autoCleanupMerged: Boolean(row.auto_cleanup_merged),
+  };
+}
+
+export function updateBranchConfig(updates: Partial<BranchConfig>): BranchConfig {
+  const db = getDb();
+  const current = getBranchConfig();
+  const updated = { ...current, ...updates };
+  db.prepare(`
+    UPDATE branch_config SET
+      default_branch = ?,
+      protected_branches = ?,
+      allow_force_push = ?,
+      auto_cleanup_merged = ?,
+      updated_at = datetime('now')
+    WHERE id = 1
+  `).run(
+    updated.defaultBranch,
+    JSON.stringify(updated.protectedBranches),
+    updated.allowForcePush ? 1 : 0,
+    updated.autoCleanupMerged ? 1 : 0
+  );
   return updated;
 }
 
-// 删除分支
-export function deleteBranch(id: string): boolean {
-  const branch = branches.get(id);
-  if (!branch) return false;
-
-  if (branch.isProtected) {
-    throw new Error('Cannot delete protected branch');
-  }
-
-  if (branch.isMain) {
-    throw new Error('Cannot delete main branch');
-  }
-
-  return branches.delete(id);
-}
-
-// 设置主分支
-export function setMainBranch(id: string): BranchRecord | undefined {
-  const branch = branches.get(id);
-  if (!branch) return undefined;
-
-  // 取消当前主分支
-  for (const [bid, b] of branches) {
-    if (b.isMain) {
-      branches.set(bid, { ...b, isMain: false });
-    }
-  }
-
-  // 设置新主分支
-  const updated = branches.get(id);
-  if (updated) {
-    branches.set(id, { ...updated, isMain: true, isProtected: true });
-  }
-
-  return branches.get(id);
-}
-
-// 保护/取消保护分支
-export function setBranchProtection(id: string, protect: boolean): BranchRecord | undefined {
-  const branch = branches.get(id);
-  if (!branch) return undefined;
-
-  if (branch.isMain && !protect) {
-    throw new Error('Main branch must always be protected');
-  }
-
-  return updateBranch(id, { isProtected: protect });
-}
-
-// 重命名分支
-export function renameBranch(id: string, newName: string): BranchRecord | undefined {
-  const branch = branches.get(id);
-  if (!branch) return undefined;
-
-  if (branch.isProtected) {
-    throw new Error('Protected branch cannot be renamed');
-  }
-
-  return updateBranch(id, { name: newName });
-}
-
-// 获取分支配置
-export function getBranchConfig(): BranchConfig {
-  return { ...config };
-}
-
-// 更新分支配置
-export function updateBranchConfig(updates: Partial<BranchConfig>): BranchConfig {
-  config = { ...config, ...updates };
-  return { ...config };
-}
-
-// 检出分支（切换到指定分支）
 export function checkoutBranch(id: string): BranchRecord | undefined {
-  const branch = branches.get(id);
+  const db = getDb();
+  const branch = getBranch(id);
   if (!branch) return undefined;
 
-  if (branch.isProtected || branch.isMain) {
-    // 保护分支和主分支可以直接 checkout
-    return branch;
-  }
-
-  // 更新 lastCommitAt 为当前时间，表示最近操作过
-  return updateBranch(id, { lastCommitAt: new Date().toISOString() });
+  db.prepare('UPDATE branches SET is_current = 1 WHERE id = ?').run(id);
+  db.prepare('UPDATE branches SET is_current = 0 WHERE id != ?').run(id);
+  db.prepare('UPDATE branches SET last_commit_at = ? WHERE id = ?').run(new Date().toISOString(), id);
+  return getBranch(id);
 }
 
-// 获取分支统计
-export function getBranchStats(): {
-  total: number;
-  main: number;
-  protected: number;
-  remote: number;
-} {
-  const all = getAllBranches();
-  return {
-    total: all.length,
-    main: all.filter(b => b.isMain).length,
-    protected: all.filter(b => b.isProtected).length,
-    remote: all.filter(b => b.isRemote).length,
-  };
+export function getBranchStats() {
+  const db = getDb();
+  const total = (db.prepare('SELECT COUNT(*) as c FROM branches').get() as { c: number }).c;
+  const main = (db.prepare('SELECT COUNT(*) as c FROM branches WHERE is_main = 1').get() as { c: number }).c;
+  const protected_ = (db.prepare('SELECT COUNT(*) as c FROM branches WHERE is_protected = 1').get() as { c: number }).c;
+  const remote = (db.prepare('SELECT COUNT(*) as c FROM branches WHERE is_remote = 1').get() as { c: number }).c;
+  return { total, main, protected: protected_, remote };
 }

@@ -468,6 +468,51 @@ router.get('/:id/timeline', (req: Request, res: Response) => {
   }
 });
 
+// GET /api/v1/versions/:id/timeline/stream — SSE real-time event stream (iter-49)
+router.get('/:id/timeline/stream', (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const row = db.prepare('SELECT id, version FROM versions WHERE id = ?').get(id) as { id: string } | undefined;
+  if (!row) {
+    res.status(404).json(error(404, 'Version not found'));
+    return;
+  }
+
+  // Set SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  // Send initial heartbeat
+  res.write(`data: ${JSON.stringify({ type: 'connected', versionId: id, timestamp: new Date().toISOString() })}\n\n`);
+
+  // Subscribe to events for this version
+  const { subscribe, getSubscriberCount } = require('../services/changeTracker.js') as typeof import('../services/changeTracker.js');
+  let isActive = true;
+  let heartbeatInterval: NodeJS.Timeout | null = null;
+
+  // Heartbeat every 30s to keep connection alive
+  heartbeatInterval = setInterval(() => {
+    if (isActive && res.writable) {
+      res.write(`: heartbeat\n\n`);
+    }
+  }, 30000);
+
+  const unsubscribe = subscribe(id, ({ versionId, event }) => {
+    if (isActive && res.writable) {
+      res.write(`data: ${JSON.stringify({ type: 'event', versionId, event, timestamp: new Date().toISOString() })}\n\n`);
+    }
+  });
+
+  req.on('close', () => {
+    isActive = false;
+    unsubscribe();
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+  });
+});
+
 // POST /api/v1/versions/:id/events — Add a manual note to the timeline
 router.post('/:id/events', (req: Request, res: Response) => {
   const { id: versionId } = req.params;

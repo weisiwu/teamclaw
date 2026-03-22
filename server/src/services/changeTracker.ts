@@ -308,6 +308,27 @@ export interface TimelineEvent {
   };
 }
 
+// ========== Simple In-Memory Pub/Sub for SSE (iter-49) ==========
+type Subscriber = (event: { versionId: string; event: TimelineEvent }) => void;
+const subscribers = new Map<string, Set<Subscriber>>();
+
+export function subscribe(versionId: string, callback: Subscriber): () => void {
+  if (!subscribers.has(versionId)) {
+    subscribers.set(versionId, new Set());
+  }
+  subscribers.get(versionId)!.add(callback);
+  return () => {
+    subscribers.get(versionId)?.delete(callback);
+    if (subscribers.get(versionId)?.size === 0) {
+      subscribers.delete(versionId);
+    }
+  };
+}
+
+export function getSubscriberCount(versionId: string): number {
+  return subscribers.get(versionId)?.size ?? 0;
+}
+
 function makeEventId(): string {
   return `evt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -349,6 +370,25 @@ export function recordChangeEvent(data: {
     data.taskId ?? null,
     data.metadata ? JSON.stringify(data.metadata) : null
   );
+
+  // Publish to SSE subscribers (iter-49)
+  const event: TimelineEvent = {
+    id,
+    type: data.type,
+    title: data.title,
+    description: data.description,
+    actor: data.actor ?? 'system',
+    timestamp: new Date().toISOString(),
+    screenshotId: data.screenshotId,
+    changelog: data.changelogId ? { features: [], fixes: [], improvements: [], breaking: [], docs: [] } : undefined,
+  };
+  const subs = subscribers.get(data.versionId);
+  if (subs) {
+    for (const cb of subs) {
+      try { cb({ versionId: data.versionId, event }); } catch { /* ignore subscriber errors */ }
+    }
+  }
+
   return id;
 }
 
