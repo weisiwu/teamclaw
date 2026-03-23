@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, Suspense, useEffect, useRef } from "react";
+import React, { useState, useMemo, useCallback, Suspense, useEffect, useRef } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -108,8 +108,8 @@ const getStatusIcon = (status: TaskStatus) => {
   }
 };
 
-// 筛选栏组件
-function FilterBar({
+// 筛选栏组件 - React.memo 避免父组件状态变化导致的不必要重渲染
+const FilterBar = React.memo(function FilterBar({
   search,
   status,
   priority,
@@ -135,7 +135,7 @@ function FilterBar({
   onClear: () => void;
 }) {
   const hasFilters = search || status !== "all" || priority !== "all" || sortBy !== "createdAt";
-  
+
   return (
     <Card>
       <CardContent className="p-4">
@@ -190,7 +190,7 @@ function FilterBar({
       </CardContent>
     </Card>
   );
-}
+});
 
 // 快速创建任务表单
 function QuickAddTaskForm({
@@ -236,8 +236,8 @@ function QuickAddTaskForm({
   );
 }
 
-// 任务卡片组件
-function TaskCard({
+// 任务卡片组件 - React.memo 避免父组件重渲染时的不必要重渲染
+const TaskCard = React.memo(function TaskCard({
   task,
   isSelected,
   onSelect,
@@ -352,7 +352,7 @@ function TaskCard({
       </CardContent>
     </Card>
   );
-}
+});
 
 // 创建任务弹窗组件
 function CreateTaskModal({
@@ -563,7 +563,37 @@ function TasksContent() {
         : 0,
     };
   }, [data]);
-  
+
+  // 任务排序结果 - useMemo 避免每次渲染都重新排序
+  const sortedTasks = useMemo(() => {
+    if (!data?.data) return [];
+    return [...data.data].sort((a, b) => {
+      let comparison = 0;
+      switch (sortBy) {
+        case "createdAt":
+          comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
+        case "completedAt":
+          const aTime = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+          const bTime = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+          comparison = aTime - bTime;
+          break;
+        case "priority":
+          comparison = b.priority - a.priority;
+          break;
+      }
+      return sortOrder === "asc" ? comparison : -comparison;
+    });
+  }, [data?.data, sortBy, sortOrder]);
+
+  // 时间线任务排序（始终按创建时间倒序）- useMemo 避免每次渲染重新排序
+  const timelineTasks = useMemo(() => {
+    if (!data?.data) return [];
+    return [...data.data].sort((a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [data?.data]);
+
   // 创建新的 URL 参数
   const createQueryString = useCallback(
     (params: Record<string, string | number | null>) => {
@@ -1000,9 +1030,7 @@ function TasksContent() {
                 {/* 时间线竖线 */}
                 <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-slate-600" />
                 
-                {data?.data
-                  .slice()
-                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                {timelineTasks
                   .map((task) => (
                     <div key={task.id} className="relative flex gap-4 pb-6">
                       {/* 时间线节点 */}
@@ -1119,25 +1147,7 @@ function TasksContent() {
                 </button>
                 <span>全选</span>
               </div>
-              {data?.data
-                .slice()
-                .sort((a, b) => {
-                  let comparison = 0;
-                  switch (sortBy) {
-                    case "createdAt":
-                      comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-                      break;
-                    case "completedAt":
-                      const aTime = a.completedAt ? new Date(a.completedAt).getTime() : 0;
-                      const bTime = b.completedAt ? new Date(b.completedAt).getTime() : 0;
-                      comparison = aTime - bTime;
-                      break;
-                    case "priority":
-                      comparison = b.priority - a.priority;
-                      break;
-                  }
-                  return sortOrder === "asc" ? comparison : -comparison;
-                })
+              {sortedTasks
                 .map((task) => (
                   <TaskCard
                     key={task.id}

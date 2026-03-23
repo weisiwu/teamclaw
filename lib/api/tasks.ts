@@ -124,7 +124,7 @@ let tasks = [...mockTasks];
 export const taskApi = {
   // 获取任务列表
   async getList(filters: TaskFilters): Promise<TaskListResponse> {
-    await delay(300); // 模拟网络延迟
+    await delay(50); // 模拟网络延迟（已优化）
 
     let filtered = [...tasks];
 
@@ -174,13 +174,13 @@ export const taskApi = {
 
   // 获取任务详情
   async getById(id: string): Promise<Task | null> {
-    await delay(200);
+    await delay(50);
     return tasks.find((t) => t.id === id) || null;
   },
 
   // 创建任务
   async create(data: CreateTaskRequest): Promise<Task> {
-    await delay(300);
+    await delay(50);
     const newTask: Task = {
       id: `t_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}_${String(tasks.length + 1).padStart(3, "0")}`,
       title: data.title,
@@ -204,7 +204,7 @@ export const taskApi = {
 
   // 更新任务
   async update(id: string, data: UpdateTaskRequest): Promise<Task> {
-    await delay(300);
+    await delay(50);
     const index = tasks.findIndex((t) => t.id === id);
     if (index === -1) throw new Error("任务不存在");
 
@@ -214,13 +214,13 @@ export const taskApi = {
 
   // 删除任务
   async delete(id: string): Promise<void> {
-    await delay(300);
+    await delay(50);
     tasks = tasks.filter((t) => t.id !== id);
   },
 
   // 完成任务
   async complete(id: string): Promise<Task> {
-    await delay(300);
+    await delay(50);
     const index = tasks.findIndex((t) => t.id === id);
     if (index === -1) throw new Error("任务不存在");
 
@@ -240,7 +240,7 @@ export const taskApi = {
 
   // 取消任务
   async cancel(id: string): Promise<Task> {
-    await delay(300);
+    await delay(50);
     const index = tasks.findIndex((t) => t.id === id);
     if (index === -1) throw new Error("任务不存在");
 
@@ -250,7 +250,7 @@ export const taskApi = {
 
   // 重新打开任务
   async reopen(id: string): Promise<Task> {
-    await delay(300);
+    await delay(50);
     const index = tasks.findIndex((t) => t.id === id);
     if (index === -1) throw new Error("任务不存在");
 
@@ -265,7 +265,7 @@ export const taskApi = {
 
   // 获取任务评论列表
   async getComments(taskId: string): Promise<TaskComment[]> {
-    await delay(200);
+    await delay(50);
     return comments.filter((c) => c.taskId === taskId).sort((a, b) => 
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
@@ -273,7 +273,7 @@ export const taskApi = {
 
   // 添加任务评论
   async addComment(taskId: string, content: string, author: string = "当前用户"): Promise<TaskComment> {
-    await delay(300);
+    await delay(50);
     const newComment: TaskComment = {
       id: `c_${Date.now()}`,
       taskId,
@@ -287,7 +287,7 @@ export const taskApi = {
 
   // 删除评论
   async deleteComment(commentId: string): Promise<void> {
-    await delay(200);
+    await delay(50);
     comments = comments.filter((c) => c.id !== commentId);
   },
 };
