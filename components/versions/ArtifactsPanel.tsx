@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { useArtifacts } from "@/lib/api/artifacts";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,7 +9,7 @@ import {
   Download,
   Package,
   FileText,
-  Image,
+  Image as ImageIcon,
   Code,
   Archive,
   Play,
@@ -37,7 +38,7 @@ function getFileIcon(fileName: string) {
   if (["js", "ts", "jsx", "tsx", "css", "html"].includes(ext))
     return <Code className="w-4 h-4 text-blue-500" />;
   if (["png", "jpg", "jpeg", "gif", "svg", "ico", "webp"].includes(ext))
-    return <Image className="w-4 h-4 text-purple-500" aria-label="Image file" />;
+    return <ImageIcon className="w-4 h-4 text-purple-500" aria-label="Image file" />;
   if (["zip", "tar", "gz", "tgz"].includes(ext))
     return <Archive className="w-4 h-4 text-amber-500" />;
   if (["json", "xml", "yaml", "yml", "txt", "md", "csv"].includes(ext))
@@ -557,11 +558,14 @@ export function ArtifactsPanel({ versionId, versionName }: ArtifactsPanelProps) 
                 </div>
               ) : isPreviewableImage(previewArtifact) ? (
                 <div className="flex justify-center">
-                  <img
-                    src={previewContent}
-                    alt={previewArtifact.name}
-                    className="max-w-full max-h-[60vh] object-contain rounded"
-                  />
+                  <div className="relative w-full h-full max-h-[60vh]">
+                    <Image
+                      src={previewContent}
+                      alt={previewArtifact.name}
+                      fill
+                      className="object-contain rounded"
+                    />
+                  </div>
                 </div>
               ) : (
                 <pre className="text-xs font-mono bg-gray-50 rounded p-3 overflow-auto max-h-[60vh] whitespace-pre-wrap break-all">

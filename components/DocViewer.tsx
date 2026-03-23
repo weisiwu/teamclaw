@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 
 interface DocPreviewResult {
   type: 'html' | 'pdf' | 'code' | 'text' | 'unsupported' | 'image';
@@ -180,11 +181,14 @@ export function DocViewer({ docId, docName, onClose }: DocViewerProps) {
 
           {!loading && !error && preview?.type === 'image' && (
             <div className="flex items-center justify-center h-full p-4">
-              <img
-                src={preview.url}
-                alt={docName}
-                className="max-w-full max-h-full object-contain rounded"
-              />
+              <div className="relative w-full h-full min-h-[200px]">
+                <Image
+                  src={preview.url || ''}
+                  alt={docName}
+                  fill
+                  className="object-contain rounded"
+                />
+              </div>
             </div>
           )}
 

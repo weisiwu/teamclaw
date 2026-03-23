@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { DocPreviewResult } from '@/lib/api/types';
 import { getDocPreview } from '@/lib/api/doc';
-import { Loader2, FileText, Image, FileCode, AlertCircle } from 'lucide-react';
+import { Loader2, FileText, Image as ImageIcon, FileCode, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface DocViewerProps {
@@ -17,11 +18,7 @@ export function DocViewer({ docId, className = '' }: DocViewerProps) {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
-  useEffect(() => {
-    loadPreview();
-  }, [docId, page]);
-
-  const loadPreview = async () => {
+  const loadPreview = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -32,7 +29,11 @@ export function DocViewer({ docId, className = '' }: DocViewerProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [docId, page]);
+
+  useEffect(() => {
+    loadPreview();
+  }, [loadPreview]);
 
   if (isLoading) {
     return (
@@ -157,13 +158,16 @@ export function DocViewer({ docId, className = '' }: DocViewerProps) {
       return (
         <div className={`flex items-center justify-center h-full bg-gray-50 dark:bg-slate-800 rounded-lg ${className}`}>
           {preview.url ? (
-            <img
-              src={preview.url}
-              alt="Preview"
-              className="max-w-full max-h-full object-contain rounded-lg"
-            />
+            <div className="relative w-full h-full">
+              <Image
+                src={preview.url}
+                alt="Preview"
+                fill
+                className="object-contain rounded-lg"
+              />
+            </div>
           ) : (
-            <Image className="w-12 h-12 text-gray-400 dark:text-gray-500 dark:text-gray-400" />
+            <ImageIcon className="w-12 h-12 text-gray-400 dark:text-gray-500 dark:text-gray-400" />
           )}
         </div>
       );

@@ -73,6 +73,7 @@ export default function TagDetailPage() {
       })
       .catch(console.error)
       .finally(() => setIsLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tagName]);
 
   const handleRename = async () => {

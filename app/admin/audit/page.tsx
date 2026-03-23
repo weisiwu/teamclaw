@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import type { AuditLog } from '../../../lib/api/auditLogs';
 import { PermissionGuard } from '@/components/layout/PermissionGuard';
 import { Card, CardContent } from '@/components/ui/card';
@@ -101,7 +101,7 @@ export default function AuditLogPage() {
     }
   }, [toastVisible]);
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -118,9 +118,9 @@ export default function AuditLogPage() {
       setTotal(data.data?.total || 0);
     } catch { /* ignore */ }
     finally { setLoading(false); }
-  };
+  }, [action, actor, keyword, startDate, endDate, limit, offset]);
 
-  useEffect(() => { fetchLogs(); }, [action, offset]);
+  useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
   // Compute action stats for summary cards
   const actionStats = (): ActionStats[] => {

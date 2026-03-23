@@ -230,7 +230,7 @@ export default function VersionPanelPage() {
   const [metaFilter, setMetaFilter] = useState<"all" | "hasScreenshot" | "hasChangelog">("all");
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
 
-  const tags = data?.data || [];
+  const tags = useMemo(() => data?.data || [], [data]);
 
   // Filter and sort tags
   const filteredTags = useMemo(() => {
@@ -265,7 +265,7 @@ export default function VersionPanelPage() {
     });
 
     return result;
-  }, [data, searchQuery, sortOrder, statusFilter]);
+  }, [tags, searchQuery, sortOrder, statusFilter, metaFilter]);
 
   const toggleExpand = (name: string) => {
     const newExpanded = new Set(expandedTags);

@@ -23,7 +23,7 @@ import {
   Loader2,
   X,
   Play,
-  Image,
+  Image as ImageIcon,
   History,
   RefreshCw,
   RotateCcw,
@@ -306,7 +306,7 @@ export function VersionDetails(props: VersionDetailsProps) {
             className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-1 ${activeTab === "screenshots" ? "border-b-2 border-blue-500 text-blue-500" : "text-gray-500"}`}
             onClick={() => setActiveTab("screenshots")}
           >
-            <Image className="w-3.5 h-3.5" aria-hidden="true" />
+            <ImageIcon className="w-3.5 h-3.5" aria-hidden="true" />
             截图
           </button>
           <button

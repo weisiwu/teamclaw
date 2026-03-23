@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FileText, Folder, Image, FileCode, File, Eye, Download, CheckSquare, Square } from 'lucide-react';
+import { FileText, Folder, Image as ImageIcon, FileCode, File, Eye, Download, CheckSquare, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DocSearchBox } from './components/DocSearchBox';
@@ -29,7 +29,7 @@ function getFileIcon(type: string) {
     case 'gif':
     case 'webp':
     case 'svg':
-      return <Image className="w-8 h-8 text-green-500" />;
+      return <ImageIcon className="w-8 h-8 text-green-500" />;
     case 'js':
     case 'ts':
     case 'jsx':

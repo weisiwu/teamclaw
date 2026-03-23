@@ -44,10 +44,9 @@ export default function MembersPage() {
   // 权限检查
   const { isAdminOrAbove, canDeleteMembers } = usePermission();
 
-  const members = data?.data || [];
-
   // Filter and sort members
   const filteredMembers = useMemo(() => {
+    const members = data?.data || [];
     let result = [...members];
     
     // Filter by search query
@@ -86,7 +85,7 @@ export default function MembersPage() {
     });
     
     return result;
-  }, [members, searchQuery, roleFilter, statusFilter, sortBy, sortOrder]);
+  }, [data, searchQuery, roleFilter, statusFilter, sortBy, sortOrder]);
 
   const handleSort = (field: SortField) => {
     if (sortBy === field) {
