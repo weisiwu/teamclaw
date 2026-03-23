@@ -1,6 +1,6 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { versionStore, type Version } from "./version-store";
-import { generateRequestId, jsonSuccess, jsonError, optionsResponse } from "@/lib/api-shared";
+import { generateRequestId, jsonSuccess, jsonError, optionsResponse, requireAuth } from "@/lib/api-shared";
 
 /**
  * GET /api/v1/versions
@@ -68,6 +68,60 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error("[versions]", err);
     return jsonError("Internal server error", 500, requestId);
+  }
+}
+
+/**
+ * POST /api/v1/versions
+ * Create a new version (requires auth)
+ * Body: { version, branch, summary?, title?, description?, tags?, gitTag? }
+ */
+export async function POST(request: NextRequest) {
+  const requestId = request.headers.get("X-Request-ID") || generateRequestId();
+
+  const authResult = requireAuth(request, requestId);
+  if (authResult instanceof NextResponse) return authResult;
+
+  try {
+    const body = await request.json() as Partial<Version>;
+
+    if (!body.version || !body.branch) {
+      return jsonError("version and branch are required", 400, requestId);
+    }
+
+    // Check for duplicate version ID
+    const normalizedId = body.version.replace(/^v/, "");
+    if (versionStore.has(normalizedId) || versionStore.has(body.version)) {
+      return jsonError(`Version ${body.version} already exists`, 409, requestId);
+    }
+
+    const now = new Date().toISOString();
+    const newVersion: Version = {
+      id: body.version.replace(/^v/, ""),
+      version: body.version.startsWith("v") ? body.version : `v${body.version}`,
+      branch: body.branch,
+      summary: body.summary,
+      title: body.title,
+      description: body.description,
+      tags: body.tags || [],
+      gitTag: body.gitTag,
+      commitHash: body.commitHash,
+      createdBy: body.createdBy,
+      createdAt: now,
+      buildStatus: body.buildStatus || "pending",
+      hasTag: body.gitTag ? true : false,
+      hasScreenshot: body.hasScreenshot || false,
+      hasSummary: body.hasSummary || false,
+      status: body.status || "draft",
+      releasedAt: null,
+    };
+
+    versionStore.set(newVersion.id, newVersion);
+
+    return NextResponse.json({ code: 0, data: newVersion, message: "ok", requestId }, { status: 201 });
+  } catch (err) {
+    console.error("[versions POST]", err);
+    return jsonError("Failed to create version", 500, requestId);
   }
 }
 
