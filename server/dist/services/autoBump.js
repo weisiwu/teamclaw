@@ -1,8 +1,9 @@
 /**
  * autoBump.ts — 自动版本升级服务
  * 供三处共用：build 成功、task done、手动触发
+ * 数据存储：PostgreSQL
  */
-import { getDb } from '../db/sqlite.js';
+import { execute, query } from '../db/pg.js';
 import { createTagRecord } from './tagService.js';
 import { createTag } from './gitService.js';
 import { bumpVersion as semverBump, bumpLevelFromTaskType } from './semver.js';
@@ -10,15 +11,26 @@ import { getVersionSettings } from '../routes/version.js';
 import path from 'path';
 import os from 'os';
 /** 从 DB 插入一条 bump_history 记录 */
-function insertBumpHistoryRecord(params) {
-    const db = getDb();
+async function insertBumpHistoryRecord(params) {
     const id = `bh_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const now = new Date().toISOString();
-    const settings = getVersionSettings();
-    db.prepare(`
+    await execute(`
     INSERT INTO bump_history (id, version_id, version_name, previous_version, new_version, bump_type, trigger_type, trigger_task_id, trigger_task_title, summary, created_by, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, params.versionId, params.versionName, params.previousVersion, params.newVersion, params.bumpType, params.triggerType, params.triggerTaskId || null, params.triggerTaskTitle || null, params.summary || null, params.createdBy || 'system', now);
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+  `, [
+        id,
+        params.versionId,
+        params.versionName,
+        params.previousVersion,
+        params.newVersion,
+        params.bumpType,
+        params.triggerType,
+        params.triggerTaskId || null,
+        params.triggerTaskTitle || null,
+        params.summary || null,
+        params.createdBy || 'system',
+        now,
+    ]);
     return {
         id,
         versionId: params.versionId,
@@ -44,7 +56,6 @@ function insertBumpHistoryRecord(params) {
  */
 export async function executeAutoBump(options) {
     const { versionId, currentVersion, triggerType, taskId, taskTitle, taskType, projectPath, summary: customSummary, } = options;
-    const db = getDb();
     const settings = getVersionSettings();
     // 计算 bump 类型和新版本号
     let bumpType = settings.bumpType;
@@ -67,10 +78,10 @@ export async function executeAutoBump(options) {
     // 插入新版本记录
     const newVersionId = `v_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const now = new Date().toISOString();
-    db.prepare(`
+    await execute(`
     INSERT INTO versions (id, version, branch, summary, created_by, created_at, build_status, tag_created)
-    VALUES (?, ?, 'main', ?, 'system', ?, 'success', 0)
-  `).run(newVersionId, newVersion, computedSummary, now);
+    VALUES ($1, $2, 'main', $3, 'system', $4, 'success', FALSE)
+  `, [newVersionId, newVersion, computedSummary, now]);
     // 创建 git tag
     let gitTagCreated = false;
     let gitTagName;
@@ -81,7 +92,7 @@ export async function executeAutoBump(options) {
             path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', versionId);
         try {
             createTag(effectiveProjectPath, gitTagName, computedSummary);
-            db.prepare('UPDATE versions SET tag_created = 1 WHERE id = ?').run(newVersionId);
+            await execute('UPDATE versions SET tag_created = TRUE WHERE id = $1', [newVersionId]);
             gitTagCreated = true;
         }
         catch (err) {
@@ -106,7 +117,7 @@ export async function executeAutoBump(options) {
         }
     }
     // 记录 bump_history
-    const historyRecord = insertBumpHistoryRecord({
+    const historyRecord = await insertBumpHistoryRecord({
         versionId: newVersionId,
         versionName: newVersion,
         previousVersion: currentVersion,
@@ -132,27 +143,19 @@ export async function executeAutoBump(options) {
 /**
  * 获取某个版本的 bump 历史
  */
-export function getBumpHistory(versionId) {
-    const db = getDb();
-    const rows = db
-        .prepare(`SELECT * FROM bump_history WHERE version_id = ? ORDER BY created_at DESC`)
-        .all(versionId);
+export async function getBumpHistory(versionId) {
+    const rows = await query('SELECT * FROM bump_history WHERE version_id = $1 ORDER BY created_at DESC', [versionId]);
     return rows.map(rowToBumpHistoryRecord);
 }
 /**
  * 获取所有 bump 历史（带分页）
  */
-export function getAllBumpHistory(limit = 50, offset = 0) {
-    const db = getDb();
-    const totalRow = db
-        .prepare('SELECT COUNT(*) as cnt FROM bump_history')
-        .get();
-    const rows = db
-        .prepare(`SELECT * FROM bump_history ORDER BY created_at DESC LIMIT ? OFFSET ?`)
-        .all(limit, offset);
+export async function getAllBumpHistory(limit = 50, offset = 0) {
+    const totalRow = await queryOne('SELECT COUNT(*) as count FROM bump_history');
+    const rows = await query('SELECT * FROM bump_history ORDER BY created_at DESC LIMIT $1 OFFSET $2', [limit, offset]);
     return {
         records: rows.map(rowToBumpHistoryRecord),
-        total: totalRow.cnt,
+        total: parseInt(totalRow?.count ?? '0', 10),
     };
 }
 function rowToBumpHistoryRecord(row) {

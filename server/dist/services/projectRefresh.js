@@ -62,7 +62,7 @@ export async function refreshProject(project) {
     // Step 6: Re-analyze git history
     try {
         const history = await analyzeGitHistory(projectPath);
-        result.newCommits = history.length;
+        result.newCommits = history.totalCommits;
         result.steps.push({ name: 'git_history', status: 'done' });
     }
     catch (e) {

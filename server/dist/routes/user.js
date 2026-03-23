@@ -8,6 +8,7 @@ import { checkPermission } from "../services/permissionService.js";
 import { recordRoleChange, getRoleHistory, getRecentRoleChanges, getRoleChangeStats, grantDelegation, revokeDelegation, getDelegationsForUser, getDelegationsByUser, } from "../services/roleMemory.js";
 import { getUserPermissionMap, } from "../services/permissionFineGrained.js";
 import { success, error } from "../utils/response.js";
+import { requireAuth, requireAdmin } from "../middleware/auth.js";
 const router = Router();
 // ============ GET /api/v1/users ============
 // 获取用户列表（支持分页、角色筛选）
@@ -68,7 +69,7 @@ router.get("/:userId", async (req, res) => {
 });
 // ============ POST /api/v1/users ============
 // 创建用户（增强：记录角色变更历史）
-router.post("/", async (req, res) => {
+router.post("/", requireAdmin, async (req, res) => {
     try {
         const { name, role, wechatId, feishuId, remark, changedBy, reason } = req.body;
         if (!name || !role) {
@@ -91,7 +92,7 @@ router.post("/", async (req, res) => {
 });
 // ============ PUT /api/v1/users/:userId ============
 // 更新用户信息（增强：记录角色变更历史）
-router.put("/:userId", async (req, res) => {
+router.put("/:userId", requireAuth, async (req, res) => {
     try {
         const { name, role, wechatId, feishuId, remark, changedBy, reason } = req.body;
         if (role && !["admin", "vice_admin", "member"].includes(role)) {
@@ -124,7 +125,7 @@ router.put("/:userId", async (req, res) => {
 });
 // ============ DELETE /api/v1/users/:userId ============
 // 删除用户
-router.delete("/:userId", async (req, res) => {
+router.delete("/:userId", requireAdmin, async (req, res) => {
     try {
         const deleted = await deleteUser(req.params.userId);
         if (!deleted) {
@@ -179,7 +180,7 @@ router.get("/role-stats", async (req, res) => {
 });
 // ============ POST /api/v1/users/delegations ============
 // 授予权限委托
-router.post("/delegations", async (req, res) => {
+router.post("/delegations", requireAuth, async (req, res) => {
     try {
         const { delegatorId, delegateId, permissions, expiresAt } = req.body;
         if (!delegatorId || !delegateId || !permissions?.length) {
@@ -196,7 +197,7 @@ router.post("/delegations", async (req, res) => {
 });
 // ============ DELETE /api/v1/users/delegations ============
 // 撤销权限委托
-router.delete("/delegations", async (req, res) => {
+router.delete("/delegations", requireAuth, async (req, res) => {
     try {
         const { delegatorId, delegateId } = req.body;
         if (!delegatorId || !delegateId) {

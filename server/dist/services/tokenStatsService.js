@@ -58,23 +58,30 @@ export class TokenStatsService {
      */
     async getSummary(startDate, endDate) {
         const filtered = this.filterByDate(tokenUsage, startDate, endDate);
-        const totalTokens = filtered.reduce((s, r) => s + r.totalTokens, 0);
-        const totalCost = filtered.reduce((s, r) => s + r.cost, 0);
-        const inputTokens = filtered.reduce((s, r) => s + r.inputTokens, 0);
-        const outputTokens = filtered.reduce((s, r) => s + r.outputTokens, 0);
+        // Single-pass computation: accumulate all stats in one iteration
+        let totalTokens = 0;
+        let totalCost = 0;
+        let inputTokens = 0;
+        let outputTokens = 0;
+        const layerTokensMap = { light: 0, medium: 0, strong: 0 };
+        const layerCostMap = { light: 0, medium: 0, strong: 0 };
+        for (const r of filtered) {
+            totalTokens += r.totalTokens;
+            totalCost += r.cost;
+            inputTokens += r.inputTokens;
+            outputTokens += r.outputTokens;
+            layerTokensMap[r.layer] += r.totalTokens;
+            layerCostMap[r.layer] += r.cost;
+        }
         const layers = ['light', 'medium', 'strong'];
         const byLayer = layers.map((layer) => {
-            const layerTokens = filtered
-                .filter((r) => r.layer === layer)
-                .reduce((s, r) => s + r.totalTokens, 0);
-            const layerCost = filtered
-                .filter((r) => r.layer === layer)
-                .reduce((s, r) => s + r.cost, 0);
+            const lt = layerTokensMap[layer];
+            const lc = layerCostMap[layer];
             return {
                 layer,
-                tokens: layerTokens,
-                cost: parseFloat(layerCost.toFixed(6)),
-                percent: totalTokens > 0 ? parseFloat(((layerTokens / totalTokens) * 100).toFixed(1)) : 0,
+                tokens: lt,
+                cost: parseFloat(lc.toFixed(6)),
+                percent: totalTokens > 0 ? parseFloat(((lt / totalTokens) * 100).toFixed(1)) : 0,
             };
         });
         return {

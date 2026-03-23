@@ -206,6 +206,22 @@ export function loadChangelog(versionTag) {
 // Version Change Events — event tracking for the version timeline
 // =============================================================================
 import { getDb } from '../db/sqlite.js';
+const subscribers = new Map();
+export function subscribe(versionId, callback) {
+    if (!subscribers.has(versionId)) {
+        subscribers.set(versionId, new Set());
+    }
+    subscribers.get(versionId).add(callback);
+    return () => {
+        subscribers.get(versionId)?.delete(callback);
+        if (subscribers.get(versionId)?.size === 0) {
+            subscribers.delete(versionId);
+        }
+    };
+}
+export function getSubscriberCount(versionId) {
+    return subscribers.get(versionId)?.size ?? 0;
+}
 function makeEventId() {
     return `evt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -221,6 +237,26 @@ export function recordChangeEvent(data) {
       actor, actor_id, screenshot_id, changelog_id, build_id, task_id, metadata
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, data.versionId, data.type, data.title, data.description ?? null, data.actor ?? 'system', data.actorId ?? null, data.screenshotId ?? null, data.changelogId ?? null, data.buildId ?? null, data.taskId ?? null, data.metadata ? JSON.stringify(data.metadata) : null);
+    // Publish to SSE subscribers (iter-49)
+    const event = {
+        id,
+        type: data.type,
+        title: data.title,
+        description: data.description,
+        actor: data.actor ?? 'system',
+        timestamp: new Date().toISOString(),
+        screenshotId: data.screenshotId,
+        changelog: data.changelogId ? { features: [], fixes: [], improvements: [], breaking: [], docs: [] } : undefined,
+    };
+    const subs = subscribers.get(data.versionId);
+    if (subs) {
+        for (const cb of subs) {
+            try {
+                cb({ versionId: data.versionId, event });
+            }
+            catch { /* ignore subscriber errors */ }
+        }
+    }
     return id;
 }
 /**

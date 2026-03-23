@@ -36,9 +36,10 @@
  */
 import { Router } from 'express';
 import { success, error } from '../utils/response.js';
+import { requireAuth } from '../middleware/auth.js';
 import { messageQueueService } from '../services/messageQueue.js';
 import { enrichMessagePriority } from '../services/priorityCalculator.js';
-import { manualPreempt, buildPreemptionNotification } from '../services/preemptionService.js';
+import { manualPreempt } from '../services/preemptionService.js';
 import { messageStatsService } from '../services/messageStats.js';
 import { messageDLQService } from '../services/messageDLQ.js';
 import { messageRetryService } from '../services/messageRetry.js';
@@ -46,6 +47,7 @@ import { messageRateLimiterService } from '../services/messageRateLimiter.js';
 import { messageCircuitBreakerService } from '../services/messageCircuitBreaker.js';
 import { messageChannelAggregatorService } from '../services/messageChannelAggregator.js';
 import { messageRouterService } from '../services/messageRouter.js';
+import { processMessage } from '../services/messagePipeline.js';
 const router = Router();
 // ============================================
 // POST /api/v1/messages - 接收外部消息
@@ -56,42 +58,20 @@ router.post('/', async (req, res) => {
         if (!body.content || !body.channel || !body.userId) {
             return res.status(400).json(error(400, '缺少必要字段: content, channel, userId'));
         }
-        const role = body.role || 'employee';
-        const { urgency, priority, roleWeight } = enrichMessagePriority(role, body.content);
-        const messageData = {
-            channel: body.channel,
-            userId: body.userId,
-            userName: body.userName || '未知用户',
-            role,
-            roleWeight,
-            content: body.content,
-            type: body.type || 'text',
-            urgency,
-            priority,
-            timestamp: body.timestamp || new Date().toISOString(),
-            fileInfo: body.fileInfo,
-        };
-        const result = messageQueueService.enqueue(messageData);
+        // 使用 messagePipeline 处理完整流程：入队→@检测→权限→任务→Agent→回复
+        const pipelineResult = await processMessage(body);
         // 统计
-        messageStatsService.onEnqueued(result.message);
-        if (result.preempted)
-            messageStatsService.onPreempted();
-        if (result.message.mergedFrom?.length)
-            messageStatsService.onMerged();
-        let notification = null;
-        if (result.preempted && result.preemptedMessageId) {
-            const preemptedMsg = messageQueueService.getMessage(result.preemptedMessageId);
-            if (preemptedMsg) {
-                notification = buildPreemptionNotification(preemptedMsg.userName, preemptedMsg.content.slice(0, 20), result.message.userName, result.message.content.slice(0, 20));
-            }
+        const msg = messageQueueService.getMessage(pipelineResult.messageId);
+        if (msg) {
+            messageStatsService.onEnqueued(msg);
         }
         res.status(201).json(success({
-            messageId: result.message.messageId,
-            priority: result.message.priority,
-            status: result.message.status,
-            preempted: result.preempted,
-            notification,
-            merged: !!result.message.mergedFrom?.length,
+            messageId: pipelineResult.messageId,
+            taskId: pipelineResult.taskId,
+            executionId: pipelineResult.executionId,
+            acknowledged: pipelineResult.acknowledged,
+            success: pipelineResult.success,
+            error: pipelineResult.error,
         }));
     }
     catch (err) {
@@ -311,7 +291,7 @@ router.get('/dlq/:messageId', (req, res) => {
 // ============================================
 // POST /api/v1/messages/dlq/:messageId/requeue - 从 DLQ 重新入队
 // ============================================
-router.post('/dlq/:messageId/requeue', (req, res) => {
+router.post('/dlq/:messageId/requeue', requireAuth, (req, res) => {
     try {
         const { messageId } = req.params;
         const msg = messageDLQService.requeue(messageId);
@@ -345,7 +325,7 @@ router.post('/dlq/:messageId/requeue', (req, res) => {
 // ============================================
 // DELETE /api/v1/messages/dlq/:messageId - 从 DLQ 丢弃消息
 // ============================================
-router.delete('/dlq/:messageId', (req, res) => {
+router.delete('/dlq/:messageId', requireAuth, (req, res) => {
     try {
         const { messageId } = req.params;
         const discarded = messageDLQService.discard(messageId);
@@ -418,7 +398,7 @@ router.get('/ratelimit/check', (req, res) => {
 // ============================================
 // PUT /api/v1/messages/ratelimit/config - 更新限流配置
 // ============================================
-router.put('/ratelimit/config', (req, res) => {
+router.put('/ratelimit/config', requireAuth, (req, res) => {
     try {
         const { key, maxMessages, windowMs } = req.body;
         if (!key)
@@ -446,9 +426,9 @@ router.get('/circuit/stats', (req, res) => {
     }
 });
 // ============================================
-// POST /api/v1/messages/circuit/:channel/reset - 重置断路器
+// POST /api/v1/messages/circuit/:channel/reset - 重置断路器（需要身份认证）
 // ============================================
-router.post('/circuit/:channel/reset', (req, res) => {
+router.post('/circuit/:channel/reset', requireAuth, (req, res) => {
     try {
         const { channel } = req.params;
         messageCircuitBreakerService.reset(channel);
@@ -514,7 +494,7 @@ router.get('/unified/sessions/:userGlobalId', (req, res) => {
 // ============================================
 // POST /api/v1/messages/unified/read - 标记已读
 // ============================================
-router.post('/unified/read', (req, res) => {
+router.post('/unified/read', requireAuth, (req, res) => {
     try {
         const { globalId, userGlobalId } = req.body;
         let marked = 0;
@@ -545,9 +525,9 @@ router.get('/router/rules', (req, res) => {
     }
 });
 // ============================================
-// POST /api/v1/messages/router/rules - 添加路由规则
+// POST /api/v1/messages/router/rules - 添加路由规则（需要身份认证）
 // ============================================
-router.post('/router/rules', (req, res) => {
+router.post('/router/rules', requireAuth, (req, res) => {
     try {
         const rule = req.body;
         if (!rule.id || !rule.name) {
@@ -562,9 +542,9 @@ router.post('/router/rules', (req, res) => {
     }
 });
 // ============================================
-// PUT /api/v1/messages/router/rules/:ruleId - 更新路由规则
+// PUT /api/v1/messages/router/rules/:ruleId - 更新路由规则（需要身份认证）
 // ============================================
-router.put('/router/rules/:ruleId', (req, res) => {
+router.put('/router/rules/:ruleId', requireAuth, (req, res) => {
     try {
         const { ruleId } = req.params;
         const rule = req.body;
@@ -578,9 +558,9 @@ router.put('/router/rules/:ruleId', (req, res) => {
     }
 });
 // ============================================
-// DELETE /api/v1/messages/router/rules/:ruleId - 删除路由规则
+// DELETE /api/v1/messages/router/rules/:ruleId - 删除路由规则（需要身份认证）
 // ============================================
-router.delete('/router/rules/:ruleId', (req, res) => {
+router.delete('/router/rules/:ruleId', requireAuth, (req, res) => {
     try {
         const { ruleId } = req.params;
         const deleted = messageRouterService.deleteRule(ruleId);

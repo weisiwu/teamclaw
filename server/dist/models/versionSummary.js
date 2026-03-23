@@ -1,7 +1,7 @@
 /**
- * VersionSummary Model — SQLite persistence (migrated from in-memory)
+ * VersionSummary Model — PostgreSQL persistence
  */
-import { getDb } from '../db/sqlite.js';
+import { query, queryOne, execute } from '../db/pg.js';
 function rowToSummary(row) {
     return {
         id: row.id,
@@ -19,29 +19,42 @@ function rowToSummary(row) {
     };
 }
 export const VersionSummaryModel = {
-    create(data) {
-        const db = getDb();
+    async create(data) {
         const id = `sum_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
         const generatedAt = new Date().toISOString();
-        db.prepare(`
+        await execute(`
       INSERT INTO version_summaries (id, version_id, title, content, features, fixes, changes, breaking, changes_detail, generated_at, generated_by, branch_name)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, data.versionId, data.title, data.content, JSON.stringify(data.features), JSON.stringify(data.fixes), JSON.stringify(data.changes), JSON.stringify(data.breaking), JSON.stringify(data.changes_detail), generatedAt, data.generatedBy, data.branchName || null);
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    `, [
+            id,
+            data.versionId,
+            data.title,
+            data.content,
+            JSON.stringify(data.features),
+            JSON.stringify(data.fixes),
+            JSON.stringify(data.changes),
+            JSON.stringify(data.breaking),
+            JSON.stringify(data.changes_detail),
+            generatedAt,
+            data.generatedBy,
+            data.branchName || null,
+        ]);
         return { id, ...data, generatedAt, generatedBy: data.generatedBy };
     },
-    findById(id) {
-        const db = getDb();
-        const row = db.prepare('SELECT * FROM version_summaries WHERE id = ?').get(id);
+    async findById(id) {
+        const row = await queryOne('SELECT * FROM version_summaries WHERE id = $1', [id]);
         return row ? rowToSummary(row) : undefined;
     },
-    findByVersionId(versionId) {
-        const db = getDb();
-        const row = db.prepare('SELECT * FROM version_summaries WHERE version_id = ?').get(versionId);
+    async findByVersionId(versionId) {
+        const row = await queryOne('SELECT * FROM version_summaries WHERE version_id = $1', [versionId]);
         return row ? rowToSummary(row) : undefined;
     },
-    update(versionId, data) {
-        const db = getDb();
-        const existing = this.findByVersionId(versionId);
+    async findAll() {
+        const rows = await query('SELECT * FROM version_summaries ORDER BY generated_at DESC');
+        return rows.map(rowToSummary);
+    },
+    async update(versionId, data) {
+        const existing = await this.findByVersionId(versionId);
         if (!existing)
             return undefined;
         const updated = {
@@ -56,23 +69,34 @@ export const VersionSummaryModel = {
             generatedAt: new Date().toISOString(),
             generatedBy: 'manual',
         };
-        db.prepare(`
+        await execute(`
       UPDATE version_summaries
-      SET title=?, content=?, features=?, fixes=?, changes=?, breaking=?, changes_detail=?, generated_at=?, generated_by=?
-      WHERE version_id=?
-    `).run(updated.title, updated.content, JSON.stringify(updated.features), JSON.stringify(updated.fixes), JSON.stringify(updated.changes), JSON.stringify(updated.breaking), JSON.stringify(updated.changes_detail), updated.generatedAt, updated.generatedBy, versionId);
+      SET title=$1, content=$2, features=$3, fixes=$4, changes=$5, breaking=$6, changes_detail=$7, generated_at=$8, generated_by=$9
+      WHERE version_id=$10
+    `, [
+            updated.title,
+            updated.content,
+            JSON.stringify(updated.features),
+            JSON.stringify(updated.fixes),
+            JSON.stringify(updated.changes),
+            JSON.stringify(updated.breaking),
+            JSON.stringify(updated.changes_detail),
+            updated.generatedAt,
+            updated.generatedBy,
+            versionId,
+        ]);
         return updated;
     },
-    upsert(data) {
-        const existing = this.findByVersionId(data.versionId);
+    async upsert(data) {
+        const existing = await this.findByVersionId(data.versionId);
         if (existing) {
-            return this.update(data.versionId, {
+            return (await this.update(data.versionId, {
                 content: data.content,
                 features: data.features,
                 fixes: data.fixes,
                 changes: data.changes,
                 breaking: data.breaking,
-            });
+            }));
         }
         return this.create({
             versionId: data.versionId,
@@ -91,9 +115,8 @@ export const VersionSummaryModel = {
             generatedBy: data.createdBy || 'AI',
         });
     },
-    delete(versionId) {
-        const db = getDb();
-        const info = db.prepare('DELETE FROM version_summaries WHERE version_id = ?').run(versionId);
-        return info.changes > 0;
+    async delete(versionId) {
+        const count = await execute('DELETE FROM version_summaries WHERE version_id = $1', [versionId]);
+        return count > 0;
     },
 };

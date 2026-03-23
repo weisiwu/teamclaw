@@ -4,6 +4,7 @@
  */
 import { Router } from 'express';
 import { success, error } from '../utils/response.js';
+import { requireAuth } from '../middleware/auth.js';
 import { taskLifecycle } from '../services/taskLifecycle.js';
 import { taskFlow } from '../services/taskFlow.js';
 import { taskMemory } from '../services/taskMemory.js';
@@ -13,8 +14,8 @@ import { taskStats } from '../services/taskStats.js';
 import { taskCancel } from '../services/taskCancel.js';
 const router = Router();
 // ============ 任务 CRUD ============
-// POST /api/v1/tasks - 创建任务
-router.post('/', async (req, res) => {
+// POST /api/v1/tasks - 创建任务（需要身份认证）
+router.post('/', requireAuth, async (req, res) => {
     try {
         const body = req.body;
         if (!body.sessionId || !body.title) {
@@ -76,7 +77,28 @@ router.get('/', (req, res) => {
         const pageSize = query.pageSize || 20;
         const total = tasks.length;
         const start = (page - 1) * pageSize;
-        const list = tasks.slice(start, start + pageSize);
+        let list = tasks.slice(start, start + pageSize);
+        // 字段过滤（iter-87 API优化：支持 fields 参数减少 payload）
+        const fields = req.query.fields?.split(',').map(f => f.trim());
+        if (fields && fields.length > 0) {
+            list = list.map(task => {
+                const filtered = {};
+                for (const field of fields) {
+                    if (field in task) {
+                        filtered[field] = task[field];
+                    }
+                }
+                return filtered;
+            });
+        }
+        // ETag + Cache-Control 支持（iter-87 API优化：启用条件请求减少带宽）
+        const etag = `W/"${total}-${page}-${pageSize}"`;
+        res.setHeader('ETag', etag);
+        res.setHeader('Cache-Control', 'private, max-age=30');
+        if (req.headers['if-none-match'] === etag) {
+            res.status(304).end();
+            return;
+        }
         res.json(success({ list, total, page, pageSize }));
     }
     catch (err) {
@@ -115,23 +137,29 @@ router.get('/:taskId', (req, res) => {
             res.status(404).json(error(404, 'Task not found'));
             return;
         }
-        // 附带记忆摘要
-        const memorySummary = taskMemory.getTaskMemorySummary(task.taskId);
-        res.json({
-            success: true,
-            data: {
-                ...task,
-                memory: memorySummary,
-            },
-        });
+        // 记忆摘要默认关闭，按需加载（iter-87 API优化：避免不必要的 memory 查询）
+        const includeMemory = req.query.includeMemory === 'true';
+        const result = { ...task };
+        if (includeMemory) {
+            result.memory = taskMemory.getTaskMemorySummary(task.taskId);
+        }
+        // ETag + Cache-Control
+        const etag = `W/"${task.taskId}-${task.status}-${task.updatedAt ?? task.createdAt}"`;
+        res.setHeader('ETag', etag);
+        res.setHeader('Cache-Control', 'private, max-age=60');
+        if (req.headers['if-none-match'] === etag) {
+            res.status(304).end();
+            return;
+        }
+        res.json(success(result));
     }
     catch (err) {
         console.error('[TaskRoutes] get error:', err);
         res.status(500).json(error(500, 'Internal server error'));
     }
 });
-// PATCH /api/v1/tasks/:taskId - 更新任务
-router.patch('/:taskId', async (req, res) => {
+// PATCH /api/v1/tasks/:taskId - 更新任务（需要身份认证）
+router.patch('/:taskId', requireAuth, async (req, res) => {
     try {
         const taskId = req.params.taskId;
         const body = req.body;
@@ -197,8 +225,8 @@ router.patch('/:taskId', async (req, res) => {
         res.status(500).json(error(500, 'Internal server error'));
     }
 });
-// DELETE /api/v1/tasks/:taskId - 删除任务
-router.delete('/:taskId', (req, res) => {
+// DELETE /api/v1/tasks/:taskId - 删除任务（需要身份认证）
+router.delete('/:taskId', requireAuth, (req, res) => {
     try {
         const taskId = req.params.taskId;
         if (!taskLifecycle.deleteTask(taskId)) {
@@ -255,6 +283,38 @@ router.post('/:taskId/cancel', async (req, res) => {
         console.error('[TaskRoutes] cancel error:', err);
         res.status(500).json(error(500, 'Internal server error'));
     }
+});
+// POST /api/v1/tasks/bulk/cancel — 批量取消任务（iter-34 API优化）
+router.post('/bulk/cancel', requireAuth, async (req, res) => {
+    const { taskIds } = req.body;
+    if (!Array.isArray(taskIds) || taskIds.length === 0) {
+        res.status(400).json(error(400, 'taskIds must be a non-empty array'));
+        return;
+    }
+    if (taskIds.length > 50) {
+        res.status(400).json(error(400, 'Cannot cancel more than 50 tasks at once'));
+        return;
+    }
+    const results = [];
+    for (const taskId of taskIds) {
+        try {
+            await taskLifecycle.transition(taskId, 'cancelled');
+            await taskFlow.cascadeCancel(taskId);
+            results.push({ taskId, success: true });
+        }
+        catch (err) {
+            results.push({ taskId, success: false, error: err instanceof Error ? err.message : 'Unknown error' });
+        }
+    }
+    const succeeded = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+    res.json(success({
+        total: taskIds.length,
+        succeeded,
+        failed,
+        results,
+        message: failed === 0 ? `All ${succeeded} tasks cancelled` : `${succeeded} succeeded, ${failed} failed`,
+    }));
 });
 // POST /api/v1/tasks/:taskId/trigger-bump — 手动触发版本升级
 router.post('/:taskId/trigger-bump', async (req, res) => {
@@ -562,7 +622,7 @@ router.get('/cancel/audit', (req, res) => {
     }
 });
 // ============ 任务依赖图（iter-23 新增）============
-import { buildDAG, buildSubtaskTree, getRunnableTasks, detectDependencyConflicts } from '../services/taskDependencyGraph.js';
+import { buildDAG, buildSubtaskTree, detectDependencyConflicts } from '../services/taskDependencyGraph.js';
 import { emitTaskEvent, getEventHistory, getFailedDeliveries, listWebhookEndpoints, createWebhookEndpoint, deleteWebhookEndpoint, toggleWebhookEndpoint, listNotificationRules, createNotificationRule, deleteNotificationRule, toggleNotificationRule } from '../services/taskNotification.js';
 import { getTaskSLA, getAllSLAs, getBreachedSLAs, getAtRiskSLAs, getSLAStats, setTaskDeadline, getSLADefinitions, updateSLADefinitions } from '../services/taskSLA.js';
 // GET /api/v1/tasks/graph/:taskId - 获取任务DAG
@@ -587,17 +647,6 @@ router.get('/tree/:taskId', (req, res) => {
     }
     catch (err) {
         console.error('[TaskRoutes] tree error:', err);
-        res.status(500).json(error(500, 'Internal server error'));
-    }
-});
-// GET /api/v1/tasks/runnable - 获取可运行任务
-router.get('/runnable', (_req, res) => {
-    try {
-        const runnable = getRunnableTasks();
-        res.json(success(runnable));
-    }
-    catch (err) {
-        console.error('[TaskRoutes] runnable error:', err);
         res.status(500).json(error(500, 'Internal server error'));
     }
 });
@@ -642,7 +691,7 @@ router.get('/webhooks', (_req, res) => {
     res.json(success(listWebhookEndpoints()));
 });
 // POST /api/v1/tasks/webhooks - 创建webhook端点
-router.post('/webhooks', (req, res) => {
+router.post('/webhooks', requireAuth, (req, res) => {
     try {
         const { name, url, secret, events } = req.body;
         if (!name || !url || !events)
@@ -656,7 +705,7 @@ router.post('/webhooks', (req, res) => {
     }
 });
 // DELETE /api/v1/tasks/webhooks/:id - 删除webhook
-router.delete('/webhooks/:id', (req, res) => {
+router.delete('/webhooks/:id', requireAuth, (req, res) => {
     const ok = deleteWebhookEndpoint(req.params.id);
     res.json(success(null));
 });
@@ -671,7 +720,7 @@ router.get('/notifications/rules', (_req, res) => {
     res.json(success(listNotificationRules()));
 });
 // POST /api/v1/tasks/notifications/rules - 创建通知规则
-router.post('/notifications/rules', (req, res) => {
+router.post('/notifications/rules', requireAuth, (req, res) => {
     try {
         const { name, eventType, filter, channels, webhookEndpointId } = req.body;
         const rule = createNotificationRule({ name, eventType, filter, channels, webhookEndpointId });

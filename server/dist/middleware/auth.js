@@ -1,12 +1,28 @@
 /**
  * 权限检查中间件
- * 从请求中提取用户身份并验证权限
+ * 从 JWT Token 中提取用户身份并验证权限
  */
 import { checkPermission } from "../services/permissionService.js";
+import { verifyToken } from "../utils/jwt.js";
 /**
- * 从 header 中提取用户身份
- * Header 格式: X-User-Id: user_001
- *             X-User-Role: admin
+ * 从 Authorization header 中提取并验证 JWT Token
+ * Header 格式: Authorization: Bearer <token>
+ */
+function extractUserFromToken(req) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer '))
+        return null;
+    try {
+        const token = authHeader.slice(7);
+        return verifyToken(token);
+    }
+    catch {
+        return null;
+    }
+}
+/**
+ * 兼容旧方式（仅开发环境）
+ * Header 格式: X-User-Id: user_001, X-User-Role: admin
  */
 function extractUserFromHeaders(req) {
     const userId = req.headers["x-user-id"];
@@ -14,24 +30,40 @@ function extractUserFromHeaders(req) {
     return { id: userId, role };
 }
 /**
+ * 提取用户身份：优先从 Token，兼容旧 header（仅开发环境）
+ */
+function extractUser(req) {
+    // 优先从 Token 解析
+    const fromToken = extractUserFromToken(req);
+    if (fromToken)
+        return { id: fromToken.userId, role: fromToken.role };
+    // 兼容旧方式（开发环境限定）
+    if (process.env.NODE_ENV !== 'development')
+        return null;
+    const { id, role } = extractUserFromHeaders(req);
+    if (id && role)
+        return { id, role };
+    return null;
+}
+/**
  * 权限检查中间件
  * 验证用户是否有权限访问指定的 Agent
  */
 export function requirePermission(agent) {
     return (req, res, next) => {
-        const { id, role } = extractUserFromHeaders(req);
-        // 未携带身份信息
-        if (!id || !role) {
+        const user = extractUser(req);
+        // 未携带有效身份信息
+        if (!user) {
             res.status(401).json({
                 code: 401,
                 data: null,
-                message: "未提供身份信息，请检查 X-User-Id 和 X-User-Role 请求头",
+                message: "未提供有效身份信息，请通过登录获取 Token",
             });
             return;
         }
         // 权限检查
-        const result = checkPermission(role, agent);
-        req.user = { id, role };
+        const result = checkPermission(user.role, agent);
+        req.user = { id: user.id, role: user.role };
         req.permission = result;
         if (!result.allowed) {
             res.status(403).json({
@@ -49,34 +81,52 @@ export function requirePermission(agent) {
  * 不强制要求身份信息，但如果有则附加到 req.user
  */
 export function optionalAuth(req, _res, next) {
-    const { id, role } = extractUserFromHeaders(req);
-    if (id && role) {
-        req.user = { id, role };
-        req.permission = checkPermission(role, "pm"); // 默认检查 pm 权限
+    const user = extractUser(req);
+    if (user) {
+        req.user = { id: user.id, role: user.role };
+        req.permission = checkPermission(user.role, "pm"); // 默认检查 pm 权限
     }
+    next();
+}
+/**
+ * 身份认证中间件
+ * 要求请求必须携带有效的用户身份信息
+ * 不检查特定 Agent 权限，只验证身份有效
+ */
+export function requireAuth(req, res, next) {
+    const user = extractUser(req);
+    if (!user) {
+        res.status(401).json({
+            code: 401,
+            data: null,
+            message: "未提供有效身份信息，请通过登录获取 Token",
+        });
+        return;
+    }
+    req.user = { id: user.id, role: user.role };
     next();
 }
 /**
  * 检查管理员权限
  */
 export function requireAdmin(req, res, next) {
-    const { role } = extractUserFromHeaders(req);
-    if (!role) {
+    const user = extractUser(req);
+    if (!user) {
         res.status(401).json({
             code: 401,
             data: null,
-            message: "未提供身份信息",
+            message: "未提供有效身份信息",
         });
         return;
     }
-    if (role !== "admin") {
+    if (user.role !== "admin" && user.role !== "vice_admin") {
         res.status(403).json({
             code: 403,
             data: null,
-            message: "需要管理员权限",
+            message: "需要管理员或副管理员权限",
         });
         return;
     }
-    req.user = { id: req.headers["x-user-id"], role };
+    req.user = { id: user.id, role: user.role };
     next();
 }

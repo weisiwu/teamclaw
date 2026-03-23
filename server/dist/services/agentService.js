@@ -2,6 +2,9 @@
  * Agent 管理服务
  * 管理 Agent 的运行时状态、配置查询、团队概览
  */
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
 import { AGENT_TEAM, getAgentByName, getTeamOverview, DISPATCH_MATRIX, } from "../constants/agents.js";
 // ============ 内存存储：Agent 运行时状态 ============
 const agentRuntimes = new Map();
@@ -68,20 +71,57 @@ export function updateAgentConfig(name, updates) {
     return getAgent(name);
 }
 /**
- * 获取 Agent 历史会话列表（模拟数据）
+ * 获取 Agent 历史会话列表（真实数据）
+ * 从 ~/.openclaw/agents/{name}/sessions/ 目录读取
  */
 export function getAgentSessions(name) {
-    // 模拟数据，实际应从 openclaw agents 目录读取
     const config = getAgentByName(name);
     if (!config)
         return [];
-    return [
-        {
-            sessionId: `session_${name}_001`,
-            updatedAt: new Date().toISOString(),
-            label: `${config.role} 当前会话`,
-        },
-    ];
+    const sessionsDir = path.join(os.homedir(), ".openclaw", "agents", name, "sessions");
+    if (!fs.existsSync(sessionsDir)) {
+        return [
+            {
+                sessionId: `session_${name}_001`,
+                updatedAt: new Date().toISOString(),
+                label: `${config.role} 当前会话（无历史）`,
+            },
+        ];
+    }
+    try {
+        const files = fs.readdirSync(sessionsDir).filter((f) => f.endsWith(".jsonl"));
+        // 按修改时间倒序，取最近 20 个
+        const sorted = files
+            .map((file) => {
+            const filePath = path.join(sessionsDir, file);
+            const stat = fs.statSync(filePath);
+            return {
+                sessionId: file.replace(".jsonl", ""),
+                updatedAt: stat.mtime.toISOString(),
+                label: `${config.role} 会话 ${file.slice(0, 8)}`,
+            };
+        })
+            .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+            .slice(0, 20);
+        return sorted.length > 0
+            ? sorted
+            : [
+                {
+                    sessionId: `session_${name}_001`,
+                    updatedAt: new Date().toISOString(),
+                    label: `${config.role} 当前会话（无历史）`,
+                },
+            ];
+    }
+    catch {
+        return [
+            {
+                sessionId: `session_${name}_001`,
+                updatedAt: new Date().toISOString(),
+                label: `${config.role} 当前会话（读取失败）`,
+            },
+        ];
+    }
 }
 /**
  * 获取团队概览

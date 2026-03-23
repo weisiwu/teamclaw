@@ -3,9 +3,11 @@
  * 消息机制模块 - 消息队列管理
  *
  * 基于内存的消息队列，支持优先级排序、入队、出队、抢占
+ * 数据持久化：PostgreSQL（通过 messageRepo）+ 内存 Map 缓存
  */
 import { shouldPreempt } from './priorityCalculator.js';
 import { messageMerger } from './messageMerger.js';
+import { messageRepo } from '../db/repositories/messageRepo.js';
 // 队列时间戳格式
 function getDateStr() {
     const now = new Date();
@@ -39,6 +41,11 @@ class MessageQueueService {
         }
         return MessageQueueService.instance;
     }
+    constructor() {
+        this.loadFromDb().catch(err => {
+            console.warn('[messageQueue] Failed to load messages from DB on startup:', err);
+        });
+    }
     getTodaySequence() {
         const today = getDateStr();
         if (today !== this.lastQueueDate) {
@@ -47,6 +54,65 @@ class MessageQueueService {
         }
         this.todaySequence++;
         return this.todaySequence;
+    }
+    /**
+     * 从 DB 加载未完成的消息到内存
+     */
+    async loadFromDb() {
+        try {
+            const rows = await messageRepo.findByStatus('pending', 500);
+            for (const row of rows) {
+                const msg = {
+                    messageId: row.message_id,
+                    channel: row.channel,
+                    userId: row.user_id,
+                    userName: row.user_name,
+                    role: row.role,
+                    roleWeight: row.role_weight,
+                    content: row.content,
+                    type: row.type,
+                    urgency: row.urgency,
+                    priority: row.priority,
+                    status: row.status,
+                    timestamp: new Date(row.created_at).toISOString(),
+                    mergedFrom: row.merged_from ?? undefined,
+                    preemptedBy: row.preempted_by ?? undefined,
+                };
+                this.messages.set(msg.messageId, msg);
+                this.insertIntoPriorityQueue(msg.messageId, msg.priority);
+            }
+            // Restore current processing
+            const processing = await messageRepo.findByStatus('processing', 1);
+            if (processing.length > 0) {
+                this.currentProcessing = processing[0].message_id;
+            }
+            console.log(`[messageQueue] Loaded ${rows.length} pending messages from PostgreSQL`);
+        }
+        catch (err) {
+            console.warn('[messageQueue] Could not load messages from DB:', err);
+        }
+    }
+    /**
+     * 同步消息到 DB
+     */
+    syncToDb(msg) {
+        messageRepo.upsert({
+            messageId: msg.messageId,
+            channel: msg.channel,
+            userId: msg.userId,
+            userName: msg.userName,
+            role: msg.role,
+            roleWeight: msg.roleWeight,
+            content: msg.content,
+            type: msg.type,
+            urgency: msg.urgency,
+            priority: msg.priority,
+            status: msg.status,
+            createdAt: msg.timestamp,
+            mergedFrom: msg.mergedFrom,
+            preemptedBy: msg.preemptedBy,
+            fileInfo: msg.fileInfo,
+        }).catch(err => console.error('[messageQueue] Failed to sync to DB:', err));
     }
     /**
      * 入队：接收新消息，处理合并，计算优先级，加入队列
@@ -74,6 +140,8 @@ class MessageQueueService {
         this.messages.set(fullMessage.messageId, fullMessage);
         // 加入优先级队列（按 priority 降序插入）
         this.insertIntoPriorityQueue(fullMessage.messageId, fullMessage.priority);
+        // 持久化到 DB
+        this.syncToDb(fullMessage);
         // 检查是否需要抢占
         let preempted = false;
         let preemptedMessageId = null;
@@ -85,6 +153,7 @@ class MessageQueueService {
                 this.suspendMessage(this.currentProcessing);
                 this.currentProcessing = fullMessage.messageId;
                 fullMessage.status = 'processing';
+                this.syncToDb(fullMessage);
                 preempted = true;
             }
         }
@@ -114,6 +183,7 @@ class MessageQueueService {
         const msg = this.messages.get(messageId);
         if (msg) {
             msg.status = 'suspended';
+            this.syncToDb(msg);
             // 从优先级队列中移除（不维护顺序，因为已挂起）
             const idx = this.priorityQueue.indexOf(messageId);
             if (idx !== -1)
@@ -129,6 +199,7 @@ class MessageQueueService {
             return false;
         msg.status = 'pending';
         this.insertIntoPriorityQueue(messageId, msg.priority);
+        this.syncToDb(msg);
         return true;
     }
     /**
@@ -178,6 +249,7 @@ class MessageQueueService {
         if (!msg)
             return false;
         msg.status = status;
+        this.syncToDb(msg);
         if (status === 'completed') {
             // 从队列中移除
             const idx = this.priorityQueue.indexOf(messageId);
@@ -204,6 +276,7 @@ class MessageQueueService {
         if (nextMsg && nextMsg.status === 'pending') {
             this.currentProcessing = nextId;
             nextMsg.status = 'processing';
+            this.syncToDb(nextMsg);
         }
     }
     /**
@@ -255,6 +328,7 @@ class MessageQueueService {
         if (shouldPreempt(targetMsg.priority, currentMsg.priority)) {
             this.suspendMessage(this.currentProcessing);
             targetMsg.status = 'processing';
+            this.syncToDb(targetMsg);
             const preemptedId = this.currentProcessing;
             this.currentProcessing = messageId;
             return { success: true, preemptedId };

@@ -5,9 +5,10 @@
 import { Router } from 'express';
 import { success } from '../utils/response.js';
 import { auditService } from '../services/auditService.js';
+import { requireAuth } from '../middleware/auth.js';
 const router = Router();
 // GET /api/v1/admin/audit-logs - 查询审计日志
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
     try {
         const query = {
             action: req.query.action,
@@ -27,7 +28,7 @@ router.get('/', async (req, res) => {
     }
 });
 // GET /api/v1/admin/audit-logs/export - 导出 CSV
-router.get('/export', async (req, res) => {
+router.get('/export', requireAuth, async (req, res) => {
     try {
         const query = {
             action: req.query.action,

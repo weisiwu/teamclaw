@@ -1,182 +1,179 @@
-// Branch 分支服务
-// 提供分支的 CRUD、设置主分支、保护等业务逻辑
-// ========== In-Memory Storage ==========
-const branches = new Map();
-let nextId = 1;
-// 默认配置
-const defaultConfig = {
-    defaultBranch: 'main',
-    protectedBranches: ['main', 'master', 'release/*'],
-    allowForcePush: false,
-    autoCleanupMerged: false,
-};
-let config = { ...defaultConfig };
-// ========== 初始化默认分支 ==========
-function initDefaultBranch() {
-    if (branches.size === 0) {
-        const mainBranch = {
-            id: `branch_${nextId++}`,
-            name: 'main',
-            isMain: true,
-            isRemote: false,
-            isProtected: true,
-            createdAt: new Date().toISOString(),
-            lastCommitAt: new Date().toISOString(),
-            commitMessage: 'Initial commit',
-            author: 'system',
-            description: 'Default main branch',
-        };
-        branches.set(mainBranch.id, mainBranch);
-    }
+// Branch 分支服务 — PostgreSQL 持久化版
+import { query, queryOne, execute } from '../db/pg.js';
+function toRecord(row) {
+    return {
+        id: String(row.id),
+        name: String(row.name),
+        isMain: Boolean(row.is_main),
+        isRemote: Boolean(row.is_remote),
+        isProtected: Boolean(row.is_protected),
+        createdAt: String(row.created_at),
+        lastCommitAt: String(row.last_commit_at ?? ''),
+        commitMessage: String(row.commit_message ?? ''),
+        author: String(row.author ?? 'system'),
+        versionId: row.version_id ? String(row.version_id) : undefined,
+        baseBranch: row.base_branch ? String(row.base_branch) : undefined,
+        description: row.description ? String(row.description) : undefined,
+    };
 }
-initDefaultBranch();
 // ========== 分支 CRUD ==========
-// 获取所有分支
-export function getAllBranches() {
-    return Array.from(branches.values()).sort((a, b) => {
-        // 主分支排在最前
-        if (a.isMain)
-            return -1;
-        if (b.isMain)
-            return 1;
-        return a.name.localeCompare(b.name);
-    });
+export async function getAllBranches() {
+    const rows = await query('SELECT * FROM branches ORDER BY is_main DESC, name ASC');
+    return rows.map(toRecord);
 }
-// 获取单个分支
-export function getBranch(id) {
-    return branches.get(id);
+export async function getBranch(id) {
+    const row = await queryOne('SELECT * FROM branches WHERE id = $1', [id]);
+    return row ? toRecord(row) : undefined;
 }
-// 按名称获取分支
-export function getBranchByName(name) {
-    return Array.from(branches.values()).find(b => b.name === name);
+export async function getBranchByName(name) {
+    const row = await queryOne('SELECT * FROM branches WHERE name = $1', [name]);
+    return row ? toRecord(row) : undefined;
 }
-// 获取主分支
-export function getMainBranch() {
-    return Array.from(branches.values()).find(b => b.isMain);
+export async function getMainBranch() {
+    const row = await queryOne('SELECT * FROM branches WHERE is_main = TRUE LIMIT 1');
+    return row ? toRecord(row) : undefined;
 }
-// 创建分支
-export function createBranch(data) {
-    // 检查名称是否已存在
-    const existing = getBranchByName(data.name);
+export async function createBranch(data) {
+    const existing = await getBranchByName(data.name);
     if (existing) {
         throw new Error(`Branch ${data.name} already exists`);
     }
-    const branch = {
-        id: `branch_${nextId++}`,
-        name: data.name,
-        isMain: false,
-        isRemote: false,
-        isProtected: false,
-        createdAt: new Date().toISOString(),
-        lastCommitAt: new Date().toISOString(),
-        commitMessage: `Created branch ${data.name}`,
-        author: data.author || 'user',
-        versionId: data.versionId,
-        baseBranch: data.baseBranch,
-        description: data.description,
-    };
-    branches.set(branch.id, branch);
-    return branch;
+    const id = `branch_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const now = new Date().toISOString();
+    await execute(`
+    INSERT INTO branches (id, name, is_main, is_remote, is_protected, is_current,
+      created_at, last_commit_at, commit_message, author, version_id, base_branch, description)
+    VALUES ($1, $2, FALSE, FALSE, FALSE, FALSE, $3, $4, $5, $6, $7, $8, $9)
+  `, [
+        id,
+        data.name,
+        now,
+        now,
+        `Created branch ${data.name}`,
+        data.author || 'user',
+        data.versionId ?? null,
+        data.baseBranch ?? null,
+        data.description ?? null,
+    ]);
+    return (await getBranch(id));
 }
-// 更新分支
-export function updateBranch(id, updates) {
-    const branch = branches.get(id);
+export async function updateBranch(id, updates) {
+    const branch = await getBranch(id);
     if (!branch)
         return undefined;
-    // 名称冲突检查
     if (updates.name && updates.name !== branch.name) {
-        const existing = getBranchByName(updates.name);
+        const existing = await getBranchByName(updates.name);
         if (existing && existing.id !== id) {
             throw new Error(`Branch ${updates.name} already exists`);
         }
     }
-    // 主分支强制保护
-    if (branch.isMain) {
-        updates.isProtected = true;
-    }
-    const updated = { ...branch, ...updates };
-    branches.set(id, updated);
-    return updated;
+    const isMain = updates.isMain ?? branch.isMain;
+    const isProtected = isMain ? true : (updates.isProtected ?? branch.isProtected);
+    await execute(`
+    UPDATE branches SET
+      name = $1, is_main = $2, is_protected = $3,
+      last_commit_at = $4, commit_message = $5, author = $6,
+      version_id = $7, base_branch = $8, description = $9
+    WHERE id = $10
+  `, [
+        updates.name ?? branch.name,
+        isMain,
+        isProtected,
+        updates.lastCommitAt ?? branch.lastCommitAt,
+        updates.commitMessage ?? branch.commitMessage,
+        updates.author ?? branch.author,
+        updates.versionId ?? branch.versionId ?? null,
+        updates.baseBranch ?? branch.baseBranch ?? null,
+        updates.description ?? branch.description ?? null,
+        id,
+    ]);
+    return getBranch(id);
 }
-// 删除分支
-export function deleteBranch(id) {
-    const branch = branches.get(id);
+export async function deleteBranch(id) {
+    const branch = await getBranch(id);
     if (!branch)
         return false;
-    if (branch.isProtected) {
+    if (branch.isProtected)
         throw new Error('Cannot delete protected branch');
-    }
-    if (branch.isMain) {
+    if (branch.isMain)
         throw new Error('Cannot delete main branch');
-    }
-    return branches.delete(id);
+    const count = await execute('DELETE FROM branches WHERE id = $1', [id]);
+    return count > 0;
 }
-// 设置主分支
-export function setMainBranch(id) {
-    const branch = branches.get(id);
+export async function setMainBranch(id) {
+    const branch = await getBranch(id);
     if (!branch)
         return undefined;
-    // 取消当前主分支
-    for (const [bid, b] of branches) {
-        if (b.isMain) {
-            branches.set(bid, { ...b, isMain: false });
-        }
-    }
-    // 设置新主分支
-    const updated = branches.get(id);
-    if (updated) {
-        branches.set(id, { ...updated, isMain: true, isProtected: true });
-    }
-    return branches.get(id);
+    await execute('UPDATE branches SET is_main = FALSE');
+    await execute('UPDATE branches SET is_main = TRUE, is_protected = TRUE WHERE id = $1', [id]);
+    return getBranch(id);
 }
-// 保护/取消保护分支
-export function setBranchProtection(id, protect) {
-    const branch = branches.get(id);
+export async function setBranchProtection(id, protect) {
+    const branch = await getBranch(id);
     if (!branch)
         return undefined;
-    if (branch.isMain && !protect) {
+    if (branch.isMain && !protect)
         throw new Error('Main branch must always be protected');
-    }
-    return updateBranch(id, { isProtected: protect });
+    await execute('UPDATE branches SET is_protected = $1 WHERE id = $2', [protect, id]);
+    return getBranch(id);
 }
-// 重命名分支
-export function renameBranch(id, newName) {
-    const branch = branches.get(id);
+export async function renameBranch(id, newName) {
+    const branch = await getBranch(id);
     if (!branch)
         return undefined;
-    if (branch.isProtected) {
+    if (branch.isProtected)
         throw new Error('Protected branch cannot be renamed');
+    await execute('UPDATE branches SET name = $1 WHERE id = $2', [newName, id]);
+    return getBranch(id);
+}
+export async function getBranchConfig() {
+    const row = await queryOne('SELECT * FROM branch_config WHERE id = 1');
+    if (!row) {
+        return { defaultBranch: 'main', protectedBranches: ['main', 'master', 'release/*'], allowForcePush: false, autoCleanupMerged: false };
     }
-    return updateBranch(id, { name: newName });
+    return {
+        defaultBranch: String(row.default_branch),
+        protectedBranches: JSON.parse(String(row.protected_branches)),
+        allowForcePush: Boolean(row.allow_force_push),
+        autoCleanupMerged: Boolean(row.auto_cleanup_merged),
+    };
 }
-// 获取分支配置
-export function getBranchConfig() {
-    return { ...config };
+export async function updateBranchConfig(updates) {
+    const current = await getBranchConfig();
+    const updated = { ...current, ...updates };
+    await execute(`
+    UPDATE branch_config SET
+      default_branch = $1,
+      protected_branches = $2,
+      allow_force_push = $3,
+      auto_cleanup_merged = $4,
+      updated_at = NOW()
+    WHERE id = 1
+  `, [
+        updated.defaultBranch,
+        JSON.stringify(updated.protectedBranches),
+        updated.allowForcePush,
+        updated.autoCleanupMerged,
+    ]);
+    return updated;
 }
-// 更新分支配置
-export function updateBranchConfig(updates) {
-    config = { ...config, ...updates };
-    return { ...config };
-}
-// 检出分支（切换到指定分支）
-export function checkoutBranch(id) {
-    const branch = branches.get(id);
+export async function checkoutBranch(id) {
+    const branch = await getBranch(id);
     if (!branch)
         return undefined;
-    if (branch.isProtected || branch.isMain) {
-        // 保护分支和主分支可以直接 checkout
-        return branch;
-    }
-    // 更新 lastCommitAt 为当前时间，表示最近操作过
-    return updateBranch(id, { lastCommitAt: new Date().toISOString() });
+    await execute('UPDATE branches SET is_current = FALSE');
+    await execute('UPDATE branches SET is_current = TRUE, last_commit_at = NOW() WHERE id = $1', [id]);
+    return getBranch(id);
 }
-// 获取分支统计
-export function getBranchStats() {
-    const all = getAllBranches();
+export async function getBranchStats() {
+    const totalRow = await queryOne('SELECT COUNT(*) as count FROM branches');
+    const mainRow = await queryOne("SELECT COUNT(*) as count FROM branches WHERE is_main = TRUE");
+    const protectedRow = await queryOne("SELECT COUNT(*) as count FROM branches WHERE is_protected = TRUE");
+    const remoteRow = await queryOne("SELECT COUNT(*) as count FROM branches WHERE is_remote = TRUE");
     return {
-        total: all.length,
-        main: all.filter(b => b.isMain).length,
-        protected: all.filter(b => b.isProtected).length,
-        remote: all.filter(b => b.isRemote).length,
+        total: parseInt(totalRow?.count ?? '0', 10),
+        main: parseInt(mainRow?.count ?? '0', 10),
+        protected: parseInt(protectedRow?.count ?? '0', 10),
+        remote: parseInt(remoteRow?.count ?? '0', 10),
     };
 }

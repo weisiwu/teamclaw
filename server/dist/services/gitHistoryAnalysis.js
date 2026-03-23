@@ -4,7 +4,7 @@ import { join } from 'path';
 /**
  * Extract commits from git log as structured entries.
  */
-function parseGitLog(projectPath, limit = 200) {
+export function parseGitLog(projectPath, limit = 200) {
     if (!existsSync(join(projectPath, '.git')))
         return [];
     try {
