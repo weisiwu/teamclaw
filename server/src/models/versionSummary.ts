@@ -1,8 +1,8 @@
 /**
- * VersionSummary Model — SQLite persistence (migrated from in-memory)
+ * VersionSummary Model — PostgreSQL persistence
  */
 
-import { getDb } from '../db/sqlite.js';
+import { query, queryOne, execute } from '../db/pg.js';
 
 export interface VersionChange {
   type: 'feature' | 'fix' | 'improvement' | 'breaking' | 'docs' | 'refactor' | 'other';
@@ -21,7 +21,7 @@ export interface VersionSummary {
   breaking: string[];
   changes_detail: VersionChange[];
   generatedAt: string;
-  generatedBy: string; // 'AI' | 'manual' | 'system'
+  generatedBy: string;
   branchName?: string;
 }
 
@@ -43,15 +43,14 @@ function rowToSummary(row: Record<string, unknown>): VersionSummary {
 }
 
 export const VersionSummaryModel = {
-  create(data: Omit<VersionSummary, 'id' | 'generatedAt'>): VersionSummary {
-    const db = getDb();
+  async create(data: Omit<VersionSummary, 'id' | 'generatedAt'>): Promise<VersionSummary> {
     const id = `sum_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const generatedAt = new Date().toISOString();
 
-    db.prepare(`
+    await execute(`
       INSERT INTO version_summaries (id, version_id, title, content, features, fixes, changes, breaking, changes_detail, generated_at, generated_by, branch_name)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    `, [
       id,
       data.versionId,
       data.title,
@@ -63,33 +62,41 @@ export const VersionSummaryModel = {
       JSON.stringify(data.changes_detail),
       generatedAt,
       data.generatedBy,
-      data.branchName || null
-    );
+      data.branchName || null,
+    ]);
 
     return { id, ...data, generatedAt, generatedBy: data.generatedBy };
   },
 
-  findById(id: string): VersionSummary | undefined {
-    const db = getDb();
-    const row = db.prepare('SELECT * FROM version_summaries WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  async findById(id: string): Promise<VersionSummary | undefined> {
+    const row = await queryOne<Record<string, unknown>>(
+      'SELECT * FROM version_summaries WHERE id = $1', [id]
+    );
     return row ? rowToSummary(row) : undefined;
   },
 
-  findByVersionId(versionId: string): VersionSummary | undefined {
-    const db = getDb();
-    const row = db.prepare('SELECT * FROM version_summaries WHERE version_id = ?').get(versionId) as Record<string, unknown> | undefined;
+  async findByVersionId(versionId: string): Promise<VersionSummary | undefined> {
+    const row = await queryOne<Record<string, unknown>>(
+      'SELECT * FROM version_summaries WHERE version_id = $1', [versionId]
+    );
     return row ? rowToSummary(row) : undefined;
   },
 
-  update(versionId: string, data: {
+  async findAll(): Promise<VersionSummary[]> {
+    const rows = await query<Record<string, unknown>>(
+      'SELECT * FROM version_summaries ORDER BY generated_at DESC'
+    );
+    return rows.map(rowToSummary);
+  },
+
+  async update(versionId: string, data: {
     content?: string;
     features?: string[];
     fixes?: string[];
     changes?: string[];
     breaking?: string[];
-  }): VersionSummary | undefined {
-    const db = getDb();
-    const existing = this.findByVersionId(versionId);
+  }): Promise<VersionSummary | undefined> {
+    const existing = await this.findByVersionId(versionId);
     if (!existing) return undefined;
 
     const updated: VersionSummary = {
@@ -105,11 +112,11 @@ export const VersionSummaryModel = {
       generatedBy: 'manual',
     };
 
-    db.prepare(`
+    await execute(`
       UPDATE version_summaries
-      SET title=?, content=?, features=?, fixes=?, changes=?, breaking=?, changes_detail=?, generated_at=?, generated_by=?
-      WHERE version_id=?
-    `).run(
+      SET title=$1, content=$2, features=$3, fixes=$4, changes=$5, breaking=$6, changes_detail=$7, generated_at=$8, generated_by=$9
+      WHERE version_id=$10
+    `, [
       updated.title,
       updated.content,
       JSON.stringify(updated.features),
@@ -119,13 +126,13 @@ export const VersionSummaryModel = {
       JSON.stringify(updated.changes_detail),
       updated.generatedAt,
       updated.generatedBy,
-      versionId
-    );
+      versionId,
+    ]);
 
     return updated;
   },
 
-  upsert(data: {
+  async upsert(data: {
     versionId: string;
     content: string;
     features?: string[];
@@ -134,16 +141,16 @@ export const VersionSummaryModel = {
     breaking?: string[];
     createdBy?: string;
     title?: string;
-  }): VersionSummary {
-    const existing = this.findByVersionId(data.versionId);
+  }): Promise<VersionSummary> {
+    const existing = await this.findByVersionId(data.versionId);
     if (existing) {
-      return this.update(data.versionId, {
+      return (await this.update(data.versionId, {
         content: data.content,
         features: data.features,
         fixes: data.fixes,
         changes: data.changes,
         breaking: data.breaking,
-      })!;
+      }))!;
     }
     return this.create({
       versionId: data.versionId,
@@ -163,9 +170,8 @@ export const VersionSummaryModel = {
     });
   },
 
-  delete(versionId: string): boolean {
-    const db = getDb();
-    const info = db.prepare('DELETE FROM version_summaries WHERE version_id = ?').run(versionId);
-    return info.changes > 0;
+  async delete(versionId: string): Promise<boolean> {
+    const count = await execute('DELETE FROM version_summaries WHERE version_id = $1', [versionId]);
+    return count > 0;
   },
 };

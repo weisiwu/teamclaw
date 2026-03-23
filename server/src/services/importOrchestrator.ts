@@ -1,4 +1,10 @@
+/**
+ * Import Orchestrator — PostgreSQL 持久化
+ * 项目导入流程管理
+ */
+
 import { ImportTask, ImportStep } from '../models/project.js';
+import { importRepo } from '../db/repositories/importRepo.js';
 
 export type ImportStepName =
   | 'scan'
@@ -32,8 +38,36 @@ const STEP_NAMES: Record<ImportStepName, string> = {
   done: '完成',
 };
 
-// In-memory task store (swap for DB later)
+// In-memory cache (taskId -> ImportTask)
 const tasks = new Map<string, ImportTask>();
+
+/**
+ * Load tasks from DB on module init
+ */
+async function loadFromDb(): Promise<void> {
+  try {
+    const rows = await importRepo.findPending();
+    for (const row of rows) {
+      const task: ImportTask = {
+        taskId: row.task_id,
+        projectId: row.project_id,
+        status: row.status as ImportTask['status'],
+        currentStep: row.current_step,
+        totalSteps: row.total_steps ?? 8,
+        steps: row.steps as ImportStep[] ?? [],
+        startedAt: new Date(row.started_at).toISOString(),
+        completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : undefined,
+      };
+      tasks.set(task.taskId, task);
+    }
+    console.log(`[importOrchestrator] Loaded ${rows.length} pending import tasks from PostgreSQL`);
+  } catch (err) {
+    console.warn('[importOrchestrator] Could not load from DB:', err);
+  }
+}
+
+// Load on startup (non-blocking)
+loadFromDb().catch(err => console.warn('[importOrchestrator] Startup load error:', err));
 
 export function createImportTask(projectId: string): ImportTask {
   const taskId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -54,6 +88,17 @@ export function createImportTask(projectId: string): ImportTask {
   };
 
   tasks.set(taskId, task);
+  // Persist to DB
+  importRepo.upsert({
+    taskId: task.taskId,
+    projectId: task.projectId,
+    status: task.status,
+    currentStep: task.currentStep,
+    totalSteps: task.totalSteps,
+    steps: task.steps,
+    startedAt: task.startedAt,
+  }).catch(err => console.error('[importOrchestrator] Failed to persist createImportTask:', err));
+
   return task;
 }
 
@@ -71,6 +116,14 @@ export function executeStep(taskId: string, stepIndex: number): ImportTask {
   });
 
   tasks.set(taskId, task);
+  importRepo.upsert({
+    taskId: task.taskId,
+    projectId: task.projectId,
+    status: task.status,
+    currentStep: task.currentStep,
+    steps: task.steps,
+  }).catch(err => console.error('[importOrchestrator] Failed to persist executeStep:', err));
+
   return task;
 }
 
@@ -95,6 +148,16 @@ export function completeStep(taskId: string, stepIndex: number, errorMsg?: strin
   }
 
   tasks.set(taskId, task);
+  importRepo.upsert({
+    taskId: task.taskId,
+    projectId: task.projectId,
+    status: task.status,
+    currentStep: task.currentStep,
+    steps: task.steps,
+    completedAt: task.completedAt,
+    errorMessage: errorMsg,
+  }).catch(err => console.error('[importOrchestrator] Failed to persist completeStep:', err));
+
   return task;
 }
 

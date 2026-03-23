@@ -1,5 +1,5 @@
-// Branch 分支服务 — SQLite 持久化版 (iter-49)
-import { getDb } from '../db/sqlite.js';
+// Branch 分支服务 — PostgreSQL 持久化版
+import { query, queryOne, execute } from '../db/pg.js';
 import { BranchRecord, BranchConfig } from '../models/branch.js';
 
 function toRecord(row: Record<string, unknown>): BranchRecord {
@@ -10,7 +10,7 @@ function toRecord(row: Record<string, unknown>): BranchRecord {
     isRemote: Boolean(row.is_remote),
     isProtected: Boolean(row.is_protected),
     createdAt: String(row.created_at),
-    lastCommitAt: String(row.last_commit_at),
+    lastCommitAt: String(row.last_commit_at ?? ''),
     commitMessage: String(row.commit_message ?? ''),
     author: String(row.author ?? 'system'),
     versionId: row.version_id ? String(row.version_id) : undefined,
@@ -21,42 +21,42 @@ function toRecord(row: Record<string, unknown>): BranchRecord {
 
 // ========== 分支 CRUD ==========
 
-export function getAllBranches(): BranchRecord[] {
-  const db = getDb();
-  const rows = db.prepare(`
-    SELECT * FROM branches
-    ORDER BY is_main DESC, name ASC
-  `).all() as Record<string, unknown>[];
+export async function getAllBranches(): Promise<BranchRecord[]> {
+  const rows = await query<Record<string, unknown>>(
+    'SELECT * FROM branches ORDER BY is_main DESC, name ASC'
+  );
   return rows.map(toRecord);
 }
 
-export function getBranch(id: string): BranchRecord | undefined {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM branches WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+export async function getBranch(id: string): Promise<BranchRecord | undefined> {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT * FROM branches WHERE id = $1', [id]
+  );
   return row ? toRecord(row) : undefined;
 }
 
-export function getBranchByName(name: string): BranchRecord | undefined {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM branches WHERE name = ?').get(name) as Record<string, unknown> | undefined;
+export async function getBranchByName(name: string): Promise<BranchRecord | undefined> {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT * FROM branches WHERE name = $1', [name]
+  );
   return row ? toRecord(row) : undefined;
 }
 
-export function getMainBranch(): BranchRecord | undefined {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM branches WHERE is_main = 1 LIMIT 1').get() as Record<string, unknown> | undefined;
+export async function getMainBranch(): Promise<BranchRecord | undefined> {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT * FROM branches WHERE is_main = TRUE LIMIT 1'
+  );
   return row ? toRecord(row) : undefined;
 }
 
-export function createBranch(data: {
+export async function createBranch(data: {
   name: string;
   author?: string;
   versionId?: string;
   baseBranch?: string;
   description?: string;
-}): BranchRecord {
-  const db = getDb();
-  const existing = getBranchByName(data.name);
+}): Promise<BranchRecord> {
+  const existing = await getBranchByName(data.name);
   if (existing) {
     throw new Error(`Branch ${data.name} already exists`);
   }
@@ -64,11 +64,11 @@ export function createBranch(data: {
   const id = `branch_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const now = new Date().toISOString();
 
-  db.prepare(`
+  await execute(`
     INSERT INTO branches (id, name, is_main, is_remote, is_protected, is_current,
       created_at, last_commit_at, commit_message, author, version_id, base_branch, description)
-    VALUES (?, ?, 0, 0, 0, 0, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+    VALUES ($1, $2, FALSE, FALSE, FALSE, FALSE, $3, $4, $5, $6, $7, $8, $9)
+  `, [
     id,
     data.name,
     now,
@@ -77,19 +77,18 @@ export function createBranch(data: {
     data.author || 'user',
     data.versionId ?? null,
     data.baseBranch ?? null,
-    data.description ?? null
-  );
+    data.description ?? null,
+  ]);
 
-  return getBranch(id)!;
+  return (await getBranch(id))!;
 }
 
-export function updateBranch(id: string, updates: Partial<BranchRecord>): BranchRecord | undefined {
-  const db = getDb();
-  const branch = getBranch(id);
+export async function updateBranch(id: string, updates: Partial<BranchRecord>): Promise<BranchRecord | undefined> {
+  const branch = await getBranch(id);
   if (!branch) return undefined;
 
   if (updates.name && updates.name !== branch.name) {
-    const existing = getBranchByName(updates.name);
+    const existing = await getBranchByName(updates.name);
     if (existing && existing.id !== id) {
       throw new Error(`Branch ${updates.name} already exists`);
     }
@@ -98,72 +97,69 @@ export function updateBranch(id: string, updates: Partial<BranchRecord>): Branch
   const isMain = updates.isMain ?? branch.isMain;
   const isProtected = isMain ? true : (updates.isProtected ?? branch.isProtected);
 
-  db.prepare(`
+  await execute(`
     UPDATE branches SET
-      name = ?, is_main = ?, is_protected = ?,
-      last_commit_at = ?, commit_message = ?, author = ?,
-      version_id = ?, base_branch = ?, description = ?
-    WHERE id = ?
-  `).run(
+      name = $1, is_main = $2, is_protected = $3,
+      last_commit_at = $4, commit_message = $5, author = $6,
+      version_id = $7, base_branch = $8, description = $9
+    WHERE id = $10
+  `, [
     updates.name ?? branch.name,
-    isMain ? 1 : 0,
-    isProtected ? 1 : 0,
+    isMain,
+    isProtected,
     updates.lastCommitAt ?? branch.lastCommitAt,
     updates.commitMessage ?? branch.commitMessage,
     updates.author ?? branch.author,
     updates.versionId ?? branch.versionId ?? null,
     updates.baseBranch ?? branch.baseBranch ?? null,
     updates.description ?? branch.description ?? null,
-    id
-  );
+    id,
+  ]);
 
   return getBranch(id);
 }
 
-export function deleteBranch(id: string): boolean {
-  const db = getDb();
-  const branch = getBranch(id);
+export async function deleteBranch(id: string): Promise<boolean> {
+  const branch = await getBranch(id);
   if (!branch) return false;
   if (branch.isProtected) throw new Error('Cannot delete protected branch');
   if (branch.isMain) throw new Error('Cannot delete main branch');
 
-  const result = db.prepare('DELETE FROM branches WHERE id = ?').run(id);
-  return result.changes > 0;
+  const count = await execute('DELETE FROM branches WHERE id = $1', [id]);
+  return count > 0;
 }
 
-export function setMainBranch(id: string): BranchRecord | undefined {
-  const db = getDb();
-  const branch = getBranch(id);
+export async function setMainBranch(id: string): Promise<BranchRecord | undefined> {
+  const branch = await getBranch(id);
   if (!branch) return undefined;
 
-  db.prepare('UPDATE branches SET is_main = 0').run();
-  db.prepare('UPDATE branches SET is_main = 1, is_protected = 1 WHERE id = ?').run(id);
+  await execute('UPDATE branches SET is_main = FALSE');
+  await execute('UPDATE branches SET is_main = TRUE, is_protected = TRUE WHERE id = $1', [id]);
   return getBranch(id);
 }
 
-export function setBranchProtection(id: string, protect: boolean): BranchRecord | undefined {
-  const db = getDb();
-  const branch = getBranch(id);
+export async function setBranchProtection(id: string, protect: boolean): Promise<BranchRecord | undefined> {
+  const branch = await getBranch(id);
   if (!branch) return undefined;
   if (branch.isMain && !protect) throw new Error('Main branch must always be protected');
 
-  db.prepare('UPDATE branches SET is_protected = ? WHERE id = ?').run(protect ? 1 : 0, id);
+  await execute('UPDATE branches SET is_protected = $1 WHERE id = $2', [protect, id]);
   return getBranch(id);
 }
 
-export function renameBranch(id: string, newName: string): BranchRecord | undefined {
-  const db = getDb();
-  const branch = getBranch(id);
+export async function renameBranch(id: string, newName: string): Promise<BranchRecord | undefined> {
+  const branch = await getBranch(id);
   if (!branch) return undefined;
   if (branch.isProtected) throw new Error('Protected branch cannot be renamed');
 
-  db.prepare('UPDATE branches SET name = ? WHERE id = ?').run(newName, id);
+  await execute('UPDATE branches SET name = $1 WHERE id = $2', [newName, id]);
   return getBranch(id);
 }
 
-export function getBranchConfig(): BranchConfig {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM branch_config WHERE id = 1').get() as Record<string, unknown> | undefined;
+export async function getBranchConfig(): Promise<BranchConfig> {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT * FROM branch_config WHERE id = 1'
+  );
   if (!row) {
     return { defaultBranch: 'main', protectedBranches: ['main', 'master', 'release/*'], allowForcePush: false, autoCleanupMerged: false };
   }
@@ -175,43 +171,44 @@ export function getBranchConfig(): BranchConfig {
   };
 }
 
-export function updateBranchConfig(updates: Partial<BranchConfig>): BranchConfig {
-  const db = getDb();
-  const current = getBranchConfig();
+export async function updateBranchConfig(updates: Partial<BranchConfig>): Promise<BranchConfig> {
+  const current = await getBranchConfig();
   const updated = { ...current, ...updates };
-  db.prepare(`
+  await execute(`
     UPDATE branch_config SET
-      default_branch = ?,
-      protected_branches = ?,
-      allow_force_push = ?,
-      auto_cleanup_merged = ?,
-      updated_at = datetime('now')
+      default_branch = $1,
+      protected_branches = $2,
+      allow_force_push = $3,
+      auto_cleanup_merged = $4,
+      updated_at = NOW()
     WHERE id = 1
-  `).run(
+  `, [
     updated.defaultBranch,
     JSON.stringify(updated.protectedBranches),
-    updated.allowForcePush ? 1 : 0,
-    updated.autoCleanupMerged ? 1 : 0
-  );
+    updated.allowForcePush,
+    updated.autoCleanupMerged,
+  ]);
   return updated;
 }
 
-export function checkoutBranch(id: string): BranchRecord | undefined {
-  const db = getDb();
-  const branch = getBranch(id);
+export async function checkoutBranch(id: string): Promise<BranchRecord | undefined> {
+  const branch = await getBranch(id);
   if (!branch) return undefined;
 
-  db.prepare('UPDATE branches SET is_current = 1 WHERE id = ?').run(id);
-  db.prepare('UPDATE branches SET is_current = 0 WHERE id != ?').run(id);
-  db.prepare('UPDATE branches SET last_commit_at = ? WHERE id = ?').run(new Date().toISOString(), id);
+  await execute('UPDATE branches SET is_current = FALSE');
+  await execute('UPDATE branches SET is_current = TRUE, last_commit_at = NOW() WHERE id = $1', [id]);
   return getBranch(id);
 }
 
-export function getBranchStats() {
-  const db = getDb();
-  const total = (db.prepare('SELECT COUNT(*) as c FROM branches').get() as { c: number }).c;
-  const main = (db.prepare('SELECT COUNT(*) as c FROM branches WHERE is_main = 1').get() as { c: number }).c;
-  const protected_ = (db.prepare('SELECT COUNT(*) as c FROM branches WHERE is_protected = 1').get() as { c: number }).c;
-  const remote = (db.prepare('SELECT COUNT(*) as c FROM branches WHERE is_remote = 1').get() as { c: number }).c;
-  return { total, main, protected: protected_, remote };
+export async function getBranchStats() {
+  const totalRow = await queryOne<{ count: string }>('SELECT COUNT(*) as count FROM branches');
+  const mainRow = await queryOne<{ count: string }>("SELECT COUNT(*) as count FROM branches WHERE is_main = TRUE");
+  const protectedRow = await queryOne<{ count: string }>("SELECT COUNT(*) as count FROM branches WHERE is_protected = TRUE");
+  const remoteRow = await queryOne<{ count: string }>("SELECT COUNT(*) as count FROM branches WHERE is_remote = TRUE");
+  return {
+    total: parseInt(totalRow?.count ?? '0', 10),
+    main: parseInt(mainRow?.count ?? '0', 10),
+    protected: parseInt(protectedRow?.count ?? '0', 10),
+    remote: parseInt(remoteRow?.count ?? '0', 10),
+  };
 }

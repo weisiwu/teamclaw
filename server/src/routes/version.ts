@@ -18,17 +18,15 @@ import { compareTwoVersions, quickCompare } from '../services/versionCompare.js'
 import { performBump, formatBumpSummary } from '../services/versionBump.js';
 import { autoCreateTagForVersion, makeTagName as makeTagNameFromConfig, createTagRecord } from '../services/tagService.js';
 import { isValidSemver, bumpVersion } from '../services/semver.js';
-import { getDb } from '../db/sqlite.js';
-import { runMigrations } from '../db/migrations/run.js';
+import { versionRepo } from '../db/repositories/versionRepo.js';
 import { executeAutoBump, getBumpHistory } from '../services/autoBump.js';
 import path from 'path';
 import os from 'os';
 import { execSync } from 'child_process';
 
-const router = Router();
+// DB schema managed via PostgreSQL schema.sql (no SQLite migrations)
 
-// Run database migrations on module load
-runMigrations();
+const router = Router();
 
 // ========== Types ==========
 export type VersionBumpType = 'patch' | 'minor' | 'major';
@@ -68,7 +66,6 @@ export interface VersionSettings {
 }
 
 // ========== In-Memory Storage ==========
-const db = getDb();
 const settings: VersionSettings = {
   autoBump: true,
   bumpType: 'patch',
@@ -215,7 +212,7 @@ function makeTagName(version: string, prefix: VersionSettings['tagPrefix'], cust
 // ========== Routes ==========
 
 // GET /api/v1/versions — 列表
-router.get('/', (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;
   const pageSize = parseInt(req.query.pageSize as string) || 10;
   const status = req.query.status as string;
@@ -223,48 +220,33 @@ router.get('/', (req: Request, res: Response) => {
   const hasScreenshot = req.query.hasScreenshot as string;
   const hasSummary = req.query.hasSummary as string;
 
-  let sql = 'SELECT * FROM versions WHERE 1=1';
-  const params: Record<string, string | number> = {};
-
-  if (status && status !== 'all') {
-    sql += ' AND status = @status';
-    params.status = status;
-  }
-  if (branch) {
-    sql += ' AND branch = @branch';
-    params.branch = branch;
-  }
-
-  sql += ' ORDER BY created_at DESC';
-
-  // Fetch all rows for in-memory filtering (versions table is typically small)
-  const allRows = db.prepare(sql).all(params) as Array<Record<string, unknown>>;
+  // Fetch all versions (PostgreSQL)
+  const allRows = await versionRepo.search({ status: status !== 'all' ? status : undefined, branch, limit: 1000 });
 
   // Build screenshot index for hasScreenshot filtering
   const screenshotIndex = new Map<string, boolean>();
-  const screenshotData = ScreenshotModel.getAllScreenshots();
-  for (const shot of screenshotData) {
+  for (const shot of ScreenshotModel.getAllScreenshots()) {
     screenshotIndex.set(shot.versionId, true);
   }
 
-  // Build summary index for hasSummary filtering (SQLite)
+  // Build summary index for hasSummary filtering (PostgreSQL)
   const summaryIndex = new Set<string>();
-  const summaryRows = db.prepare('SELECT version_id FROM version_summaries').all() as Array<{ version_id: string }>;
-  for (const row of summaryRows) {
-    summaryIndex.add(row.version_id);
+  const summaries = await VersionSummaryModel.findAll(); // Need to add findAll to model
+  for (const s of summaries) {
+    summaryIndex.add(s.versionId);
   }
 
   // Apply in-memory filters
   let filteredRows = allRows;
   if (hasScreenshot === 'true') {
-    filteredRows = filteredRows.filter(r => screenshotIndex.get(r.id as string));
+    filteredRows = filteredRows.filter(r => screenshotIndex.get(r.id));
   } else if (hasScreenshot === 'false') {
-    filteredRows = filteredRows.filter(r => !screenshotIndex.get(r.id as string));
+    filteredRows = filteredRows.filter(r => !screenshotIndex.get(r.id));
   }
   if (hasSummary === 'true') {
-    filteredRows = filteredRows.filter(r => summaryIndex.has(r.id as string));
+    filteredRows = filteredRows.filter(r => summaryIndex.has(r.id));
   } else if (hasSummary === 'false') {
-    filteredRows = filteredRows.filter(r => !summaryIndex.has(r.id as string));
+    filteredRows = filteredRows.filter(r => !summaryIndex.has(r.id));
   }
 
   const total = filteredRows.length;
@@ -272,7 +254,7 @@ router.get('/', (req: Request, res: Response) => {
   const paginatedRows = filteredRows.slice(offset, offset + pageSize);
 
   const data = paginatedRows.map(row => {
-    const summaryRecord = VersionSummaryModel.findByVersionId(row.id as string);
+    const summaryRecord = VersionSummaryModel.findByVersionId(row.id);
     return {
       id: row.id,
       version: row.version,
@@ -284,11 +266,11 @@ router.get('/', (req: Request, res: Response) => {
       created_by: row.created_by,
       created_at: row.created_at,
       build_status: row.build_status,
-      tag_created: row.tag_created === 1,
-      gitTag: (row.git_tag as string) || undefined,
-      gitTagCreatedAt: (row.git_tag_created_at as string) || undefined,
-      hasScreenshot: !!screenshotIndex.get(row.id as string),
-      hasSummary: summaryIndex.has(row.id as string),
+      tag_created: row.tag_created,
+      gitTag: row.git_tag || undefined,
+      gitTagCreatedAt: row.git_tag_created_at || undefined,
+      hasScreenshot: !!screenshotIndex.get(row.id),
+      hasSummary: summaryIndex.has(row.id),
     };
   });
 

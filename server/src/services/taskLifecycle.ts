@@ -1,12 +1,14 @@
 /**
  * Task Lifecycle 服务
  * 任务机制模块 - 任务生命周期状态机
- * 
+ *
  * 管理任务状态流转：pending → running → done/failed/suspended/cancelled
  * 提供状态变更钩子（onStatusChange）
+ * 数据持久化：PostgreSQL（通过 taskRepo）+ 内存 Map 缓存
  */
 
 import { Task, TaskStatus } from '../models/task.js';
+import { taskRepo } from '../db/repositories/taskRepo.js';
 
 // 注册生命周期钩子（延迟导入避免循环依赖）
 setTimeout(async () => {
@@ -40,18 +42,94 @@ class TaskLifecycleService {
   private createHooks: TaskCreateHook[] = [];
   private startHooks: TaskStartHook[] = [];
 
-  // 任务存储
+  // 任务存储（内存 Map + DB 持久化）
   public tasks: Map<string, Task> = new Map();
   // Alias for backwards compatibility with direct access
   public get taskStore() { return this.tasks; }
 
-  private constructor() {}
+  private constructor() {
+    this.loadFromDb().catch(err => {
+      console.error('[taskLifecycle] Failed to load tasks from DB on startup:', err);
+    });
+  }
 
   static getInstance(): TaskLifecycleService {
     if (!TaskLifecycleService.instance) {
       TaskLifecycleService.instance = new TaskLifecycleService();
     }
     return TaskLifecycleService.instance;
+  }
+
+  /**
+   * 从 DB 加载任务到内存 Map
+   */
+  private async loadFromDb(): Promise<void> {
+    try {
+      const rows = await taskRepo.findAll();
+      for (const row of rows) {
+        const task: Task = {
+          taskId: row.task_id,
+          title: row.title,
+          description: row.description,
+          status: row.status as TaskStatus,
+          priority: row.priority as Task['priority'],
+          assignedAgent: row.assigned_agent ?? undefined,
+          assignedSessionKey: undefined,
+          parentTaskId: row.parent_task_id ?? undefined,
+          subtaskIds: row.subtask_ids ?? [],
+          dependsOn: row.depends_on ?? [],
+          blockingTasks: row.blocking_tasks ?? [],
+          sessionId: row.session_id,
+          contextSnapshot: row.context_snapshot ? JSON.stringify(row.context_snapshot) : undefined,
+          progress: row.progress ?? 0,
+          lastHeartbeat: row.last_heartbeat ? new Date(row.last_heartbeat).toISOString() : undefined,
+          createdBy: row.created_by,
+          tags: row.tags ?? [],
+          result: row.result ?? undefined,
+          retryCount: row.retry_count ?? 0,
+          maxRetries: row.max_retries ?? 3,
+          versionId: row.version_id ?? undefined,
+          createdAt: new Date(row.created_at).toISOString(),
+          updatedAt: new Date(row.updated_at).toISOString(),
+          startedAt: row.started_at ? new Date(row.started_at).toISOString() : undefined,
+          completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : undefined,
+        };
+        this.tasks.set(task.taskId, task);
+      }
+      console.log(`[taskLifecycle] Loaded ${rows.length} tasks from PostgreSQL`);
+    } catch (err) {
+      console.warn('[taskLifecycle] Could not load tasks from DB, starting fresh:', err);
+    }
+  }
+
+  /**
+   * 同步任务到 DB（异步，不阻塞主流程）
+   */
+  private syncToDb(task: Task): void {
+    taskRepo.upsert({
+      taskId: task.taskId,
+      title: task.title,
+      description: task.description,
+      status: task.status,
+      priority: task.priority,
+      assignedAgent: task.assignedAgent,
+      parentTaskId: task.parentTaskId,
+      sessionId: task.sessionId,
+      createdBy: task.createdBy,
+      startedAt: task.startedAt,
+      completedAt: task.completedAt,
+      contextSnapshot: task.contextSnapshot ? JSON.parse(task.contextSnapshot) : undefined,
+      tags: task.tags,
+      maxRetries: task.maxRetries,
+      retryCount: task.retryCount,
+      progress: task.progress,
+      lastHeartbeat: task.lastHeartbeat,
+      result: task.result,
+      versionId: task.versionId,
+      subtaskIds: task.subtaskIds,
+      dependsOn: task.dependsOn,
+      blockingTasks: task.blockingTasks,
+    }).catch(err => console.error('[taskLifecycle] Failed to sync task to DB:', err));
   }
 
   /**
@@ -98,12 +176,14 @@ class TaskLifecycleService {
     // 更新时间戳
     if (newStatus === 'running' && !task.startedAt) {
       task.startedAt = task.updatedAt;
-      // 执行开始钩子
       await this.executeStartHooks(task);
     }
     if (['done', 'failed', 'cancelled'].includes(newStatus)) {
       task.completedAt = task.updatedAt;
     }
+
+    // 同步到 DB
+    this.syncToDb(task);
 
     // 执行钩子
     await this.executeHooks(task, oldStatus, newStatus);
@@ -142,6 +222,10 @@ class TaskLifecycleService {
       retryCount: 0,
     };
     this.tasks.set(task.taskId, task);
+
+    // 持久化到 DB
+    this.syncToDb(task);
+
     // 执行创建钩子
     this.executeCreateHooks(task);
     // 初始化SLA + 触发事件（异步，通过动态import避免循环依赖）
@@ -180,8 +264,11 @@ class TaskLifecycleService {
   /**
    * 删除任务
    */
-  deleteTask(taskId: string): boolean {
-    return this.tasks.delete(taskId);
+  async deleteTask(taskId: string): Promise<boolean> {
+    this.tasks.delete(taskId);
+    // 从 DB 删除
+    await taskRepo.delete(taskId).catch(err => console.error('[taskLifecycle] Failed to delete task from DB:', err));
+    return true;
   }
 
   /**
@@ -194,7 +281,8 @@ class TaskLifecycleService {
       throw new Error(`Can only retry failed tasks, current: ${task.status}`);
     }
     task.retryCount += 1;
-    return this.transition(taskId, 'pending');
+    await this.transition(taskId, 'pending');
+    return this.tasks.get(taskId) ?? null;
   }
 
   /**
@@ -206,6 +294,7 @@ class TaskLifecycleService {
     task.progress = Math.max(0, Math.min(100, progress));
     task.updatedAt = new Date().toISOString();
     task.lastHeartbeat = task.updatedAt;
+    this.syncToDb(task);
     return task;
   }
 

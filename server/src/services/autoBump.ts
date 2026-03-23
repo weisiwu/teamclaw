@@ -1,9 +1,10 @@
 /**
  * autoBump.ts — 自动版本升级服务
  * 供三处共用：build 成功、task done、手动触发
+ * 数据存储：PostgreSQL
  */
 
-import { getDb } from '../db/sqlite.js';
+import { execute, query } from '../db/pg.js';
 import { performBump, formatBumpSummary } from './versionBump.js';
 import { createTagRecord } from './tagService.js';
 import { createTag } from './gitService.js';
@@ -41,7 +42,7 @@ export interface ExecuteAutoBumpOptions {
 }
 
 /** 从 DB 插入一条 bump_history 记录 */
-function insertBumpHistoryRecord(params: {
+async function insertBumpHistoryRecord(params: {
   versionId: string;
   versionName: string;
   previousVersion: string;
@@ -52,16 +53,14 @@ function insertBumpHistoryRecord(params: {
   triggerTaskTitle?: string;
   summary?: string;
   createdBy?: string;
-}): BumpHistoryRecord {
-  const db = getDb();
+}): Promise<BumpHistoryRecord> {
   const id = `bh_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const now = new Date().toISOString();
-  const settings = getVersionSettings();
 
-  db.prepare(`
+  await execute(`
     INSERT INTO bump_history (id, version_id, version_name, previous_version, new_version, bump_type, trigger_type, trigger_task_id, trigger_task_title, summary, created_by, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+  `, [
     id,
     params.versionId,
     params.versionName,
@@ -73,8 +72,8 @@ function insertBumpHistoryRecord(params: {
     params.triggerTaskTitle || null,
     params.summary || null,
     params.createdBy || 'system',
-    now
-  );
+    now,
+  ]);
 
   return {
     id,
@@ -123,7 +122,6 @@ export async function executeAutoBump(
     summary: customSummary,
   } = options;
 
-  const db = getDb();
   const settings = getVersionSettings();
 
   // 计算 bump 类型和新版本号
@@ -155,10 +153,10 @@ export async function executeAutoBump(
   const newVersionId = `v_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   const now = new Date().toISOString();
 
-  db.prepare(`
+  await execute(`
     INSERT INTO versions (id, version, branch, summary, created_by, created_at, build_status, tag_created)
-    VALUES (?, ?, 'main', ?, 'system', ?, 'success', 0)
-  `).run(newVersionId, newVersion, computedSummary, now);
+    VALUES ($1, $2, 'main', $3, 'system', $4, 'success', FALSE)
+  `, [newVersionId, newVersion, computedSummary, now]);
 
   // 创建 git tag
   let gitTagCreated = false;
@@ -175,7 +173,7 @@ export async function executeAutoBump(
       );
     try {
       createTag(effectiveProjectPath, gitTagName, computedSummary);
-      db.prepare('UPDATE versions SET tag_created = 1 WHERE id = ?').run(newVersionId);
+      await execute('UPDATE versions SET tag_created = TRUE WHERE id = $1', [newVersionId]);
       gitTagCreated = true;
     } catch (err) {
       console.warn('[autoBump] Failed to create git tag:', err);
@@ -200,7 +198,7 @@ export async function executeAutoBump(
   }
 
   // 记录 bump_history
-  const historyRecord = insertBumpHistoryRecord({
+  const historyRecord = await insertBumpHistoryRecord({
     versionId: newVersionId,
     versionName: newVersion,
     previousVersion: currentVersion,
@@ -228,37 +226,29 @@ export async function executeAutoBump(
 /**
  * 获取某个版本的 bump 历史
  */
-export function getBumpHistory(versionId: string): BumpHistoryRecord[] {
-  const db = getDb();
-  const rows = db
-    .prepare(
-      `SELECT * FROM bump_history WHERE version_id = ? ORDER BY created_at DESC`
-    )
-    .all(versionId) as Array<Record<string, unknown>>;
-
+export async function getBumpHistory(versionId: string): Promise<BumpHistoryRecord[]> {
+  const rows = await query<Record<string, unknown>>(
+    'SELECT * FROM bump_history WHERE version_id = $1 ORDER BY created_at DESC',
+    [versionId]
+  );
   return rows.map(rowToBumpHistoryRecord);
 }
 
 /**
  * 获取所有 bump 历史（带分页）
  */
-export function getAllBumpHistory(
+export async function getAllBumpHistory(
   limit = 50,
   offset = 0
-): { records: BumpHistoryRecord[]; total: number } {
-  const db = getDb();
-  const totalRow = db
-    .prepare('SELECT COUNT(*) as cnt FROM bump_history')
-    .get() as { cnt: number };
-  const rows = db
-    .prepare(
-      `SELECT * FROM bump_history ORDER BY created_at DESC LIMIT ? OFFSET ?`
-    )
-    .all(limit, offset) as Array<Record<string, unknown>>;
-
+): Promise<{ records: BumpHistoryRecord[]; total: number }> {
+  const totalRow = await queryOne<{ count: string }>('SELECT COUNT(*) as count FROM bump_history');
+  const rows = await query<Record<string, unknown>>(
+    'SELECT * FROM bump_history ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+    [limit, offset]
+  );
   return {
     records: rows.map(rowToBumpHistoryRecord),
-    total: totalRow.cnt,
+    total: parseInt(totalRow?.count ?? '0', 10),
   };
 }
 

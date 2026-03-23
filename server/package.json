@@ -11,7 +11,6 @@
   "dependencies": {
     "archiver": "^7.0.1",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^11.9.1",
     "chromadb": "^3.4.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

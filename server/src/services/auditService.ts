@@ -1,11 +1,11 @@
 /**
  * Audit Service
  * 后台管理平台 - 审计日志服务
- * 支持 SQLite DB 写入（audit_log 表）+ JSON 文件回退
+ * PostgreSQL 持久化 + JSON 文件回退
  */
 
 import { AuditLog, AuditAction, AuditLogQuery, AuditLogResponse } from '../models/auditLog.js';
-import { getDb } from '../db/sqlite.js';
+import { execute, query, queryOne } from '../db/pg.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -16,16 +16,15 @@ function generateId(prefix: string): string {
 }
 
 /**
- * DB-backed audit log
+ * DB-backed audit log — PostgreSQL
  * Falls back to JSON file if DB write fails
  */
-function writeToDb(entry: AuditLog): void {
+async function writeToDb(entry: AuditLog): Promise<void> {
   try {
-    const db = getDb();
-    db.prepare(`
+    await execute(`
       INSERT INTO audit_log (id, action, user_id, target, details, ip_address, user_agent, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [
       entry.id,
       entry.action,
       entry.actor,
@@ -34,14 +33,14 @@ function writeToDb(entry: AuditLog): void {
       entry.ipAddress || null,
       entry.userAgent || null,
       entry.timestamp,
-    );
+    ]);
 
     // Prune: keep only last 10000 rows in DB
-    db.prepare(`
+    await execute(`
       DELETE FROM audit_log WHERE id NOT IN (
         SELECT id FROM audit_log ORDER BY created_at DESC LIMIT 10000
       )
-    `).run();
+    `);
   } catch {
     // Fallback: also write to JSON file for redundancy
     writeToJsonFile(entry);
@@ -96,54 +95,64 @@ export class AuditService {
       userAgent: params.userAgent,
       timestamp: new Date().toISOString(),
     };
-    writeToDb(entry);
+    await writeToDb(entry);
     return entry;
   }
 
   /**
-   * 查询审计日志（优先从 DB 读取，fallback 到 JSON）
+   * 查询审计日志（PostgreSQL + JSON fallback）
    */
-  async query(query: AuditLogQuery): Promise<AuditLogResponse> {
+  async query(q: AuditLogQuery): Promise<AuditLogResponse> {
     try {
-      const db = getDb();
       const conditions: string[] = [];
       const params: unknown[] = [];
+      const countParams: unknown[] = [];
+      let idx = 1;
 
-      if (query.action) {
-        conditions.push('action = ?');
-        params.push(query.action);
+      if (q.action) {
+        conditions.push(`action = $${idx++}`);
+        params.push(q.action);
+        countParams.push(q.action);
       }
-      if (query.actor) {
-        conditions.push('user_id = ?');
-        params.push(query.actor);
+      if (q.actor) {
+        conditions.push(`user_id = $${idx++}`);
+        params.push(q.actor);
+        countParams.push(q.actor);
       }
-      if (query.target) {
-        conditions.push('target = ?');
-        params.push(query.target);
+      if (q.target) {
+        conditions.push(`target = $${idx++}`);
+        params.push(q.target);
+        countParams.push(q.target);
       }
-      if (query.startDate) {
-        conditions.push('created_at >= ?');
-        params.push(query.startDate);
+      if (q.startDate) {
+        conditions.push(`created_at >= $${idx++}`);
+        params.push(new Date(q.startDate));
+        countParams.push(new Date(q.startDate));
       }
-      if (query.endDate) {
-        conditions.push('created_at <= ?');
-        params.push(query.endDate);
+      if (q.endDate) {
+        conditions.push(`created_at <= $${idx++}`);
+        params.push(new Date(q.endDate));
+        countParams.push(new Date(q.endDate));
       }
 
       const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
       // Count total
-      const countRow = db.prepare(`SELECT COUNT(*) as total FROM audit_log ${where}`).get(...params) as { total: number };
+      const countRow = await queryOne<{ count: string }>(
+        `SELECT COUNT(*) as count FROM audit_log ${where}`,
+        countParams
+      );
 
       // Query with pagination
-      const limit = query.limit || 50;
-      const offset = query.offset || 0;
-      const rows = db.prepare(`
-        SELECT id, action, user_id as actor, target, details, ip_address as ipAddress, user_agent as userAgent, created_at as timestamp
-        FROM audit_log ${where}
-        ORDER BY created_at DESC
-        LIMIT ? OFFSET ?
-      `).all(...params, limit, offset) as Array<Record<string, unknown>>;
+      const limit = q.limit || 50;
+      const offset = q.offset || 0;
+      const rows = await query<Record<string, unknown>>(
+        `SELECT id, action, user_id as actor, target, details, ip_address as ipAddress, user_agent as userAgent, created_at as timestamp
+         FROM audit_log ${where}
+         ORDER BY created_at DESC
+         LIMIT $${idx++} OFFSET $${idx}`,
+        [...params, limit, offset]
+      );
 
       const list: AuditLog[] = rows.map(row => ({
         id: row.id as string,
@@ -156,7 +165,7 @@ export class AuditService {
         timestamp: row.timestamp as string,
       }));
 
-      return { list, total: countRow.total };
+      return { list, total: parseInt(countRow?.count ?? '0', 10) };
     } catch {
       // Fallback to JSON file query
       let store: { logs: AuditLog[] } = { logs: [] };
@@ -169,13 +178,13 @@ export class AuditService {
       }
       let filtered = store.logs;
 
-      if (query.action) filtered = filtered.filter(l => l.action === query.action);
-      if (query.actor) filtered = filtered.filter(l => l.actor === query.actor);
-      if (query.target) filtered = filtered.filter(l => l.target === query.target);
-      if (query.startDate) filtered = filtered.filter(l => l.timestamp >= query.startDate!);
-      if (query.endDate) filtered = filtered.filter(l => l.timestamp <= query.endDate!);
-      if (query.keyword) {
-        const kw = query.keyword.toLowerCase();
+      if (q.action) filtered = filtered.filter(l => l.action === q.action);
+      if (q.actor) filtered = filtered.filter(l => l.actor === q.actor);
+      if (q.target) filtered = filtered.filter(l => l.target === q.target);
+      if (q.startDate) filtered = filtered.filter(l => l.timestamp >= q.startDate!);
+      if (q.endDate) filtered = filtered.filter(l => l.timestamp <= q.endDate!);
+      if (q.keyword) {
+        const kw = q.keyword.toLowerCase();
         filtered = filtered.filter(l =>
           l.action.toLowerCase().includes(kw) ||
           l.actor.toLowerCase().includes(kw) ||
@@ -186,8 +195,8 @@ export class AuditService {
 
       filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       const total = filtered.length;
-      const limit = query.limit || 50;
-      const offset = query.offset || 0;
+      const limit = q.limit || 50;
+      const offset = q.offset || 0;
       return { list: filtered.slice(offset, offset + limit), total };
     }
   }
@@ -195,8 +204,8 @@ export class AuditService {
   /**
    * 导出 CSV
    */
-  async exportCsv(query: AuditLogQuery): Promise<string> {
-    const { list } = await this.query({ ...query, limit: 10000 });
+  async exportCsv(q: AuditLogQuery): Promise<string> {
+    const { list } = await this.query({ ...q, limit: 10000 });
     const header = 'ID,时间,操作类型,操作者,目标,IP,详情\n';
     const rows = list.map(l =>
       `"${l.id}","${l.timestamp}","${l.action}","${l.actor}","${l.target || ''}","${l.ipAddress || ''}","${l.details ? JSON.stringify(l.details).replace(/"/g, '""') : ''}"`
