@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     const paginatedVersions = versions.slice(start, start + pageSize);
 
     return jsonSuccess({
-      items: paginatedVersions,
+      data: paginatedVersions,
       total,
       page,
       pageSize,

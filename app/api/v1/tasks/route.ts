@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     const result = await taskApi.getList(filters);
 
     return jsonSuccess({
-      items: result.data,
+      data: result.data,
       total: result.total,
       page: result.page,
       pageSize: result.pageSize,
