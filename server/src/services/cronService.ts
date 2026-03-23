@@ -5,6 +5,7 @@
 
 import { CronJob, CronRun, CreateCronJobRequest, UpdateCronJobRequest } from '../models/cronJob.js';
 import * as cron from 'node-cron';
+import { getFeishuConfig, sendFeishuMessage } from './feishuService.js';
 
 // In-memory storage (替换为 DB/Redis 时修改此处)
 const cronJobs = new Map<string, CronJob>();
@@ -179,31 +180,66 @@ export class CronService {
     job.lastRunAt = run.startTime;
     job.runCount += 1;
 
-    // Simulate execution (实际会发消息给群聊)
-    setTimeout(() => {
-      const success = Math.random() > 0.1; // 90% success rate for simulation
-      run.endTime = new Date().toISOString();
-      run.status = success ? 'success' : 'failed';
-      run.durationMs = Math.floor(Math.random() * 5000) + 1000;
-      run.output = success
-        ? `Prompt 已发送至群聊: "${job.prompt.slice(0, 50)}..."`
-        : undefined;
-      run.error = success ? undefined : '消息发送失败，请检查群聊配置';
-
-      job.status = job.enabled ? 'active' : 'paused';
-      job.lastRunStatus = run.status;
-      job.lastRunOutput = run.output;
-      job.lastRunError = run.error;
-      if (success) {
-        job.successCount += 1;
-      } else {
-        job.failCount += 1;
-      }
-      job.nextRunAt = parseCronNextRun(job.cron);
-      job.updatedAt = new Date().toISOString();
-    }, 1500);
+    // 实际发送到飞书群聊
+    this.executeAndSend(job, run).catch(err => {
+      console.error(`[cronService] trigger error for job ${id}:`, err);
+    });
 
     return run;
+  }
+
+  private async executeAndSend(job: CronJob, run: CronRun): Promise<void> {
+    const startTime = Date.now();
+    let success = false;
+    let output: string | undefined;
+    let errorMsg: string | undefined;
+
+    try {
+      const feishuConfig = getFeishuConfig();
+      if (!feishuConfig?.chatId) {
+        // 没有配置飞书群聊时，只记录日志
+        console.log(`[cronService] Feishu not configured, would send to cron job ${job.id}: ${job.prompt}`);
+        output = `Cron Job "${job.name}" 触发（飞书未配置，消息未发送）`;
+        success = true;
+      } else {
+        const result = await sendFeishuMessage({
+          appId: feishuConfig.appId,
+          appSecret: feishuConfig.appSecret,
+          receiveIdType: 'chat_id',
+          receiveId: feishuConfig.chatId,
+          msgType: 'text',
+          content: JSON.stringify({ text: `[Cron] ${job.name}\n\n${job.prompt}` }),
+        });
+        output = `Prompt 已发送至群聊 (messageId: ${result.messageId}): "${job.prompt.slice(0, 50)}..."`;
+        success = true;
+        console.log(`[cronService] Sent cron prompt for job ${job.id} to Feishu: ${result.messageId}`);
+      }
+    } catch (err) {
+      errorMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[cronService] Failed to send cron prompt for job ${job.id}:`, err);
+    }
+
+    const endTime = new Date().toISOString();
+    run.endTime = endTime;
+    run.status = success ? 'success' : 'failed';
+    run.durationMs = Date.now() - new Date(run.startTime).getTime();
+    run.output = output;
+    run.error = errorMsg;
+
+    const cronJob = cronJobs.get(run.cronJobId);
+    if (cronJob) {
+      cronJob.status = cronJob.enabled ? 'active' : 'paused';
+      cronJob.lastRunStatus = run.status;
+      cronJob.lastRunOutput = run.output;
+      cronJob.lastRunError = run.error;
+      if (success) {
+        cronJob.successCount += 1;
+      } else {
+        cronJob.failCount += 1;
+      }
+      cronJob.nextRunAt = parseCronNextRun(cronJob.cron);
+      cronJob.updatedAt = new Date().toISOString();
+    }
   }
 
   /**

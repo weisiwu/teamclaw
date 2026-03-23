@@ -187,7 +187,7 @@ router.delete('/:tagName', requireAdmin, (req, res) => {
         return;
     }
     if (record.protected) {
-        res.status(403).json({ code: 403, message: '受保护的 tag 不可删除' });
+        res.status(403).json(error(403, '受保护的 tag 不可删除', 'FORBIDDEN'));
         return;
     }
     const deleted = removeTag(record.id, { projectPath });
@@ -246,7 +246,7 @@ router.put('/:tagName/rename', requireAdmin, (req, res) => {
         return;
     }
     if (record.protected) {
-        res.status(403).json({ code: 403, message: '受保护的 tag 不可重命名' });
+        res.status(403).json(error(403, '受保护的 tag 不可重命名', 'FORBIDDEN'));
         return;
     }
     const updated = renameTag(record.id, newName, { projectPath });

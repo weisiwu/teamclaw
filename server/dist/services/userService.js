@@ -8,49 +8,6 @@ const userStore = new Map();
 function generateId() {
     return `u_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
-// 初始化种子数据
-function initSeedData() {
-    if (userStore.size > 0)
-        return;
-    const seeds = [
-        {
-            id: generateId(),
-            userId: "user_001",
-            name: "卫思伍",
-            role: "admin",
-            weight: ROLE_WEIGHTS.admin,
-            wechatId: "wxid_weisiwu",
-            feishuId: "ou_da6b48690e83a478e3e3993ecc62da0e",
-            remark: "项目创始人",
-            createdAt: "2026-01-15T10:00:00Z",
-            updatedAt: "2026-01-15T10:00:00Z",
-        },
-        {
-            id: generateId(),
-            userId: "user_002",
-            name: "张三",
-            role: "vice_admin",
-            weight: ROLE_WEIGHTS.vice_admin,
-            wechatId: "wxid_zhangsan",
-            remark: "技术负责人",
-            createdAt: "2026-01-20T14:30:00Z",
-            updatedAt: "2026-01-20T14:30:00Z",
-        },
-        {
-            id: generateId(),
-            userId: "user_003",
-            name: "李四",
-            role: "member",
-            weight: ROLE_WEIGHTS.member,
-            wechatId: "wxid_lisi",
-            remark: "开发工程师",
-            createdAt: "2026-02-01T09:15:00Z",
-            updatedAt: "2026-02-01T09:15:00Z",
-        },
-    ];
-    seeds.forEach((u) => userStore.set(u.id, u));
-}
-initSeedData();
 // ============ CRUD 操作 ============
 /**
  * 获取所有用户（支持分页、角色筛选）

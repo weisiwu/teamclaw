@@ -3,7 +3,10 @@
  * 飞书开放平台 API 调用封装
  */
 const FEISHU_BASE_URL = 'https://open.feishu.cn';
-const FEISHU_API_VERSION = 'v6';
+/**
+ * 获取 Feishu App Access Token
+ * 文档: https://open.feishu.cn/document/server-docs/authentication-management/access-token/app_access_token_internal
+ */
 /**
  * 获取 Feishu App Access Token
  * 文档: https://open.feishu.cn/document/server-docs/authentication-management/access-token/app_access_token_internal
@@ -145,4 +148,72 @@ export async function getFeishuChatMembers(params) {
         pageToken: data.data?.page_token,
         hasMore: data.data?.has_more ?? false,
     };
+}
+/**
+ * 发送飞书消息（文本）
+ * 文档: https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message/create
+ */
+export async function sendFeishuMessage(params) {
+    const { appId, appSecret, receiveIdType, receiveId, msgType, content } = params;
+    const accessToken = await getAppAccessToken(appId, appSecret);
+    const response = await fetch(`${FEISHU_BASE_URL}/open-apis/im/v1/messages?receive_id_type=${receiveIdType}`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            receive_id: receiveId,
+            msg_type: msgType,
+            content,
+        }),
+    });
+    if (!response.ok) {
+        throw new Error(`Failed to send Feishu message: ${response.status} ${response.statusText}`);
+    }
+    const data = await response.json();
+    if (data.code !== 0) {
+        throw new Error(`Feishu API error: ${data.code} ${data.msg}`);
+    }
+    return { messageId: data.data?.message_id ?? '' };
+}
+/**
+ * 发送飞书消息（富文本卡片）
+ * 文档: https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message/create
+ */
+export async function sendFeishuCard(params) {
+    const { appId, appSecret, receiveIdType, receiveId, card } = params;
+    const accessToken = await getAppAccessToken(appId, appSecret);
+    const response = await fetch(`${FEISHU_BASE_URL}/open-apis/im/v1/messages?receive_id_type=${receiveIdType}`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            receive_id: receiveId,
+            msg_type: 'interactive',
+            content: JSON.stringify(card),
+        }),
+    });
+    if (!response.ok) {
+        throw new Error(`Failed to send Feishu card: ${response.status} ${response.statusText}`);
+    }
+    const data = await response.json();
+    if (data.code !== 0) {
+        throw new Error(`Feishu API error: ${data.code} ${data.msg}`);
+    }
+    return { messageId: data.data?.message_id ?? '' };
+}
+/**
+ * 获取飞书配置（从环境变量）
+ */
+export function getFeishuConfig() {
+    const appId = process.env.FEISHU_APP_ID;
+    const appSecret = process.env.FEISHU_APP_SECRET;
+    const chatId = process.env.FEISHU_CHAT_ID;
+    if (appId && appSecret) {
+        return { appId, appSecret, chatId };
+    }
+    return null;
 }

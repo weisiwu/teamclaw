@@ -3,6 +3,7 @@ import { pool } from '../utils/db.js';
 import { redis } from '../utils/redis.js';
 import { createChromaClient } from '../utils/chromadb.js';
 import { getDb } from '../db/sqlite.js';
+import { success, error } from '../utils/response.js';
 const router = Router();
 async function checkPostgres() {
     const start = Date.now();
@@ -128,31 +129,35 @@ router.get('/health/detailed', async (req, res) => {
     const allOk = [postgres, redis, chromadb, sqlite].every(s => s.status === 'ok');
     const anyError = [postgres, redis, chromadb, sqlite].some(s => s.status === 'error');
     const statusCode = allOk ? 200 : anyError ? 503 : 200;
-    res.status(statusCode)
-        .setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=60')
-        .json({
-        code: statusCode,
-        data: {
-            status: allOk ? 'ok' : anyError ? 'error' : 'degraded',
-            timestamp: new Date().toISOString(),
-            uptime: process.uptime(),
-            services: { postgres, redis, chromadb, sqlite },
-            lastBuild: lastBuild || { status: 'none', message: 'No builds found' },
-            lastVersion: lastVersion || { status: 'none', message: 'No versions found' },
-        },
-        message: allOk ? 'All services healthy' : 'Some services are experiencing issues',
-    });
+    const healthData = {
+        status: allOk ? 'ok' : anyError ? 'error' : 'degraded',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        services: { postgres, redis, chromadb, sqlite },
+        lastBuild: lastBuild || { status: 'none', message: 'No builds found' },
+        lastVersion: lastVersion || { status: 'none', message: 'No versions found' },
+    };
+    if (statusCode === 200) {
+        res.status(200)
+            .setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=60')
+            .json(success(healthData));
+    }
+    else {
+        res.status(503)
+            .setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=60')
+            .json(error(503, 'Some services are experiencing issues', 'SERVICE_UNAVAILABLE'));
+    }
 });
-router.get('/health/live', (req, res) => {
-    res.json({ code: 200, data: { alive: true }, message: 'OK' });
+router.get('/health/live', (_req, res) => {
+    res.json(success({ alive: true }));
 });
-router.get('/health/ready', async (req, res) => {
+router.get('/health/ready', async (_req, res) => {
     try {
         await pool.query('SELECT 1');
-        res.json({ code: 200, data: { ready: true }, message: 'Ready' });
+        res.json(success({ ready: true }));
     }
     catch {
-        res.status(503).json({ code: 503, data: { ready: false }, message: 'Not ready' });
+        res.status(503).json(error(503, 'Not ready', 'SERVICE_UNAVAILABLE'));
     }
 });
 export default router;

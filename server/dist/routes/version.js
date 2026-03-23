@@ -23,6 +23,7 @@ import versionScreenshotRouter from './versionScreenshot.js';
 import versionSummaryRouter from './versionSummary.js';
 import versionBumpRouter from './versionBump.js';
 import versionSettingsRouter from './versionSettings.js';
+import versionChangeStatsRouter from './versionChangeStats.js';
 const router = Router();
 const idParamSchema = z.string().min(1, 'id is required').max(100).regex(/^[a-zA-Z0-9_-]+$/, 'id contains invalid characters');
 function validateId(paramName = 'id') {
@@ -136,7 +137,7 @@ router.post('/', (req, res) => {
         return;
     }
     if (!isValidSemver(version)) {
-        res.status(400).json({ code: 400, message: '无效的版本号格式，需要 semver 如 1.0.0' });
+        res.status(400).json(error(400, '无效的版本号格式，需要 semver 如 1.0.0', 'BAD_REQUEST'));
         return;
     }
     const id = `v_${Date.now()}`;
@@ -268,4 +269,5 @@ router.use('/', versionScreenshotRouter);
 router.use('/', versionSummaryRouter);
 router.use('/', versionBumpRouter);
 router.use('/', versionSettingsRouter);
+router.use('/change-stats', versionChangeStatsRouter);
 export default router;

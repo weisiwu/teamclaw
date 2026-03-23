@@ -4,6 +4,7 @@
  */
 import { checkPermission } from "../services/permissionService.js";
 import { verifyToken } from "../utils/jwt.js";
+import { error } from "../utils/response.js";
 /**
  * 从 Authorization header 中提取并验证 JWT Token
  * Header 格式: Authorization: Bearer <token>
@@ -54,11 +55,7 @@ export function requirePermission(agent) {
         const user = extractUser(req);
         // 未携带有效身份信息
         if (!user) {
-            res.status(401).json({
-                code: 401,
-                data: null,
-                message: "未提供有效身份信息，请通过登录获取 Token",
-            });
+            res.status(401).json(error(401, '未提供有效身份信息，请通过登录获取 Token', 'UNAUTHORIZED'));
             return;
         }
         // 权限检查
@@ -66,11 +63,7 @@ export function requirePermission(agent) {
         req.user = { id: user.id, role: user.role };
         req.permission = result;
         if (!result.allowed) {
-            res.status(403).json({
-                code: 403,
-                data: null,
-                message: result.reason || "没有权限",
-            });
+            res.status(403).json(error(403, result.reason || '没有权限', 'FORBIDDEN'));
             return;
         }
         next();
@@ -96,11 +89,7 @@ export function optionalAuth(req, _res, next) {
 export function requireAuth(req, res, next) {
     const user = extractUser(req);
     if (!user) {
-        res.status(401).json({
-            code: 401,
-            data: null,
-            message: "未提供有效身份信息，请通过登录获取 Token",
-        });
+        res.status(401).json(error(401, '未提供有效身份信息，请通过登录获取 Token', 'UNAUTHORIZED'));
         return;
     }
     req.user = { id: user.id, role: user.role };
@@ -112,19 +101,11 @@ export function requireAuth(req, res, next) {
 export function requireAdmin(req, res, next) {
     const user = extractUser(req);
     if (!user) {
-        res.status(401).json({
-            code: 401,
-            data: null,
-            message: "未提供有效身份信息",
-        });
+        res.status(401).json(error(401, '未提供有效身份信息', 'UNAUTHORIZED'));
         return;
     }
     if (user.role !== "admin" && user.role !== "vice_admin") {
-        res.status(403).json({
-            code: 403,
-            data: null,
-            message: "需要管理员或副管理员权限",
-        });
+        res.status(403).json(error(403, '需要管理员或副管理员权限', 'FORBIDDEN'));
         return;
     }
     req.user = { id: user.id, role: user.role };

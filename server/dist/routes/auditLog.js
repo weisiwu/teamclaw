@@ -3,7 +3,7 @@
  * 后台管理平台 - 审计日志 API
  */
 import { Router } from 'express';
-import { success } from '../utils/response.js';
+import { success, error } from '../utils/response.js';
 import { auditService } from '../services/auditService.js';
 import { requireAuth } from '../middleware/auth.js';
 const router = Router();
@@ -24,7 +24,7 @@ router.get('/', requireAuth, async (req, res) => {
         res.json(success(result));
     }
     catch (e) {
-        res.status(500).json({ success: false, error: e.message });
+        res.status(500).json(error(500, e.message, 'INTERNAL_ERROR'));
     }
 });
 // GET /api/v1/admin/audit-logs/export - 导出 CSV
@@ -43,7 +43,7 @@ router.get('/export', requireAuth, async (req, res) => {
         res.send(csv);
     }
     catch (e) {
-        res.status(500).json({ success: false, error: e.message });
+        res.status(500).json(error(500, e.message, 'INTERNAL_ERROR'));
     }
 });
 export default router;

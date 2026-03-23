@@ -25,15 +25,9 @@ function getFeishuConfig() {
 router.get('/messages', async (req, res) => {
     try {
         const config = getFeishuConfig();
-        // Return mock data if no Feishu config is available
+        // Return error if no Feishu config is available
         if (!config) {
-            // Return a notice that Feishu is not configured
-            return res.json(success({
-                messages: [],
-                hasMore: false,
-                notice: '飞书 API 未配置，请设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET 环境变量',
-                configured: false,
-            }));
+            return res.status(503).json(error(503, '飞书未配置，请在 .env 中设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET'));
         }
         const { container_id_type = 'chat', container_id, start_time, end_time, page_size = '20', page_token, sort_type = 'ByCreateTimeDesc', } = req.query;
         if (!container_id) {
@@ -92,11 +86,7 @@ router.get('/chats', async (req, res) => {
     try {
         const config = getFeishuConfig();
         if (!config) {
-            return res.json(success({
-                chats: [],
-                notice: '飞书 API 未配置',
-                configured: false,
-            }));
+            return res.status(503).json(error(503, '飞书未配置，请在 .env 中设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET'));
         }
         const { page_size = '20', page_token } = req.query;
         const accessToken = await getAppAccessTokenSimple(config.appId, config.appSecret);
@@ -140,11 +130,7 @@ router.get('/chats/:chatId/members', async (req, res) => {
     try {
         const config = getFeishuConfig();
         if (!config) {
-            return res.json(success({
-                members: [],
-                notice: '飞书 API 未配置',
-                configured: false,
-            }));
+            return res.status(503).json(error(503, '飞书未配置，请在 .env 中设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET'));
         }
         const { chatId } = req.params;
         const { page_size = '50', page_token } = req.query;
