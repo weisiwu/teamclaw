@@ -1,6 +1,7 @@
 import path from "path";
 import fs from "fs/promises";
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/api-shared";
 
 /** CORS headers for cross-origin API access */
 const corsHeaders = {
@@ -191,6 +192,11 @@ export async function GET(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
+
+  // Auth: require authentication
+  const authResult = requireAuth(request, requestId);
+  if (authResult instanceof NextResponse) return authResult;
+
   const { searchParams } = new URL(request.url);
   const filename = searchParams.get('filename');
   const versionName = searchParams.get('versionName');
@@ -232,6 +238,11 @@ export async function DELETE(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
+
+  // Auth: require authentication
+  const authResult = requireAuth(request, requestId);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;

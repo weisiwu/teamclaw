@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { requireElevatedRole } from "@/lib/api-shared";
 
 /** Allowed env values for build triggers */
@@ -20,21 +21,18 @@ function generateReqId(): string {
 /**
  * Unified JSON error response helper (uses buildCorsHeaders for CORS preflight with auth headers)
  */
-function jsonBuildError(message: string, status: number, requestId?: string): NextResponse {
-  return NextResponse.json(
-    { code: status, message, requestId },
-    { status, headers: buildCorsHeaders }
-  );
-}
+const jsonError = (message: string, status: number, requestId?: string): NextResponse =>
+  NextResponse.json({ code: status, message, requestId }, { status, headers: buildCorsHeaders });
+
+// Keep jsonBuildError as alias for backward compatibility
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const jsonBuildError = jsonError;
 
 /**
  * Unified success response helper
  */
-function jsonSucc(data: unknown, requestId?: string): NextResponse {
-  return NextResponse.json({ code: 0, data, requestId }, {
-    headers: { ...buildCorsHeaders },
-  });
-}
+const jsonSucc = (data: unknown, requestId?: string): NextResponse =>
+  NextResponse.json({ code: 0, data, requestId }, { headers: { ...buildCorsHeaders } });
 
 /**
  * OPTIONS /api/v1/build/trigger
