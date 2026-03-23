@@ -47,6 +47,7 @@ next-env.d.ts
 # teamclaw specific
 *.log
 logs/
+backups/
 memory/
 tasks/
 files/

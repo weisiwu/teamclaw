@@ -133,3 +133,38 @@ export function checkRequiredEnvVars(): void {
     console.warn('   Set them in .env or config.json');
   }
 }
+
+export function validateConfig(): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  const required = [
+    'PORT',
+    'DATABASE_URL',
+    'REDIS_URL',
+    'CHROMADB_URL',
+  ];
+
+  for (const key of required) {
+    if (!process.env[key]) {
+      errors.push(`缺失必填环境变量：${key}`);
+    }
+  }
+
+  // 校验 DATABASE_URL 格式
+  if (process.env.DATABASE_URL && !process.env.DATABASE_URL.startsWith('postgres')) {
+    errors.push('DATABASE_URL 格式不正确，应以 postgres:// 或 postgresql:// 开头');
+  }
+
+  // 校验端口范围
+  const port = parseInt(process.env.PORT || '9700');
+  if (port < 1 || port > 65535) {
+    errors.push(`PORT 值无效：${port}`);
+  }
+
+  if (errors.length > 0) {
+    console.error('❌ 配置校验失败：');
+    errors.forEach(e => console.error(`  - ${e}`));
+  }
+
+  return { valid: errors.length === 0, errors };
+}
