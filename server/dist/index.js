@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 import { success } from './utils/response.js';
 import { requireAdmin } from './middleware/auth.js';
 import { unifiedErrorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { runMigrations } from './db/migrations/run.js';
 import healthRouter from './routes/health.js';
 import projectRouter from './routes/project.js';
 import userRouter from './routes/user.js';
@@ -179,8 +180,10 @@ app.get('/', (req, res) => {
 app.use(notFoundHandler);
 app.use(unifiedErrorHandler);
 // 保存 server 引用用于优雅关闭
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
     console.log(`TeamClaw server running on port ${PORT}`);
+    // 运行数据库迁移
+    await runMigrations();
     // 注册自动版本升级钩子
     registerAutoBumpHook();
 });

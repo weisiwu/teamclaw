@@ -1,157 +1,84 @@
-import { getDb } from '../sqlite.js';
-export function runMigrations() {
-    const db = getDb();
-    db.exec(`
-    CREATE TABLE IF NOT EXISTS versions (
-      id TEXT PRIMARY KEY,
-      version TEXT NOT NULL,
-      branch TEXT DEFAULT 'main',
-      summary TEXT,
-      commit_hash TEXT,
-      created_by TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      build_status TEXT DEFAULT 'pending',
-      tag_created INTEGER DEFAULT 0
-    );
-
-    CREATE TABLE IF NOT EXISTS tags (
-      id TEXT PRIMARY KEY,
+/**
+ * Idempotent Migration Runner
+ * - Tracks executed migrations in _migrations table
+ * - Only runs migrations not yet recorded
+ * - Supports UP/DOWN sections (DOWN is optional)
+ * - Records execution time and status
+ */
+import { pool } from '../../utils/db.js';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
+const MIGRATIONS_DIR = path.join(import.meta.dirname, '.');
+// Ensure _migrations table exists
+async function ensureMigrationTable() {
+    await pool.query(`
+    CREATE TABLE IF NOT EXISTS _migrations (
+      id SERIAL PRIMARY KEY,
       name TEXT UNIQUE NOT NULL,
-      version_id TEXT,
-      commit_hash TEXT,
-      annotation TEXT,
-      protected INTEGER DEFAULT 0,
-      created_at TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS search_history (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      query TEXT NOT NULL,
-      type TEXT NOT NULL DEFAULT 'keyword',
-      filters TEXT,
-      result_count INTEGER DEFAULT 0,
-      created_at TEXT DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_search_history_user ON search_history(user_id, created_at DESC);
-
-    CREATE TABLE IF NOT EXISTS download_tasks (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      type TEXT NOT NULL,
-      file_ids TEXT NOT NULL,
-      status TEXT NOT NULL,
-      progress INTEGER DEFAULT 0,
-      total_bytes INTEGER DEFAULT 0,
-      downloaded_bytes INTEGER DEFAULT 0,
-      zip_path TEXT,
-      zip_name TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      completed_at TEXT,
-      error_message TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_download_tasks_user ON download_tasks(user_id, created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_download_tasks_status ON download_tasks(status);
-
-    CREATE TABLE IF NOT EXISTS bump_history (
-      id TEXT PRIMARY KEY,
-      version_id TEXT NOT NULL,
-      version_name TEXT NOT NULL,
-      previous_version TEXT NOT NULL,
-      new_version TEXT NOT NULL,
-      bump_type TEXT NOT NULL CHECK (bump_type IN ('patch', 'minor', 'major')),
-      trigger_type TEXT NOT NULL CHECK (trigger_type IN ('task_done', 'build_success', 'manual')),
-      trigger_task_id TEXT,
-      trigger_task_title TEXT,
-      summary TEXT,
-      created_by TEXT DEFAULT 'system',
-      created_at TEXT DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_bump_history_version ON bump_history(version_id, created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_bump_history_trigger ON bump_history(trigger_type, created_at DESC);
-
-    CREATE TABLE IF NOT EXISTS version_summaries (
-      id TEXT PRIMARY KEY,
-      version_id TEXT UNIQUE NOT NULL,
-      title TEXT,
-      content TEXT,
-      features TEXT,
-      fixes TEXT,
-      changes TEXT,
-      breaking TEXT,
-      changes_detail TEXT,
-      generated_at TEXT DEFAULT (datetime('now')),
-      generated_by TEXT,
-      branch_name TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_version_summaries_version ON version_summaries(version_id);
-
-    CREATE TABLE IF NOT EXISTS rollback_history (
-      id TEXT PRIMARY KEY,
-      version_id TEXT NOT NULL,
-      version_name TEXT NOT NULL,
-      target_ref TEXT NOT NULL,
-      target_type TEXT NOT NULL CHECK (target_type IN ('tag', 'branch', 'commit')),
-      mode TEXT NOT NULL CHECK (mode IN ('revert', 'checkout')),
-      previous_ref TEXT,
-      new_branch TEXT,
-      backup_created INTEGER DEFAULT 0,
-      message TEXT,
-      success INTEGER NOT NULL,
-      error TEXT,
-      performed_by TEXT DEFAULT 'developer',
-      performed_at TEXT DEFAULT (datetime('now')),
-      created_at TEXT DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_rollback_history_version ON rollback_history(version_id, created_at DESC);
+      executed_at TIMESTAMPTZ DEFAULT NOW(),
+      checksum TEXT,
+      execution_time_ms INTEGER,
+      status TEXT DEFAULT 'success'
+    )
   `);
-    // Add git_tag columns if they don't exist (iter-79)
+}
+// Get list of already-executed migrations
+async function getExecutedMigrations() {
+    const { rows } = await pool.query('SELECT name FROM _migrations WHERE status = $1 ORDER BY name', ['success']);
+    return new Set(rows.map((r) => r.name));
+}
+// Scan and sort migration files matching YYYYMMDD_NNN pattern
+function scanMigrationFiles() {
+    return fs.readdirSync(MIGRATIONS_DIR)
+        .filter((f) => f.endsWith('.sql') && /^\d{8}_\d{3}_/.test(f))
+        .sort()
+        .map((f) => {
+        const content = fs.readFileSync(path.join(MIGRATIONS_DIR, f), 'utf-8');
+        return {
+            name: f.replace(/\.sql$/, ''),
+            path: path.join(MIGRATIONS_DIR, f),
+            checksum: crypto.createHash('md5').update(content).digest('hex'),
+        };
+    });
+}
+// Execute a single migration (UP section only)
+async function executeMigration(migration) {
+    const sql = fs.readFileSync(migration.path, 'utf-8');
+    const upSection = sql.split(/-- DOWN/)[0]; // Only run UP
+    const start = Date.now();
+    const client = await pool.connect();
     try {
-        db.prepare("ALTER TABLE versions ADD COLUMN git_tag TEXT").run();
+        await client.query('BEGIN');
+        await client.query(upSection.trim());
+        await client.query('INSERT INTO _migrations (name, checksum, execution_time_ms, status) VALUES ($1, $2, $3, $4)', [migration.name, migration.checksum, Date.now() - start, 'success']);
+        await client.query('COMMIT');
+        console.log(`  ✅ ${migration.name} (${Date.now() - start}ms)`);
     }
-    catch (e) {
-        // Column may already exist in newer dbs, ignore
+    catch (err) {
+        await client.query('ROLLBACK');
+        await pool.query('INSERT INTO _migrations (name, checksum, execution_time_ms, status) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO UPDATE SET status = EXCLUDED.status, execution_time_ms = EXCLUDED.execution_time_ms', [migration.name, migration.checksum, Date.now() - start, 'failed']);
+        console.error(`  ❌ ${migration.name}: ${err}`);
+        throw err;
     }
-    try {
-        db.prepare("ALTER TABLE versions ADD COLUMN git_tag_created_at TEXT").run();
+    finally {
+        client.release();
     }
-    catch (e) {
-        // Column may already exist in newer dbs, ignore
+}
+// Main entry point
+export async function runMigrations() {
+    console.log('[migrations] Checking database migrations...');
+    await ensureMigrationTable();
+    const executed = await getExecutedMigrations();
+    const files = scanMigrationFiles();
+    const pending = files.filter((f) => !executed.has(f.name));
+    if (pending.length === 0) {
+        console.log('[migrations] Database is up to date');
+        return;
     }
-    // Add project_id column to versions (iter-19)
-    try {
-        db.prepare("ALTER TABLE versions ADD COLUMN project_id TEXT").run();
+    console.log(`[migrations] Running ${pending.length} pending migration(s)...`);
+    for (const migration of pending) {
+        await executeMigration(migration);
     }
-    catch (e) {
-        // Column may already exist, ignore
-    }
-    // Add rollback tracking fields to versions (iter75-version-rollback)
-    try {
-        db.prepare("ALTER TABLE versions ADD COLUMN rollback_count INTEGER DEFAULT 0").run();
-    }
-    catch (e) {
-        // Column may already exist, ignore
-    }
-    try {
-        db.prepare("ALTER TABLE versions ADD COLUMN last_rollback_at TEXT").run();
-    }
-    catch (e) {
-        // Column may already exist, ignore
-    }
-    db.exec(`
-    CREATE TABLE IF NOT EXISTS audit_log (
-      id TEXT PRIMARY KEY,
-      action TEXT NOT NULL,
-      user_id TEXT,
-      target TEXT,
-      details TEXT,
-      ip_address TEXT,
-      user_agent TEXT,
-      created_at TEXT DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
-    CREATE INDEX IF NOT EXISTS idx_audit_log_user_id ON audit_log(user_id);
-    CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
-  `);
-    console.log('[migrations] Database migrations completed');
+    console.log('[migrations] All migrations completed');
 }
