@@ -29,7 +29,6 @@ export interface UseDownloadProgressReturn {
 
 export function useDownloadProgress({
   taskId,
-  autoStart = false,
   onComplete,
   onError,
 }: UseDownloadProgressOptions): UseDownloadProgressReturn {
@@ -42,6 +41,9 @@ export function useDownloadProgress({
 
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
+  // Keep taskRef in sync with task state to avoid exhaustive-deps warning
+  const taskRef = useRef<DownloadTaskResponse | null>(null);
+  taskRef.current = task;
 
   const clearSubscriptions = useCallback(() => {
     if (unsubscribeRef.current) {
@@ -96,7 +98,7 @@ export function useDownloadProgress({
 
       if (event.status === 'completed') {
         setTask(prev => prev ? { ...prev, status: 'completed', progress: 100 } : null);
-        onComplete?.({ ...task!, status: 'completed', progress: 100 } as DownloadTaskResponse);
+        onComplete?.({ ...taskRef.current!, status: 'completed', progress: 100 } as DownloadTaskResponse);
       } else if (event.status === 'failed' || event.status === 'cancelled') {
         onError?.(event.status);
       }
