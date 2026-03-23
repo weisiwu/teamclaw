@@ -32,7 +32,7 @@ interface CommitEntry {
 /**
  * Extract commits from git log as structured entries.
  */
-function parseGitLog(projectPath: string, limit = 200): CommitEntry[] {
+export function parseGitLog(projectPath: string, limit = 200): CommitEntry[] {
   if (!existsSync(join(projectPath, '.git'))) return [];
 
   try {

@@ -11,7 +11,7 @@ import {
   ImportContext,
 } from '../services/importOrchestrator.js';
 import { query as vectorQuery } from '../services/vectorStore.js';
-import { analyzeGitHistory } from '../services/gitHistoryAnalysis.js';
+import { analyzeGitHistory, parseGitLog } from '../services/gitHistoryAnalysis.js';
 
 const router = Router();
 
@@ -196,7 +196,8 @@ router.get('/:id/git-history', (req: Request, res: Response) => {
 
   try {
     const analysis = analyzeGitHistory(basePath);
-    res.json(success({ analysis }));
+    const commits = parseGitLog(basePath);
+    res.json(success({ analysis, commits }));
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Git history analysis failed';
     res.status(500).json(error(500, message));
@@ -212,7 +213,7 @@ router.post('/:id/refresh', async (req: Request, res: Response) => {
   }
 
   try {
-    const { refreshProject } = await import('./services/projectRefresh.js');
+    const { refreshProject } = await import('../services/projectRefresh.js');
     const result = await refreshProject(project);
     res.json(success({ refresh: result }));
   } catch (err) {

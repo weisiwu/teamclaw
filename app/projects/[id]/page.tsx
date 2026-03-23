@@ -310,7 +310,7 @@ export default function ProjectDetailPage({ params }: Props) {
     try {
       const res = await fetch(`/api/v1/projects/${id}/git-history`);
       const json = await res.json();
-      if (json.code === 0) setGitHistory(json.data.analysis || []);
+      if (json.code === 0) setGitHistory(json.data.commits || []);
     } catch { /* ignore */ }
     setLoadingSub(false);
   };
