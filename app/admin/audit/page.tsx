@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import type { AuditLog } from '../../../lib/api/auditLogs';
 import { PermissionGuard } from '@/components/layout/PermissionGuard';
 import { Card, CardContent } from '@/components/ui/card';
@@ -122,8 +122,8 @@ export default function AuditLogPage() {
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
-  // Compute action stats for summary cards
-  const actionStats = (): ActionStats[] => {
+  // Compute action stats for summary cards (memoized to avoid recalc on every render)
+  const actionStats = useMemo((): ActionStats[] => {
     const counts: Record<string, number> = {};
     logs.forEach(log => {
       counts[log.action] = (counts[log.action] || 0) + 1;
@@ -136,7 +136,7 @@ export default function AuditLogPage() {
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
-  };
+  }, [logs]);
 
   const exportCsv = async () => {
     const params = new URLSearchParams();
@@ -187,7 +187,7 @@ export default function AuditLogPage() {
       {/* Action Type Summary */}
       {!loading && logs.length > 0 && (
         <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-6">
-          {actionStats().map(stat => (
+          {actionStats.map(stat => (
             <Card key={stat.action} className="py-3 px-4">
               <div className="flex items-center gap-2 mb-1">
                 <span className={`p-1 rounded ${ACTION_COLORS[stat.action] || 'bg-gray-50 text-gray-600 dark:bg-gray-900/20 dark:text-gray-400'}`}>

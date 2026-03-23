@@ -46,7 +46,8 @@ export default function MembersPage() {
 
   // Filter and sort members
   const filteredMembers = useMemo(() => {
-    const members = data?.data || [];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const members = data?.data || []; // intentional: data?.data may be re-fetched with same contents
     let result = [...members];
     
     // Filter by search query
