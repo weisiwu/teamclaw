@@ -313,28 +313,35 @@ export default function ImportPage() {
 
   // 步骤3: 解析进度
   const renderStep3 = () => {
-    // 11步对应taskData中的steps，或回退到简化的5步
-    const steps = taskData?.steps ?? [
-      { step: 1, name: 'clone_or_copy', status: 'done' },
-      { step: 2, name: 'scan_files', status: 'done' },
-      { step: 3, name: 'detect_stack', status: 'done' },
-      { step: 4, name: 'parse_docs', status: 'running' },
-      { step: 5, name: 'analyze_code', status: 'pending' },
-      { step: 6, name: 'build_summary', status: 'pending' },
-      { step: 7, name: 'generate_skills', status: 'pending' },
-      { step: 8, name: 'vectorize', status: 'pending' },
-      { step: 9, name: 'done', status: 'pending' },
-    ];
+    // 从 taskData 获取后端返回的步骤列表（taskData 初始化时 steps 为空则显示加载占位）
+    const steps = taskData?.steps ?? (taskData ? [] : [
+      { step: 1, name: 'clone', status: 'pending' },
+      { step: 2, name: 'scan', status: 'pending' },
+      { step: 3, name: 'detectTech', status: 'pending' },
+      { step: 4, name: 'parseDocs', status: 'pending' },
+      { step: 5, name: 'analyzeCode', status: 'pending' },
+      { step: 6, name: 'detectBuild', status: 'pending' },
+      { step: 7, name: 'buildSummary', status: 'pending' },
+      { step: 8, name: 'generateFeatureMap', status: 'pending' },
+      { step: 9, name: 'generateSkills', status: 'pending' },
+      { step: 10, name: 'convertDocs', status: 'pending' },
+      { step: 11, name: 'vectorize', status: 'pending' },
+      { step: 12, name: 'gitHistory', status: 'pending' },
+    ]);
 
     const STEP_LABELS: Record<string, string> = {
-      clone_or_copy: '📥 定位/克隆项目',
-      scan_files: '📂 扫描文件结构',
-      detect_stack: '🔍 检测技术栈',
-      parse_docs: '📄 解析文档',
-      analyze_code: '🏗️ 分析代码架构',
-      build_summary: '📝 生成项目摘要',
-      generate_skills: '🛠️ 生成 Skills',
+      clone: '📥 定位/克隆项目',
+      scan: '📂 扫描文件结构',
+      detectTech: '🔍 检测技术栈',
+      parseDocs: '📄 解析文档',
+      analyzeCode: '🏗️ 分析代码架构',
+      detectBuild: '⚙️ 检测打包机制',
+      buildSummary: '📝 生成项目摘要',
+      generateFeatureMap: '🗺️ 生成功能定位',
+      generateSkills: '🛠️ 生成 Skills',
+      convertDocs: '📋 文档转换',
       vectorize: '🧠 向量化存储',
+      gitHistory: '📊 Git 历史分析',
       done: '✅ 完成',
     };
 

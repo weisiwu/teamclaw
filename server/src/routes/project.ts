@@ -1,8 +1,15 @@
 import { Router, Request, Response } from 'express';
 import { success, error } from '../utils/response.js';
-import { Project, ImportTask, ImportStep } from '../models/project.js';
+import { Project, ImportTask } from '../models/project.js';
 import { cloneOrCopyProject } from '../services/gitClone.js';
 import { scanDirectory } from '../services/fileScanner.js';
+import { detectTechStack } from '../services/techDetector.js';
+import {
+  createImportTask,
+  runAllSteps,
+  getTaskStatus,
+  ImportContext,
+} from '../services/importOrchestrator.js';
 import { query as vectorQuery } from '../services/vectorStore.js';
 import { analyzeGitHistory } from '../services/gitHistoryAnalysis.js';
 
@@ -10,9 +17,8 @@ const router = Router();
 
 // In-memory storage (replace with DB later)
 const projects = new Map<string, Project>();
-const importTasks = new Map<string, ImportTask>();
 
-// 1. POST /api/v1/projects/import — 创建导入任务
+// 1. POST /api/v1/projects/import — 创建导入任务（异步编排）
 router.post('/import', async (req: Request, res: Response) => {
   const { source, url, localPath, name } = req.body as {
     source: 'url' | 'local';
@@ -37,13 +43,16 @@ router.post('/import', async (req: Request, res: Response) => {
   }
 
   try {
-    // 1. Clone / 定位项目
+    // 1. Clone / 定位项目（同步执行，获取 projectPath）
     const projectPath = await cloneOrCopyProject(source, url, localPath);
 
-    // 2. 扫描文件树
+    // 2. 扫描文件树（同步执行，获取 tree.name 用于项目名）
     const tree = await scanDirectory(projectPath);
 
-    // 3. 生成项目信息
+    // 3. 检测技术栈（使用 techDetector.ts）
+    const techStack = await detectTechStack(projectPath);
+
+    // 4. 生成项目信息
     const projectId = `proj_${Date.now()}`;
     const projectName = name || tree.name || projectPath.split('/').pop() || 'unknown';
 
@@ -53,8 +62,11 @@ router.post('/import', async (req: Request, res: Response) => {
       source,
       url: url || undefined,
       localPath: source === 'local' ? projectPath : undefined,
-      techStack: detectTechStack(tree),
-      buildTool: detectBuildTool(tree),
+      techStack: [
+        ...techStack.language,
+        ...techStack.framework,
+      ],
+      buildTool: techStack.buildTool[0],
       hasGit: true,
       importedAt: new Date().toISOString(),
       status: 'active',
@@ -62,28 +74,29 @@ router.post('/import', async (req: Request, res: Response) => {
 
     projects.set(projectId, project);
 
-    // 4. 创建导入任务（模拟多步骤进度）
-    const taskId = `task_${Date.now()}`;
-    const steps: ImportStep[] = [
-      { step: 1, name: 'clone_or_copy', status: 'done' },
-      { step: 2, name: 'scan_files', status: 'done' },
-      { step: 3, name: 'detect_stack', status: 'done' },
-      { step: 4, name: 'index_chromadb', status: 'pending' },
-    ];
+    // 5. 通过 orchestrator 创建导入任务
+    const importTask = createImportTask(projectId);
 
-    const importTask: ImportTask = {
-      taskId,
+    // 6. 立即返回 201（后台异步执行剩余步骤）
+    res.status(201).json(success({ project, task: importTask }));
+
+    // 7. 后台异步执行所有剩余步骤
+    const ctx: ImportContext = {
+      source,
+      url,
+      localPath,
+      projectPath,
       projectId,
-      status: 'processing',
-      currentStep: 3,
-      totalSteps: 4,
-      steps,
-      startedAt: new Date().toISOString(),
+      projectName,
+      techStack,
+      tree,
     };
 
-    importTasks.set(taskId, importTask);
-
-    res.status(201).json(success({ project, task: importTask }));
+    setImmediate(() => {
+      runAllSteps(importTask.taskId, ctx).catch(err => {
+        console.error('[importOrchestrator] runAllSteps failed:', err);
+      });
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Import failed';
     res.status(500).json(error(500, message));
@@ -133,7 +146,7 @@ router.get('/:id/tree', async (req: Request, res: Response) => {
 
 // 5. GET /api/v1/projects/import/:taskId — 导入进度
 router.get('/import/:taskId', (req: Request, res: Response) => {
-  const task = importTasks.get(req.params.taskId);
+  const task = getTaskStatus(req.params.taskId);
   if (!task) {
     res.status(404).json(error(404, 'Import task not found'));
     return;
@@ -141,7 +154,7 @@ router.get('/import/:taskId', (req: Request, res: Response) => {
   res.json(success({ task }));
 });
 
-// 6b. GET /api/v1/projects/:id/vector-search — 向量语义搜索
+// 6. GET /api/v1/projects/:id/vector-search — 向量语义搜索
 router.get('/:id/vector-search', async (req: Request, res: Response) => {
   const project = projects.get(req.params.id);
   if (!project) {
@@ -165,7 +178,7 @@ router.get('/:id/vector-search', async (req: Request, res: Response) => {
   }
 });
 
-// 6c. GET /api/v1/projects/:id/git-history — Git历史分析
+// 7. GET /api/v1/projects/:id/git-history — Git历史分析
 router.get('/:id/git-history', (req: Request, res: Response) => {
   const project = projects.get(req.params.id);
   if (!project) {
@@ -190,7 +203,7 @@ router.get('/:id/git-history', (req: Request, res: Response) => {
   }
 });
 
-// 7. POST /api/v1/projects/:id/refresh — 手动触发项目刷新（增量更新）
+// 8. POST /api/v1/projects/:id/refresh — 手动触发项目刷新（增量更新）
 router.post('/:id/refresh', async (req: Request, res: Response) => {
   const project = projects.get(req.params.id);
   if (!project) {
@@ -208,7 +221,7 @@ router.post('/:id/refresh', async (req: Request, res: Response) => {
   }
 });
 
-// 8. GET /api/v1/projects/:id/feature-map — 获取功能定位文件
+// 9. GET /api/v1/projects/:id/feature-map — 获取功能定位文件
 router.get('/:id/feature-map', async (req: Request, res: Response) => {
   const project = projects.get(req.params.id);
   if (!project) {
@@ -230,7 +243,7 @@ router.get('/:id/feature-map', async (req: Request, res: Response) => {
   }
 });
 
-// 9. GET /api/v1/projects/:id/docs — 获取转换后的文档列表
+// 10. GET /api/v1/projects/:id/docs — 获取转换后的文档列表
 router.get('/:id/docs', async (req: Request, res: Response) => {
   const project = projects.get(req.params.id);
   if (!project) {
@@ -248,7 +261,7 @@ router.get('/:id/docs', async (req: Request, res: Response) => {
   }
 });
 
-// 10. DELETE /api/v1/projects/:id — 删除项目
+// 11. DELETE /api/v1/projects/:id — 删除项目
 router.delete('/:id', (req: Request, res: Response) => {
   const project = projects.get(req.params.id);
   if (!project) {
@@ -258,49 +271,5 @@ router.delete('/:id', (req: Request, res: Response) => {
   projects.delete(req.params.id);
   res.json(success({ deleted: req.params.id }));
 });
-
-// --- helpers ---
-
-function detectTechStack(tree: { children?: { name: string; extension?: string }[] }): string[] {
-  const stacks: string[] = [];
-  const files = flattenFiles(tree);
-  const names = files.map(f => f.name.toLowerCase());
-  const exts = new Set(files.map(f => f.extension?.toLowerCase()).filter(Boolean));
-
-  if (names.some(n => n === 'package.json')) stacks.push('Node.js');
-  if (names.some(n => n === 'Cargo.toml')) stacks.push('Rust');
-  if (names.some(n => n === 'go.mod')) stacks.push('Go');
-  if (names.some(n => n === 'requirements.txt' || n === 'Pipfile' || n === 'pyproject.toml')) stacks.push('Python');
-  if (names.some(n => n === 'pom.xml' || n === 'build.gradle')) stacks.push('Java');
-  if (exts.has('.cs')) stacks.push('C#');
-  if (exts.has('.swift')) stacks.push('Swift');
-  if (exts.has('.kt')) stacks.push('Kotlin');
-  if (exts.has('.dart')) stacks.push('Dart');
-  if (exts.has('.vue')) stacks.push('Vue');
-  if (exts.has('.jsx') || exts.has('.tsx')) stacks.push('React');
-
-  return stacks.length ? stacks : ['Unknown'];
-}
-
-function detectBuildTool(tree: { children?: { name: string; extension?: string }[] }): string | undefined {
-  const files = flattenFiles(tree);
-  const names = files.map(f => f.name.toLowerCase());
-
-  if (names.some(n => n === 'package.json')) return 'npm';
-  if (names.some(n => n === 'Cargo.toml')) return 'cargo';
-  if (names.some(n => n === 'go.mod')) return 'go';
-  if (names.some(n => n === 'requirements.txt')) return 'pip';
-  if (names.some(n => n === 'pom.xml')) return 'maven';
-  if (names.some(n => n === 'build.gradle')) return 'gradle';
-  if (names.some(n => n === 'CMakeLists.txt')) return 'cmake';
-
-  return undefined;
-}
-
-function flattenFiles(node: { type: string; children?: { type: string; name: string; extension?: string }[] }): { name: string; extension?: string }[] {
-  if (node.type === 'file') return [{ name: node.name, extension: node.extension }];
-  if (!node.children) return [];
-  return node.children.flatMap(child => flattenFiles(child as { type: string; children?: { type: string; name: string; extension?: string }[]; name: string; extension?: string }));
-}
 
 export default router;
