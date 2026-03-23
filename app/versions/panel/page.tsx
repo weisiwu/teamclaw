@@ -280,9 +280,10 @@ export default function VersionPanelPage() {
   const clearFilters = () => {
     setSearchQuery("");
     setStatusFilter("all");
+    setMetaFilter("all");
   };
 
-  const hasActiveFilters = searchQuery || statusFilter !== "all";
+  const hasActiveFilters = searchQuery || statusFilter !== "all" || metaFilter !== "all";
 
   return (
     <div className="min-h-screen bg-gray-50">
