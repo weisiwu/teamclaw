@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { versionStore, type Version } from "./version-store";
-import { generateRequestId, jsonSuccess, jsonError, optionsResponse, requireAuth } from "@/lib/api-shared";
+import { generateRequestId, jsonSuccess, jsonError, handleApiError, optionsResponse, requireAuth } from "@/lib/api-shared";
 
 /**
  * GET /api/v1/versions
@@ -118,10 +118,10 @@ export async function POST(request: NextRequest) {
 
     versionStore.set(newVersion.id, newVersion);
 
-    return NextResponse.json({ code: 0, data: newVersion, message: "ok", requestId }, { status: 201 });
+    return jsonSuccess(newVersion, requestId, 201);
   } catch (err) {
     console.error("[versions POST]", err);
-    return jsonError("Failed to create version", 500, requestId);
+    return handleApiError(err, requestId);
   }
 }
 

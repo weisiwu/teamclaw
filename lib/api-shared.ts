@@ -95,7 +95,7 @@ export function rateLimitResponse(
 
   return NextResponse.json(
     {
-      code: 429,
+      code: AppErrorCode.ERR_RATE_LIMITED,
       message: `请求过于频繁，请 ${Math.ceil(resetMs / 1000)} 秒后重试`,
       requestId,
       remaining: 0,
@@ -153,9 +153,11 @@ export function extractAuthUser(request: NextRequest): AuthUser | null {
 export function requireAuth(request: NextRequest, requestId?: string): AuthUser | NextResponse {
   const user = extractAuthUser(request);
   if (!user) {
-    return NextResponse.json(
-      { code: 401, message: "未提供身份信息，请检查 X-User-Id 和 X-User-Role 请求头", requestId },
-      { status: 401, headers: corsHeaders }
+    return jsonAppError(
+      "未提供身份信息，请检查 X-User-Id 和 X-User-Role 请求头",
+      AppErrorCode.ERR_UNAUTHORIZED,
+      401,
+      requestId
     );
   }
 
@@ -174,9 +176,11 @@ export function requireAdmin(request: NextRequest, requestId?: string): AuthUser
   const user = requireAuth(request, requestId);
   if (user instanceof NextResponse) return user;
   if (user.role !== "admin") {
-    return NextResponse.json(
-      { code: 403, message: "需要管理员权限", requestId },
-      { status: 403, headers: corsHeaders }
+    return jsonAppError(
+      "需要管理员权限",
+      AppErrorCode.ERR_FORBIDDEN,
+      403,
+      requestId
     );
   }
   return user;
@@ -190,12 +194,86 @@ export function requireElevatedRole(request: NextRequest, requestId?: string): A
   const user = requireAuth(request, requestId);
   if (user instanceof NextResponse) return user;
   if (user.role !== "admin" && user.role !== "vice_admin") {
-    return NextResponse.json(
-      { code: 403, message: "需要管理员或副管理员权限", requestId },
-      { status: 403, headers: corsHeaders }
+    return jsonAppError(
+      "需要管理员或副管理员权限",
+      AppErrorCode.ERR_FORBIDDEN,
+      403,
+      requestId
     );
   }
   return user;
+}
+
+// ============ Application Error Code System ============
+
+/**
+ * Application-level error codes (separate from HTTP status).
+ * These codes are stable identifiers for error types, independent of HTTP status.
+ *
+ * Convention: 1xxxx = validation/auth, 2xxxx = not found, 3xxxx = conflict,
+ * 4xxxx = rate limit, 5xxxx = server errors, 9xxxx = internal system errors
+ */
+export enum AppErrorCode {
+  // 1xxxx: Validation / Bad Request
+  ERR_VALIDATION_FAILED      = 10001,
+  ERR_INVALID_JSON           = 10002,
+  ERR_MISSING_REQUIRED_FIELD = 10003,
+  ERR_INVALID_FORMAT         = 10004,
+
+  // 2xxxx: Not Found
+  ERR_NOT_FOUND             = 20001,
+
+  // 3xxxx: Conflict
+  ERR_CONFLICT              = 30001,
+  ERR_DUPLICATE_ENTRY       = 30002,
+
+  // 4xxxx: Rate Limit / Auth
+  ERR_UNAUTHORIZED          = 40101,
+  ERR_FORBIDDEN             = 40301,
+  ERR_RATE_LIMITED          = 42901,
+
+  // 5xxxx: Server / Internal
+  ERR_INTERNAL              = 50001,
+  ERR_NOT_IMPLEMENTED       = 50002,
+  ERR_SERVICE_UNAVAILABLE   = 50301,
+}
+
+/**
+ * Standard HTTP status for each AppErrorCode category.
+ */
+export const AppErrorHttpStatus: Record<AppErrorCode, number> = {
+  [AppErrorCode.ERR_VALIDATION_FAILED]:      400,
+  [AppErrorCode.ERR_INVALID_JSON]:           400,
+  [AppErrorCode.ERR_MISSING_REQUIRED_FIELD]: 400,
+  [AppErrorCode.ERR_INVALID_FORMAT]:         400,
+  [AppErrorCode.ERR_NOT_FOUND]:              404,
+  [AppErrorCode.ERR_CONFLICT]:               409,
+  [AppErrorCode.ERR_DUPLICATE_ENTRY]:        409,
+  [AppErrorCode.ERR_UNAUTHORIZED]:           401,
+  [AppErrorCode.ERR_FORBIDDEN]:              403,
+  [AppErrorCode.ERR_RATE_LIMITED]:           429,
+  [AppErrorCode.ERR_INTERNAL]:               500,
+  [AppErrorCode.ERR_NOT_IMPLEMENTED]:        501,
+  [AppErrorCode.ERR_SERVICE_UNAVAILABLE]:    503,
+};
+
+/**
+ * Structured application error — can be thrown from API handlers.
+ * Automatically maps to correct HTTP status and app error code.
+ */
+export class AppError extends Error {
+  constructor(
+    public readonly appCode: AppErrorCode,
+    message: string,
+    public readonly details?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = "AppError";
+  }
+
+  get httpStatus(): number {
+    return AppErrorHttpStatus[this.appCode];
+  }
 }
 
 // ============ Existing exports ============
@@ -213,17 +291,64 @@ export function generateRequestId(): string {
   return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function jsonSuccess(data: unknown, requestId?: string): NextResponse {
+export function jsonSuccess(data: unknown, requestId?: string, httpStatus = 200): NextResponse {
   return NextResponse.json({ code: 0, data, requestId }, {
+    status: httpStatus,
     headers: { ...corsHeaders },
   });
 }
 
+/**
+ * JSON error response with separated app error code and HTTP status.
+ * Use this when you need to specify a distinct application error code
+ * that is separate from the HTTP status (e.g., app code 10001 for validation
+ * errors but HTTP 400).
+ *
+ * For simple cases where app code = HTTP status, use jsonError() instead.
+ */
+export function jsonAppError(
+  message: string,
+  appCode: number,
+  httpStatus: number,
+  requestId?: string
+): NextResponse {
+  return NextResponse.json(
+    { code: appCode, message, requestId },
+    { status: httpStatus, headers: { ...corsHeaders } }
+  );
+}
+
+/**
+ * Standard error response for API routes.
+ * Uses HTTP status as the app error code (backward-compatible).
+ *
+ * For explicit app code + HTTP status separation, use jsonAppError() instead.
+ */
 export function jsonError(message: string, status: number, requestId?: string): NextResponse {
-  return NextResponse.json({ code: status, message, requestId }, {
-    status,
-    headers: { ...corsHeaders },
-  });
+  return NextResponse.json(
+    { code: status, message, requestId },
+    { status, headers: { ...corsHeaders } }
+  );
+}
+
+/**
+ * Handle an error (typically from a try/catch) and return a JSON error response.
+ * Works with AppError, SyntaxError (bad JSON), and plain Error.
+ */
+export function handleApiError(err: unknown, requestId?: string): NextResponse {
+  if (err instanceof AppError) {
+    return jsonAppError(err.message, err.appCode, err.httpStatus, requestId);
+  }
+  if (err instanceof SyntaxError) {
+    return jsonAppError("无效的 JSON 请求体", AppErrorCode.ERR_INVALID_JSON, 400, requestId);
+  }
+  console.error("[api-shared] unexpected error:", err);
+  return jsonAppError(
+    "服务器内部错误",
+    AppErrorCode.ERR_INTERNAL,
+    500,
+    requestId
+  );
 }
 
 export function optionsResponse(): NextResponse {
