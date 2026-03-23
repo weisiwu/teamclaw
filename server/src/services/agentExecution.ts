@@ -5,6 +5,16 @@
 
 import { getAgent, releaseAgent, updateAgentStatus, updateLoadScore } from "./agentService.js";
 import { canDispatch } from "../constants/agents.js";
+import { buildSystemPrompt, getUserPromptPrefix } from "../prompts/agentPrompts.js";
+import { taskMemory } from "./taskMemory.js";
+import { llmCostTracker } from "./llmCostTracker.js";
+import {
+  LLMMessages,
+  llmAutoRoute,
+  estimateComplexity,
+  selectTierByComplexity,
+  type LLMResponse,
+} from "./agentExecution.js";
 
 export interface ExecutionContext {
   executionId: string;
@@ -20,6 +30,12 @@ export interface ExecutionContext {
   error?: string;
   model?: string;          // 使用的模型
   durationMs?: number;
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
+  costUsd?: number;
 }
 
 export interface DispatchRequest {
@@ -38,8 +54,8 @@ const agentExecStates: Map<string, { executionId: string; startedAt: string }> =
 // ============ 执行引擎核心 ============
 
 /**
- * 派发任务到指定 Agent（生成执行记录）
- * 实际执行由 sessions_send 触发
+ * 派发任务到指定 Agent（异步执行真实 LLM 调用）
+ * 立即返回 executionId，后台异步执行 LLM
  */
 export function dispatchToAgent(req: DispatchRequest): ExecutionContext | { error: string } {
   const { dispatcher, targetAgent, taskId, prompt, model } = req;
@@ -86,15 +102,138 @@ export function dispatchToAgent(req: DispatchRequest): ExecutionContext | { erro
   updateAgentStatus(targetAgent, "running", taskId);
   updateLoadScore(targetAgent, 15);
 
+  // 异步执行 LLM（不阻塞 HTTP 响应）
+  const timeoutMs = req.timeoutMs ?? 5 * 60 * 1000; // 默认 5 分钟
+  executeAgentTask(context, timeoutMs).catch((err) => {
+    console.error(`[agentExecution] Async execution error for ${executionId}:`, err.message);
+  });
+
   return context;
 }
+
+/**
+ * 异步执行 Agent 任务的实际 LLM 调用
+ */
+async function executeAgentTask(context: ExecutionContext, timeoutMs: number): Promise<void> {
+  const { executionId, targetAgent, taskId, prompt } = context;
+
+  // 标记为 running
+  updateExecution(executionId, { status: "running" });
+
+  // 构建 system + user messages
+  const messages = buildAgentMessages(targetAgent, taskId, prompt);
+
+  // 设置超时
+  const timeoutHandle = setTimeout(() => {
+    const ctx = executionLogs.get(executionId);
+    if (ctx && ctx.status === "running") {
+      updateExecution(executionId, {
+        status: "timeout",
+        error: `执行超时（${Math.round(timeoutMs / 1000)}s）`,
+      });
+    }
+  }, timeoutMs);
+
+  const startMs = Date.now();
+
+  try {
+    // 调用 LLM（自动路由选择模型层级）
+    const response = await llmAutoRoute(messages);
+
+    clearTimeout(timeoutHandle);
+
+    const durationMs = Date.now() - startMs;
+
+    // 记录 token 用量
+    context.usage = response.usage;
+    context.costUsd = estimateCost(response.provider, response.usage.inputTokens, response.usage.outputTokens);
+    context.model = response.model;
+
+    // 记录到成本追踪器
+    const complexity = estimateComplexity(prompt);
+    const tier = selectTierByComplexity(complexity);
+    llmCostTracker.record(response, durationMs, tier);
+
+    // 记录到任务记忆
+    taskMemory.addMessage(taskId, targetAgent, "user", prompt);
+    taskMemory.addMessage(taskId, targetAgent, "assistant", response.content);
+
+    // 更新执行结果
+    updateExecution(executionId, {
+      status: "completed",
+      result: response.content,
+    });
+
+    // main Agent 完成后自动派发子任务给 coder（如果需要）
+    if (targetAgent === "main") {
+      maybeDispatchSubtasks(context, response.content);
+    }
+  } catch (err) {
+    clearTimeout(timeoutHandle);
+    const message = err instanceof Error ? err.message : String(err);
+    updateExecution(executionId, {
+      status: "failed",
+      error: message,
+    });
+  }
+}
+
+/**
+ * 为 Agent 构建 LLM 消息列表
+ */
+function buildAgentMessages(agentName: string, taskId: string, prompt: string): LLMMessages[] {
+  // 构建任务上下文
+  const sessionId = `exec_${taskId}`;
+  const taskContext = taskMemory.buildContextPrompt(taskId, sessionId);
+
+  // 构建 system prompt
+  const systemPrompt = buildSystemPrompt(agentName, {
+    taskContext: taskContext || undefined,
+  });
+
+  const userPrompt = getUserPromptPrefix(agentName) + prompt;
+
+  const messages: LLMMessages[] = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userPrompt },
+  ];
+
+  return messages;
+}
+
+/**
+ * main Agent 响应后，解析结果并自动派发子任务
+ * 从 LLM 输出中提取子任务派发指令
+ */
+async function maybeDispatchSubtasks(context: ExecutionContext, llmResponse: string): Promise<void> {
+  // 简单解析：检测 LLM 输出中是否有 [DISPATCH: agentName: taskDescription] 格式
+  const dispatchPattern = /\[DISPATCH:\s*(\w+):\s*([^\]]+)\]/g;
+  let match;
+
+  while ((match = dispatchPattern.exec(llmResponse)) !== null) {
+    const [, agentName, taskDescription] = match;
+    const allowedAgents = ["pm", "coder1", "coder2", "reviewer"];
+    if (allowedAgents.includes(agentName)) {
+      console.log(`[agentExecution] Auto-dispatching to ${agentName}: ${taskDescription.trim()}`);
+      // 派发子任务（异步，不阻塞）
+      dispatchToAgent({
+        dispatcher: "main",
+        targetAgent: agentName,
+        taskId: `sub_${context.taskId}_${Date.now()}`,
+        prompt: taskDescription.trim(),
+        timeoutMs: 5 * 60 * 1000,
+      });
+    }
+  }
+}
+
 
 /**
  * 更新执行状态（外部回调）
  */
 export function updateExecution(
   executionId: string,
-  updates: Partial<Pick<ExecutionContext, "status" | "result" | "error">>
+  updates: Partial<Pick<ExecutionContext, "status" | "result" | "error" | "usage" | "costUsd">>
 ): boolean {
   const ctx = executionLogs.get(executionId);
   if (!ctx) return false;
@@ -102,6 +241,8 @@ export function updateExecution(
   if (updates.status) ctx.status = updates.status;
   if (updates.result) ctx.result = updates.result;
   if (updates.error) ctx.error = updates.error;
+  if (updates.usage) ctx.usage = updates.usage;
+  if (updates.costUsd !== undefined) ctx.costUsd = updates.costUsd;
 
   if (ctx.status === "completed" || ctx.status === "failed" || ctx.status === "timeout") {
     ctx.completedAt = new Date().toISOString();
