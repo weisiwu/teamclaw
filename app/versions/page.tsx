@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT, VERSION_STATUS_OPTIONS } from "@/lib/api/types";
+import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT, VERSION_STATUS_OPTIONS, VERSION_STATUS_LABELS, VERSION_STATUS_BADGE_VARIANT as VERSION_STATUS_BADGE } from "@/lib/api/types";
 import { getVersions } from "@/lib/api/versions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -68,6 +68,10 @@ export default function VersionsPage() {
         const totalBuilds = successBuilds + failedBuilds;
         const successRate = totalBuilds > 0 ? Math.round((successBuilds / totalBuilds) * 100) : 0;
         const avgCommits = versions.length > 0 ? Math.round(versions.reduce((sum, v) => sum + v.commitCount, 0) / versions.length) : 0;
+        const publishedCount = versions.filter((v) => v.status === "published").length;
+        const draftCount = versions.filter((v) => v.status === "draft").length;
+        const archivedCount = versions.filter((v) => v.status === "archived").length;
+        const publishRate = versions.length > 0 ? Math.round((publishedCount / versions.length) * 100) : 0;
         return (
           <div className="page-section mb-4 flex items-center gap-6 flex-wrap">
             <div className="flex items-center gap-2">
@@ -95,9 +99,16 @@ export default function VersionsPage() {
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-green-500" />
               <span className="text-sm text-muted-foreground">已发布</span>
-              <span className="text-sm font-semibold">
-                {versions.filter((v) => v.status === "published").length}
-              </span>
+              <span className="text-sm font-semibold text-green-600">{publishedCount}</span>
+              <span className="text-xs text-muted-foreground">({publishRate}%)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">草稿</span>
+              <span className="text-sm font-semibold">{draftCount}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">归档</span>
+              <span className="text-sm font-semibold text-yellow-600">{archivedCount}</span>
             </div>
           </div>
         );
@@ -233,13 +244,19 @@ export default function VersionsPage() {
                   <div className="p-5">
                     {/* Top row: version + status */}
                     <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xl font-bold font-mono text-foreground">{v.version}</span>
                         {v.isMain && (
                           <Badge variant="success" className="text-xs gap-1">
                             <Star className="w-3 h-3" />主版本
                           </Badge>
                         )}
+                        <Badge
+                          variant={VERSION_STATUS_BADGE[v.status]}
+                          className="text-xs"
+                        >
+                          {VERSION_STATUS_LABELS[v.status]}
+                        </Badge>
                       </div>
                       <Badge
                         variant={BUILD_STATUS_BADGE_VARIANT[v.buildStatus]}
@@ -283,10 +300,13 @@ export default function VersionsPage() {
                     )}
 
                     {/* Footer */}
-                    <div className="flex items-center justify-between text-xs text-muted-foreground pt-3 border-t border-border">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground pt-3 border-t border-border flex-wrap gap-1">
                       <span>{v.commitCount} 次提交</span>
                       <span>{v.changedFiles.length} 个文件</span>
                       <span>{v.createdAt ? new Date(v.createdAt).toLocaleDateString("zh-CN") : "-"}</span>
+                      {v.releasedAt && (
+                        <span className="text-green-600 dark:text-green-400">发布于 {new Date(v.releasedAt).toLocaleDateString("zh-CN")}</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -300,6 +320,7 @@ export default function VersionsPage() {
               <thead>
                 <tr className="border-b dark:border-slate-700">
                   <th className="text-left py-2 px-3 font-medium text-muted-foreground">版本</th>
+                  <th className="text-left py-2 px-3 font-medium text-muted-foreground">状态</th>
                   <th className="text-left py-2 px-3 font-medium text-muted-foreground">标题</th>
                   <th className="text-left py-2 px-3 font-medium text-muted-foreground">构建状态</th>
                   <th className="text-left py-2 px-3 font-medium text-muted-foreground">提交</th>
@@ -315,6 +336,11 @@ export default function VersionsPage() {
                         <span className="font-mono font-bold">{v.version}</span>
                         {v.isMain && <Badge variant="success" className="text-xs gap-1"><Star className="w-3 h-3" /></Badge>}
                       </Link>
+                    </td>
+                    <td className="py-2 px-3">
+                      <Badge variant={VERSION_STATUS_BADGE[v.status]} className="text-xs">
+                        {VERSION_STATUS_LABELS[v.status]}
+                      </Badge>
                     </td>
                     <td className="py-2 px-3">
                       <span className="font-medium">{v.title}</span>
