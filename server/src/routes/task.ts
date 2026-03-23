@@ -92,7 +92,30 @@ router.get('/', (req, res) => {
     const pageSize = query.pageSize || 20;
     const total = tasks.length;
     const start = (page - 1) * pageSize;
-    const list = tasks.slice(start, start + pageSize);
+    let list = tasks.slice(start, start + pageSize);
+
+    // 字段过滤（iter-87 API优化：支持 fields 参数减少 payload）
+    const fields = (req.query.fields as string)?.split(',').map(f => f.trim());
+    if (fields && fields.length > 0) {
+      list = list.map(task => {
+        const filtered: Record<string, unknown> = {};
+        for (const field of fields) {
+          if (field in task) {
+            filtered[field] = (task as Record<string, unknown>)[field];
+          }
+        }
+        return filtered;
+      });
+    }
+
+    // ETag + Cache-Control 支持（iter-87 API优化：启用条件请求减少带宽）
+    const etag = `W/"${total}-${page}-${pageSize}"`;
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'private, max-age=30');
+    if (req.headers['if-none-match'] === etag) {
+      res.status(304).end();
+      return;
+    }
 
     res.json(success({ list, total, page, pageSize }));
   } catch (err) {
@@ -133,16 +156,23 @@ router.get('/:taskId', (req, res) => {
       return;
     }
 
-    // 附带记忆摘要
-    const memorySummary = taskMemory.getTaskMemorySummary(task.taskId);
+    // 记忆摘要默认关闭，按需加载（iter-87 API优化：避免不必要的 memory 查询）
+    const includeMemory = req.query.includeMemory === 'true';
+    const result: Record<string, unknown> = { ...task };
+    if (includeMemory) {
+      result.memory = taskMemory.getTaskMemorySummary(task.taskId);
+    }
 
-    res.json({
-      success: true,
-      data: {
-        ...task,
-        memory: memorySummary,
-      },
-    });
+    // ETag + Cache-Control
+    const etag = `W/"${task.taskId}-${task.status}-${task.updatedAt ?? task.createdAt}"`;
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'private, max-age=60');
+    if (req.headers['if-none-match'] === etag) {
+      res.status(304).end();
+      return;
+    }
+
+    res.json(success(result));
   } catch (err) {
     console.error('[TaskRoutes] get error:', err);
     res.status(500).json(error(500, 'Internal server error'));
@@ -621,7 +651,7 @@ router.get('/cancel/audit', (req, res) => {
 
 // ============ 任务依赖图（iter-23 新增）============
 
-import { buildDAG, buildSubtaskTree, getRunnableTasks, detectDependencyConflicts } from '../services/taskDependencyGraph.js';
+import { buildDAG, buildSubtaskTree, detectDependencyConflicts } from '../services/taskDependencyGraph.js';
 import { emitTaskEvent, getEventHistory, getFailedDeliveries, listWebhookEndpoints, createWebhookEndpoint, deleteWebhookEndpoint, toggleWebhookEndpoint, listNotificationRules, createNotificationRule, deleteNotificationRule, toggleNotificationRule, TaskEventType } from '../services/taskNotification.js';
 import { getTaskSLA, getAllSLAs, getBreachedSLAs, getAtRiskSLAs, getSLAStats, setTaskDeadline, getSLADefinitions, updateSLADefinitions, SLAStatus } from '../services/taskSLA.js';
 
@@ -645,17 +675,6 @@ router.get('/tree/:taskId', (req, res) => {
     res.json(success(tree));
   } catch (err) {
     console.error('[TaskRoutes] tree error:', err);
-    res.status(500).json(error(500, 'Internal server error'));
-  }
-});
-
-// GET /api/v1/tasks/runnable - 获取可运行任务
-router.get('/runnable', (_req, res) => {
-  try {
-    const runnable = getRunnableTasks();
-    res.json(success(runnable));
-  } catch (err) {
-    console.error('[TaskRoutes] runnable error:', err);
     res.status(500).json(error(500, 'Internal server error'));
   }
 });
