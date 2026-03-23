@@ -10,6 +10,7 @@ import { Message, QueueStatus } from '../models/message.js';
 import { shouldPreempt } from './priorityCalculator.js';
 import { messageMerger } from './messageMerger.js';
 import { messageRepo } from '../db/repositories/messageRepo.js';
+import { addDocuments } from './vectorStore.js';
 
 // 队列时间戳格式
 function getDateStr(): string {
@@ -297,6 +298,10 @@ class MessageQueueService {
         this.currentProcessing = null;
         this.processNext();
       }
+      // 向量化存储消息内容（非阻塞）
+      this.vectorizeMessage(msg).catch(err => {
+        console.error('[messageQueue] Failed to vectorize completed message:', err.message);
+      });
     }
 
     return true;
@@ -360,6 +365,42 @@ class MessageQueueService {
     this.history.unshift(message);
     if (this.history.length > this.MAX_HISTORY) {
       this.history = this.history.slice(0, this.MAX_HISTORY);
+    }
+  }
+
+  /**
+   * 向量存储单条消息
+   */
+  private async vectorizeMessage(msg: Message): Promise<void> {
+    try {
+      const textToStore = [
+        `[${msg.type === 'file' ? '文件' : '文本'}消息]`,
+        `用户：${msg.userName} (${msg.role})`,
+        `内容：${msg.content}`,
+        msg.fileInfo?.fileName ? `文件名：${msg.fileInfo.fileName}` : '',
+      ].filter(Boolean).join('\n');
+
+      await addDocuments(
+        'messages',
+        [textToStore],
+        [`msg_${msg.messageId}`],
+        [{
+          messageId: msg.messageId,
+          channel: msg.channel,
+          userId: msg.userId,
+          userName: msg.userName,
+          role: msg.role,
+          type: msg.type,
+          urgency: msg.urgency,
+          timestamp: msg.timestamp,
+          type_field: 'message',
+        }]
+      );
+      console.log(`[messageQueue] Message ${msg.messageId} vectorized`);
+    } catch (err) {
+      // 非关键路径，只记录日志
+      const msg_str = err instanceof Error ? err.message : String(err);
+      console.warn(`[messageQueue] Vectorize failed for ${msg.messageId}:`, msg_str);
     }
   }
 

@@ -49,6 +49,9 @@ import { messageCircuitBreakerService } from '../services/messageCircuitBreaker.
 import { messageChannelAggregatorService } from '../services/messageChannelAggregator.js';
 import { messageRouterService } from '../services/messageRouter.js';
 import { processMessage } from '../services/messagePipeline.js';
+import { docService } from '../services/docService.js';
+import { parseDocument } from '../services/docParser.js';
+import { addDocuments } from '../services/vectorStore.js';
 import {
   Message,
   ReceiveMessageRequest,
@@ -56,6 +59,83 @@ import {
 } from '../models/message.js';
 
 const router = Router();
+
+// ============================================
+// 文件文档库写入 + 解析 + 向量化（异步辅助函数）
+// ============================================
+const PARSEABLE_MIMES = new Set([
+  'text/markdown', 'text/plain',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+]);
+
+async function saveFileToDocLibrary(
+  messageId: string,
+  fileData: {
+    fileName: string;
+    fileSize: number;
+    mimeType: string;
+    content?: string;
+    channel: Message['channel'];
+    userId: string;
+    userName: string;
+  }
+): Promise<void> {
+  try {
+    // 写入文档库
+    let docId = `file_${messageId}`;
+    if (fileData.content) {
+      const buffer = Buffer.from(fileData.content, fileData.content.startsWith('JVBER') ? 'base64' : 'utf8');
+      const doc = docService.uploadDoc(fileData.fileName, buffer);
+      docId = doc.id;
+      console.log(`[messages] File saved to doc library: ${doc.id} (${fileData.fileName})`);
+    } else {
+      // 无内容时只记录引用
+      console.log(`[messages] File without content recorded: ${fileData.fileName} (messageId: ${messageId})`);
+    }
+
+    // 可解析类型 → 解析内容 → 向量化
+    if (PARSEABLE_MIMES.has(fileData.mimeType) && fileData.content) {
+      try {
+        // 将内容写入临时文件供解析器使用
+        const tmpPath = `/tmp/teamclaw/tmp_${messageId}_${fileData.fileName}`;
+        const fs = await import('fs');
+        const path = await import('path');
+        await fs.promises.mkdir(path.dirname(tmpPath), { recursive: true });
+        const contentBuffer = Buffer.from(fileData.content, fileData.content.startsWith('JVBER') ? 'base64' : 'utf8');
+        await fs.promises.writeFile(tmpPath, contentBuffer);
+
+        const parsed = await parseDocument(tmpPath);
+        if (parsed && parsed.content) {
+          // 向量化存储解析结果
+          await addDocuments(
+            'documents',
+            [parsed.content],
+            [`doc_${docId}`],
+            [{
+              docId,
+              fileName: fileData.fileName,
+              mimeType: fileData.mimeType,
+              messageId,
+              channel: fileData.channel,
+              uploadedAt: new Date().toISOString(),
+              type: 'document_content',
+            }]
+          );
+          console.log(`[messages] Document content parsed and vectorized: ${fileData.fileName}`);
+        }
+
+        // 清理临时文件
+        await fs.promises.unlink(tmpPath).catch(() => {});
+      } catch (parseErr) {
+        console.warn(`[messages] Failed to parse/file document ${fileData.fileName}:`, parseErr);
+      }
+    }
+  } catch (err) {
+    console.error('[messages] saveFileToDocLibrary error:', err);
+  }
+}
 
 // ============================================
 // POST /api/v1/messages - 接收外部消息
@@ -211,6 +291,11 @@ router.post('/file', (req, res) => {
         mimeType: body.mimeType,
         convertedContent: body.content,
       },
+    });
+
+    // 异步：写入文档库 + 解析 + 向量化（非阻塞，不影响响应）
+    saveFileToDocLibrary(result.message.messageId, body).catch(err => {
+      console.error('[messages] POST /file: doc library save failed:', err.message);
     });
 
     res.status(201).json(success({

@@ -6,6 +6,9 @@
 import { CronJob, CronRun, CreateCronJobRequest, UpdateCronJobRequest } from '../models/cronJob.js';
 import * as cron from 'node-cron';
 import { getFeishuConfig, sendFeishuMessage } from './feishuService.js';
+import { llmAutoRoute, type LLMMessages } from './llmService.js';
+import { dispatchToAgent } from './agentExecution.js';
+import { AgentName } from '../constants/agents.js';
 
 // In-memory storage (替换为 DB/Redis 时修改此处)
 const cronJobs = new Map<string, CronJob>();
@@ -189,7 +192,6 @@ export class CronService {
   }
 
   private async executeAndSend(job: CronJob, run: CronRun): Promise<void> {
-    const startTime = Date.now();
     let success = false;
     let output: string | undefined;
     let errorMsg: string | undefined;
@@ -197,26 +199,60 @@ export class CronService {
     try {
       const feishuConfig = getFeishuConfig();
       if (!feishuConfig?.chatId) {
-        // 没有配置飞书群聊时，只记录日志
-        console.log(`[cronService] Feishu not configured, would send to cron job ${job.id}: ${job.prompt}`);
-        output = `Cron Job "${job.name}" 触发（飞书未配置，消息未发送）`;
+        console.log(`[cronService] Feishu not configured, would execute cron job ${job.id}: ${job.prompt}`);
+        output = `Cron Job "${job.name}" 触发（飞书未配置，仅记录日志）`;
         success = true;
       } else {
+        // 检测 prompt 是否含 @agent
+        const agentPattern = /@(\w+)/i;
+        const agentMatch = job.prompt.match(agentPattern);
+        const mentionedAgent = agentMatch?.[1]?.toLowerCase() as AgentName | null;
+
+        let responseText: string;
+
+        if (mentionedAgent && ['main', 'pm', 'coder', 'reviewer'].includes(mentionedAgent)) {
+          // @agent → 走 Agent 执行流程
+          console.log(`[cronService] Cron job ${job.id} routing to agent ${mentionedAgent}: ${job.prompt.slice(0, 80)}...`);
+          const sessionId = `cron_${job.id}_${Date.now()}`;
+          const dispatchResult = dispatchToAgent({
+            dispatcher: 'system',
+            targetAgent: mentionedAgent,
+            taskId: `cron_${job.id}`,
+            prompt: job.prompt,
+          });
+
+          if ('error' in dispatchResult) {
+            responseText = `[Cron] ${job.name}\n\n⚠️ Agent ${mentionedAgent} 执行失败: ${dispatchResult.error}`;
+          } else {
+            // Agent 异步执行，等待一小段时间后取结果
+            responseText = `[Cron] ${job.name}\n\n✅ 任务已派发给 @${mentionedAgent}（executionId: ${dispatchResult.executionId}）`;
+          }
+        } else {
+          // 无 @agent → 直接 LLM 调用
+          console.log(`[cronService] Cron job ${job.id} calling LLM directly: ${job.prompt.slice(0, 80)}...`);
+          const messages: LLMMessages[] = [
+            { role: 'user', content: job.prompt },
+          ];
+          const llmResponse = await llmAutoRoute(messages);
+          responseText = `[Cron] ${job.name}\n\n${llmResponse.content}`;
+        }
+
+        // 发送结果到飞书群聊
         const result = await sendFeishuMessage({
           appId: feishuConfig.appId,
           appSecret: feishuConfig.appSecret,
           receiveIdType: 'chat_id',
           receiveId: feishuConfig.chatId,
           msgType: 'text',
-          content: JSON.stringify({ text: `[Cron] ${job.name}\n\n${job.prompt}` }),
+          content: JSON.stringify({ text: responseText }),
         });
-        output = `Prompt 已发送至群聊 (messageId: ${result.messageId}): "${job.prompt.slice(0, 50)}..."`;
+        output = `Cron 执行完成，消息已发送 (messageId: ${result.messageId})`;
         success = true;
-        console.log(`[cronService] Sent cron prompt for job ${job.id} to Feishu: ${result.messageId}`);
+        console.log(`[cronService] Cron job ${job.id} executed and sent to Feishu: ${result.messageId}`);
       }
     } catch (err) {
       errorMsg = err instanceof Error ? err.message : String(err);
-      console.error(`[cronService] Failed to send cron prompt for job ${job.id}:`, err);
+      console.error(`[cronService] Failed to execute cron job ${job.id}:`, err);
     }
 
     const endTime = new Date().toISOString();
