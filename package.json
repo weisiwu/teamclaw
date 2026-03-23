@@ -4,6 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:all": "bash scripts/dev.sh",
+    "dev:backend": "bash scripts/dev.sh --backend",
+    "dev:frontend": "bash scripts/dev.sh --frontend",
+    "dev:stop": "bash scripts/dev.sh --stop",
+    "dev:status": "bash scripts/dev.sh --status",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

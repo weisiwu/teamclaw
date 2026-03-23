@@ -56,5 +56,8 @@ artifacts/
 !app/api/v1/versions/
 !app/api/v1/tasks/
 
+# pid files
+.pids/
+
 # docker
 docker-compose.override.yml

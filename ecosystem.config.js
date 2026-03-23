@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'teamclaw-server',
       script: './server/dist/index.js',
-      cwd: '.',
+      cwd: '/Users/weisiwu_clawbot_mac/Desktop/致富经/apps/teamclaw',
       watch: false,
       ignore_watch: ['node_modules', '.next', 'dist'],
       env: {
@@ -25,7 +25,7 @@ module.exports = {
     {
       name: 'teamclaw-dashboard',
       script: './.next/standalone/server.js',
-      cwd: '.',
+      cwd: '/Users/weisiwu_clawbot_mac/Desktop/致富经/apps/teamclaw',
       env: {
         NODE_ENV: 'production',
         PORT: 3000,
