@@ -1,20 +1,12 @@
 import { NextResponse } from "next/server";
+import {
+  generateRequestId,
+  jsonSuccess,
+  jsonError,
+  optionsResponse,
+} from "@/lib/api-shared";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Request-ID",
-};
-
-function generateRequestId(): string {
-  return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-function jsonSuccess(data: unknown, requestId?: string): NextResponse {
-  return NextResponse.json({ code: 0, data, requestId }, { headers: { ...corsHeaders } });
-}
-function jsonError(message: string, status: number, requestId?: string): NextResponse {
-  return NextResponse.json({ code: status, message, requestId }, { status });
-}
+export { optionsResponse as OPTIONS };
 
 interface GitBranch {
   id: string; name: string; isMain: boolean; isRemote: boolean; isProtected: boolean;
@@ -35,10 +27,6 @@ function ensureInit() {
   };
   branchStore.set(main.id, main);
   branchStore.set("main", main);
-}
-
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, { status: 204, headers: corsHeaders });
 }
 
 // GET /api/v1/branches/main — 获取主分支

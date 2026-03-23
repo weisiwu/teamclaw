@@ -1,46 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import {
+  generateRequestId,
+  jsonSuccess,
+  jsonError,
+  optionsResponse,
+} from "@/lib/api-shared";
 
-/** CORS headers for cross-origin API access */
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Request-ID",
-  "Access-Control-Max-Age": "86400",
-};
-
-/**
- * Generate a short unique request ID
- */
-function generateRequestId(): string {
-  return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-/**
- * Unified JSON error response helper (consistent with other API routes)
- */
-function jsonError(message: string, status: number, requestId?: string): NextResponse {
-  return NextResponse.json(
-    { code: status, message, requestId },
-    { status, headers: corsHeaders }
-  );
-}
-
-/**
- * Unified success response helper (consistent with other API routes)
- */
-function jsonSuccess(data: unknown, requestId?: string): NextResponse {
-  return NextResponse.json({ code: 0, data, requestId }, {
-    headers: { ...corsHeaders },
-  });
-}
-
-/**
- * OPTIONS /api/health
- * CORS preflight
- */
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, { status: 204, headers: corsHeaders });
-}
+export { optionsResponse as OPTIONS };
 
 /**
  * GET /api/health
