@@ -36,6 +36,12 @@ import authRouter from './routes/auth.js';
 import { getArtifactsRootDir } from './services/artifactStore.js';
 import './services/taskInit.js'; // 初始化任务机制钩子
 import { registerAutoBumpHook } from './hooks/autoBumpOnTaskDone.js';
+import traceRouter from './routes/trace.js';
+// 初始化事件总线串联模块（按依赖顺序导入）
+import './services/messageToTask.js'; // 消息→任务
+import './services/taskToAgent.js'; // 任务→Agent
+import './services/agentToVersion.js'; // Agent→代码→版本
+import './services/versionToBuild.js'; // 版本→构建→通知
 
 const app = express();
 const PORT = process.env.PORT || 9700;
@@ -44,52 +50,59 @@ const PORT = process.env.PORT || 9700;
 registerShutdownHandlers();
 
 // ========== Security Headers (Helmet) ==========
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"],
-      fontSrc: ["'self'"],
-      objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
-      upgradeInsecureRequests: [],
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'https:'],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"],
+        upgradeInsecureRequests: [],
+      },
     },
-  },
-  crossOriginEmbedderPolicy: false,
-  // 额外安全配置 (iter-20)
-  xContentTypeOptions: true, // 禁止 MIME 类型嗅探
-  xFrameOptions: { action: 'deny' }, // 禁止点击劫持
-  xXssProtection: true, // 启用浏览器 XSS 过滤器
-  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-  hsts: {
-    maxAge: 31536000, // 1年
-    includeSubDomains: true,
-    preload: true,
-  },
-  dnsPrefetchControl: { allow: false },
-  permittedCrossDomainPolicies: { permittedPolicies: 'none' },
-}));
+    crossOriginEmbedderPolicy: false,
+    // 额外安全配置 (iter-20)
+    xContentTypeOptions: true, // 禁止 MIME 类型嗅探
+    xFrameOptions: { action: 'deny' }, // 禁止点击劫持
+    xXssProtection: true, // 启用浏览器 XSS 过滤器
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    hsts: {
+      maxAge: 31536000, // 1年
+      includeSubDomains: true,
+      preload: true,
+    },
+    dnsPrefetchControl: { allow: false },
+    permittedCrossDomainPolicies: { permittedPolicies: 'none' },
+  })
+);
 
 // ========== CORS Configuration ==========
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',').map(s => s.trim());
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    // In development, allow any localhost origin
-    if (process.env.NODE_ENV !== 'production' && origin?.includes('localhost')) return callback(null, true);
-    callback(new Error(`CORS policy violation: origin ${origin} not allowed`));
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Request-Id'],
-  exposedHeaders: ['X-Request-Id', 'Content-Disposition'],
-}));
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
+  .split(',')
+  .map(s => s.trim());
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      // In development, allow any localhost origin
+      if (process.env.NODE_ENV !== 'production' && origin?.includes('localhost'))
+        return callback(null, true);
+      callback(new Error(`CORS policy violation: origin ${origin} not allowed`));
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Request-Id'],
+    exposedHeaders: ['X-Request-Id', 'Content-Disposition'],
+  })
+);
 
 app.use(express.json());
 
@@ -104,9 +117,9 @@ const defaultLimiter = rateLimit({
     res.status(429).json({
       code: 429,
       data: null,
-      message: '请求过于频繁，请稍后再试'
+      message: '请求过于频繁，请稍后再试',
     });
-  }
+  },
 });
 
 // 严格限流：10 req/min（用于敏感接口）
@@ -119,9 +132,9 @@ const strictLimiter = rateLimit({
     res.status(429).json({
       code: 429,
       data: null,
-      message: '请求过于频繁，请稍后再试'
+      message: '请求过于频繁，请稍后再试',
     });
-  }
+  },
 });
 
 // 应用全局限流
@@ -132,25 +145,31 @@ app.use('/api/v1/auth/login', strictLimiter);
 app.use('/api/v1/users', strictLimiter);
 
 // Static artifact downloads
-app.use('/artifacts', express.static(getArtifactsRootDir(), {
-  maxAge: '1d',
-  etag: true,
-  lastModified: true,
-  setHeaders: (res) => {
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
-  },
-}));
+app.use(
+  '/artifacts',
+  express.static(getArtifactsRootDir(), {
+    maxAge: '1d',
+    etag: true,
+    lastModified: true,
+    setHeaders: res => {
+      res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    },
+  })
+);
 
 // Static package downloads (zip/tar.gz)
 const ARCHIVE_ROOT = join(process.env.HOME || '/tmp', '.openclaw', 'packages');
-app.use('/packages', express.static(ARCHIVE_ROOT, {
-  maxAge: '1d',
-  etag: true,
-  lastModified: true,
-  setHeaders: (res) => {
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
-  },
-}));
+app.use(
+  '/packages',
+  express.static(ARCHIVE_ROOT, {
+    maxAge: '1d',
+    etag: true,
+    lastModified: true,
+    setHeaders: res => {
+      res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    },
+  })
+);
 
 // Routes
 app.use('/api/v1', healthRouter);
@@ -183,6 +202,7 @@ app.use('/api/v1/artifacts', artifactRouter);
 app.use('/api/v1/branches', branchRouter);
 app.use('/api/v1/downloads', downloadRouter);
 app.use('/api/v1/llm', llmRouter);
+app.use('/api/v1/traces', traceRouter);
 
 // Root
 app.get('/', (req, res) => {
@@ -205,7 +225,7 @@ const server = app.listen(PORT, async () => {
 // 注册 HTTP Server 关闭
 onShutdown('HTTP Server', async () => {
   return new Promise<void>((resolve, reject) => {
-    server.close((err) => {
+    server.close(err => {
       if (err) reject(err);
       else resolve();
     });

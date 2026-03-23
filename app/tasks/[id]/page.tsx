@@ -220,6 +220,17 @@ export default function TaskDetailPage({
                 <span className="font-medium">{task.duration} 分钟</span>
               </div>
             )}
+            {task.sessionId && (
+              <div>
+                <span className="text-gray-500 dark:text-gray-400">追踪：</span>
+                <Link
+                  href={`/monitor?trace=${task.sessionId}`}
+                  className="font-medium text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  查看链路
+                </Link>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
