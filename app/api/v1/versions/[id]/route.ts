@@ -1,6 +1,6 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { versionStore, type Version } from "../version-store";
-import { generateRequestId, jsonSuccess, jsonError, optionsResponse } from "@/lib/api-shared";
+import { generateRequestId, jsonSuccess, jsonError, optionsResponse, requireAuth } from "@/lib/api-shared";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -28,13 +28,18 @@ export async function GET(
 
 /**
  * PUT /api/v1/versions/[id]
- * Replace a version (full update)
+ * Replace a version (full update) — requires auth
  */
 export async function PUT(
   request: NextRequest,
   context: RouteContext
 ) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
+
+  // Auth: require authentication
+  const authResult = requireAuth(request, requestId);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const { id } = await context.params;
     const existing = versionStore.get(id);
@@ -61,13 +66,18 @@ export async function PUT(
 
 /**
  * PATCH /api/v1/versions/[id]
- * Partially update a version (e.g. update buildStatus, summary)
+ * Partially update a version (e.g. update buildStatus, summary) — requires auth
  */
 export async function PATCH(
   request: NextRequest,
   context: RouteContext
 ) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
+
+  // Auth: require authentication
+  const authResult = requireAuth(request, requestId);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const { id } = await context.params;
     const existing = versionStore.get(id);
@@ -94,13 +104,18 @@ export async function PATCH(
 
 /**
  * DELETE /api/v1/versions/[id]
- * Delete a version
+ * Delete a version — requires auth
  */
 export async function DELETE(
   request: NextRequest,
   context: RouteContext
 ) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
+
+  // Auth: require authentication
+  const authResult = requireAuth(request, requestId);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const { id } = await context.params;
     const existing = versionStore.get(id);
