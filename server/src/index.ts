@@ -1,4 +1,5 @@
 import express, { Router } from 'express';
+import { onShutdown, registerShutdownHandlers } from './utils/shutdown.js';
 import { join } from 'path';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -36,6 +37,9 @@ import { registerAutoBumpHook } from './hooks/autoBumpOnTaskDone.js';
 
 const app = express();
 const PORT = process.env.PORT || 9700;
+
+// 注册进程信号监听
+registerShutdownHandlers();
 
 // ========== Security Headers (Helmet) ==========
 app.use(helmet({
@@ -186,10 +190,21 @@ app.get('/', (req, res) => {
 app.use(notFoundHandler);
 app.use(unifiedErrorHandler);
 
-app.listen(PORT, () => {
+// 保存 server 引用用于优雅关闭
+const server = app.listen(PORT, () => {
   console.log(`TeamClaw server running on port ${PORT}`);
   // 注册自动版本升级钩子
   registerAutoBumpHook();
+});
+
+// 注册 HTTP Server 关闭
+onShutdown('HTTP Server', async () => {
+  return new Promise<void>((resolve, reject) => {
+    server.close((err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
 });
 
 export default app;

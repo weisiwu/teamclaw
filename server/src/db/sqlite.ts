@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { onShutdown } from '../utils/shutdown.js';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
@@ -27,3 +28,7 @@ export function closeDb() {
     _db = null;
   }
 }
+
+onShutdown('SQLite', () => {
+  closeDb();
+});

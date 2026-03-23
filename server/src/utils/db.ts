@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { onShutdown } from './shutdown.js';
 
 const { Pool } = pg;
 
@@ -11,4 +12,9 @@ export const pool = new Pool({
 
 pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
+});
+
+// 注册优雅关闭
+onShutdown('PostgreSQL', async () => {
+  await pool.end();
 });
