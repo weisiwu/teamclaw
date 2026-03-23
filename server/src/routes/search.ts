@@ -1,13 +1,22 @@
+/**
+ * Search Routes
+ * 搜索增强模块 - 语义搜索 API
+ *
+ * GET /api/v1/search/tasks?q=xxx&mode=semantic&topK=5  语义搜索历史任务
+ * GET /api/v1/search?q=xxx&mode=semantic              全局语义搜索
+ */
+
 import { Router } from 'express';
 import { searchService } from '../services/searchService.js';
+import { taskMemory, TaskSearchResult } from '../services/taskMemory.js';
 import {
   semanticDocSearch,
   applyFilters,
   getSearchSuggestions,
   saveSearchHistory,
-  getSearchHistory,
   clearSearchHistory,
   indexDocInChroma,
+  getSearchHistoryRecords,
   SearchFilter,
 } from '../services/searchEnhancer.js';
 import { docService } from '../services/docService.js';
@@ -30,7 +39,6 @@ router.get('/docs', async (req, res) => {
   if (mode === 'semantic' && q && typeof q === 'string') {
     const semanticResults = await semanticDocSearch(q as string, size);
     const docIds = semanticResults.map(r => r.id);
-    // Fetch full doc info and apply filters
     let docs = docIds.map(id => docService.getDoc(id)).filter(Boolean);
     docs = applyFilters(docs, filter);
     const total = docs.length;
@@ -74,14 +82,46 @@ router.get('/docs', async (req, res) => {
   }));
 });
 
-// 任务搜索 GET /api/v1/search/tasks?q=xxx&page=1&pageSize=10
-router.get('/tasks', (req, res) => {
-  const { q, page = '1', pageSize = '10' } = req.query;
+// 任务搜索 GET /api/v1/search/tasks?q=xxx&mode=semantic&topK=5
+router.get('/tasks', async (req, res) => {
+  const { q, mode = 'keyword', page = '1', pageSize = '10', topK = '5' } = req.query;
+
   if (!q || typeof q !== 'string') {
-    return res.status(400).json(error(400, '需要 q 参数', 'INVALID_PARAMS'));
+    return res.status(400).json(error(400, 'query parameter "q" is required', 'INVALID_PARAMS'));
   }
+
   const pageNum = parseInt(page as string);
   const size = parseInt(pageSize as string);
+  const k = parseInt(topK as string);
+
+  // 语义搜索模式
+  if (mode === 'semantic') {
+    try {
+      const results = await taskMemory.searchSimilarTasks(q, k);
+      const total = results.length;
+      const paged = results.slice((pageNum - 1) * size, pageNum * size);
+      saveSearchHistory('default', q, 'semantic', {}, total);
+      return res.json(success({
+        list: paged.map((r: TaskSearchResult) => ({
+          taskId: r.taskId,
+          title: r.title,
+          summary: r.summary,
+          similarity: r.similarity,
+          completedAt: r.completedAt,
+        })),
+        total,
+        page: pageNum,
+        pageSize: size,
+        mode: 'semantic',
+      }));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[search] Semantic task search failed:', msg);
+      return res.status(500).json(error(500, 'Semantic search failed', 'SEARCH_ERROR'));
+    }
+  }
+
+  // 关键词搜索模式（fallback）
   const result = searchService.searchTasks(q, pageNum, size);
   res.json(success(result));
 });
@@ -115,7 +155,6 @@ router.get('/suggestions', (req, res) => {
 // 搜索历史 GET /api/v1/search/history?userId=xxx&limit=10
 router.get('/history', (req, res) => {
   const { userId = 'default', limit = '10' } = req.query;
-  const { getSearchHistoryRecords } = require('../services/searchEnhancer.js');
   const history = getSearchHistoryRecords(userId as string, parseInt(limit as string));
   res.json(success({ history }));
 });

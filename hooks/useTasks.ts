@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { taskApi } from "@/lib/api/tasks";
+import { searchTasksSemantic, getTaskSummary, getTaskContext, getTaskSimilar } from "@/lib/api/search";
 import { TaskFilters, CreateTaskRequest, UpdateTaskRequest } from "@/lib/api/types";
 
 // Query Keys
@@ -145,5 +146,54 @@ export function useDeleteComment(taskId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: commentKeys.list(taskId) });
     },
+  });
+}
+
+// ── 语义搜索相关 ──────────────────────────────────────
+
+// Query Keys for semantic search
+export const semanticSearchKeys = {
+  all: ["semanticSearch"] as const,
+  tasks: (q: string) => [...semanticSearchKeys.all, "tasks", q] as const,
+  similar: (taskId: string) => [...semanticSearchKeys.all, "similar", taskId] as const,
+};
+
+// 语义搜索历史任务 Hook
+export function useTaskSemanticSearch(q: string, topK = 5, enabled = true) {
+  return useQuery({
+    queryKey: semanticSearchKeys.tasks(q),
+    queryFn: () => searchTasksSemantic(q, 'semantic', topK),
+    enabled: enabled && !!q && q.length >= 2,
+    staleTime: 60000,
+  });
+}
+
+// 获取任务摘要 Hook
+export function useTaskSummary(taskId: string) {
+  return useQuery({
+    queryKey: ["taskSummary", taskId] as const,
+    queryFn: () => getTaskSummary(taskId),
+    enabled: !!taskId,
+    staleTime: 300000,
+  });
+}
+
+// 获取任务上下文快照 Hook
+export function useTaskContext(taskId: string) {
+  return useQuery({
+    queryKey: ["taskContext", taskId] as const,
+    queryFn: () => getTaskContext(taskId),
+    enabled: !!taskId,
+    staleTime: 300000,
+  });
+}
+
+// 获取相似历史任务 Hook
+export function useTaskSimilar(taskId: string, topK = 5) {
+  return useQuery({
+    queryKey: semanticSearchKeys.similar(taskId),
+    queryFn: () => getTaskSimilar(taskId, topK),
+    enabled: !!taskId,
+    staleTime: 60000,
   });
 }

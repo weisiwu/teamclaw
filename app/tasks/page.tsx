@@ -26,7 +26,8 @@ import {
   LayoutGrid,
   Clock,
   Target,
-  Loader2
+  Loader2,
+  Brain
 } from "lucide-react";
 
 // CSV 导出函数
@@ -65,8 +66,10 @@ import {
   useCompleteTask, 
   useCancelTask,
   useReopenTask,
-  useUpdateTask 
+  useUpdateTask,
+  useTaskSemanticSearch 
 } from "@/hooks/useTasks";
+import type { TaskSearchResult } from "@/lib/api/search";
 import { 
   TASK_STATUS_OPTIONS, 
   TASK_PRIORITY_OPTIONS,
@@ -526,6 +529,13 @@ function TasksContent() {
 
   // 快速创建展开状态
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+
+  // 语义搜索状态
+  const [semanticQuery, setSemanticQuery] = useState("");
+  const [isSemanticMode, setIsSemanticMode] = useState(false);
+
+  // 语义搜索结果
+  const semanticResults = useTaskSemanticSearch(semanticQuery, 5, isSemanticMode && semanticQuery.length >= 2);
   
   // 从 URL 获取筛选参数
   const search = searchParams.get("search") || "";
@@ -892,6 +902,75 @@ function TasksContent() {
             </Button>
           </div>
         </div>
+
+        {/* 语义搜索 */}
+        <div className="mb-4 flex gap-3 items-center">
+          <div className="flex-1 relative">
+            <Brain className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-500" />
+            <Input
+              placeholder="🧠 输入自然语言搜索相似历史任务..."
+              value={semanticQuery}
+              onChange={(e) => setSemanticQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && semanticQuery.length >= 2) {
+                  setIsSemanticMode(true);
+                }
+              }}
+              className="pl-10 border-purple-200 dark:border-purple-700 focus:border-purple-400"
+            />
+          </div>
+          <Button
+            variant={isSemanticMode ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              if (semanticQuery.length >= 2) {
+                setIsSemanticMode(!isSemanticMode);
+              }
+            }}
+            disabled={semanticQuery.length < 2}
+            className={isSemanticMode ? "bg-purple-500 hover:bg-purple-600" : ""}
+          >
+            <Brain className="w-4 h-4 mr-1" />
+            语义搜索
+          </Button>
+        </div>
+
+        {/* 语义搜索结果 */}
+        {isSemanticMode && (
+          <Card className="mb-4 border-purple-200 dark:border-purple-700">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Brain className="w-4 h-4 text-purple-500" />
+                <span className="font-medium text-sm">语义搜索结果</span>
+                {semanticResults.isFetching && <Loader2 className="w-3 h-3 animate-spin text-purple-500" />}
+              </div>
+              {semanticResults.isError ? (
+                <p className="text-sm text-red-500">搜索失败，请重试</p>
+              ) : semanticResults.data?.data?.list?.length === 0 ? (
+                <p className="text-sm text-gray-500">未找到相似任务</p>
+              ) : semanticResults.data?.data?.list?.length ? (
+                <div className="space-y-2">
+                  {semanticResults.data.data.list.map((result: TaskSearchResult) => (
+                    <div key={result.taskId} className="flex items-start gap-3 p-2 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <Link href={`/tasks/${result.taskId}`}>
+                            <span className="font-mono text-xs text-purple-600 dark:text-purple-400 hover:underline">{result.taskId}</span>
+                          </Link>
+                          <span className="text-sm font-medium truncate">{result.title}</span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">{result.summary}</p>
+                      </div>
+                      <Badge variant="outline" className="text-xs shrink-0">
+                        相似度 {((result.similarity || 0) * 100).toFixed(0)}%
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        )}
 
         {/* 任务统计概览 */}
         {taskStats && (

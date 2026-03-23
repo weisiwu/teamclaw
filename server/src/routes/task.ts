@@ -859,4 +859,53 @@ router.put('/sla/definitions', (req, res) => {
   }
 });
 
+// GET /api/v1/tasks/:taskId/summary - 获取任务生成的摘要
+router.get('/:taskId/summary', async (req, res) => {
+  try {
+    const task = taskLifecycle.getTask(req.params.taskId);
+    if (!task) {
+      res.status(404).json(error(404, 'Task not found'));
+      return;
+    }
+    const summary = await taskMemory.getTaskSummary(task.taskId);
+    res.json(success({ summary }));
+  } catch (err) {
+    console.error('[TaskRoutes] summary error:', err);
+    res.status(500).json(error(500, 'Internal server error'));
+  }
+});
+
+// GET /api/v1/tasks/:taskId/context - 获取任务创建时的上下文快照
+router.get('/:taskId/context', (req, res) => {
+  try {
+    const task = taskLifecycle.getTask(req.params.taskId);
+    if (!task) {
+      res.status(404).json(error(404, 'Task not found'));
+      return;
+    }
+    const snapshot = task.contextSnapshot ? JSON.parse(task.contextSnapshot) : null;
+    res.json(success({ contextSnapshot: snapshot }));
+  } catch (err) {
+    console.error('[TaskRoutes] context error:', err);
+    res.status(500).json(error(500, 'Internal server error'));
+  }
+});
+
+// GET /api/v1/tasks/:taskId/similar - 获取与该任务相似的历史任务
+router.get('/:taskId/similar', async (req, res) => {
+  try {
+    const task = taskLifecycle.getTask(req.params.taskId);
+    if (!task) {
+      res.status(404).json(error(404, 'Task not found'));
+      return;
+    }
+    const topK = parseInt(req.query.topK as string) || 5;
+    const similar = await taskMemory.getSimilarTasks(task.taskId, topK);
+    res.json(success({ list: similar, total: similar.length }));
+  } catch (err) {
+    console.error('[TaskRoutes] similar tasks error:', err);
+    res.status(500).json(error(500, 'Internal server error'));
+  }
+});
+
 export default router;

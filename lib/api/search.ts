@@ -78,3 +78,71 @@ export async function clearSearchHistory(userId?: string): Promise<void> {
   const json = await res.json();
   if (json.code !== 0) throw new Error(json.message);
 }
+
+// ── 任务语义搜索 ──────────────────────────────────────
+
+export interface TaskSearchResult {
+  taskId: string;
+  title: string;
+  summary: string;
+  similarity: number;
+  completedAt: string;
+}
+
+export interface TaskSearchResponse {
+  list: TaskSearchResult[];
+  total: number;
+  page: number;
+  pageSize: number;
+  mode: string;
+}
+
+// 语义搜索历史任务
+export async function searchTasksSemantic(
+  q: string,
+  mode: 'keyword' | 'semantic' = 'semantic',
+  topK = 5,
+  page = 1,
+  pageSize = 10
+): Promise<TaskSearchResponse> {
+  const params = new URLSearchParams();
+  params.set('q', q);
+  params.set('mode', mode);
+  params.set('topK', String(topK));
+  params.set('page', String(page));
+  params.set('pageSize', String(pageSize));
+
+  const res = await fetch(`${API_BASE}/search/tasks?${params}`);
+  const json = await res.json();
+  if (json.code !== 0) throw new Error(json.message || '语义搜索失败');
+  return json.data;
+}
+
+// 获取任务摘要
+export async function getTaskSummary(taskId: string): Promise<{
+  summary: string | null;
+  keyChanges: string[];
+  techStack: string[];
+  patterns: string[];
+} | null> {
+  const res = await fetch(`${API_BASE}/tasks/${encodeURIComponent(taskId)}/summary`);
+  const json = await res.json();
+  if (json.code !== 0) throw new Error(json.message);
+  return json.data?.summary ?? null;
+}
+
+// 获取任务上下文快照
+export async function getTaskContext(taskId: string): Promise<{ contextSnapshot: object | null }> {
+  const res = await fetch(`${API_BASE}/tasks/${encodeURIComponent(taskId)}/context`);
+  const json = await res.json();
+  if (json.code !== 0) throw new Error(json.message);
+  return json.data;
+}
+
+// 获取相似历史任务
+export async function getTaskSimilar(taskId: string, topK = 5): Promise<{ list: TaskSearchResult[]; total: number }> {
+  const res = await fetch(`${API_BASE}/tasks/${encodeURIComponent(taskId)}/similar?topK=${topK}`);
+  const json = await res.json();
+  if (json.code !== 0) throw new Error(json.message);
+  return json.data;
+}

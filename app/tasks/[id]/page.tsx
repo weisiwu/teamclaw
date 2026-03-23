@@ -21,9 +21,11 @@ import {
   Loader2,
   MessageCircle,
   Send,
-  Trash2
+  Trash2,
+  Brain
 } from "lucide-react";
-import { useTaskDetail, useCompleteTask, useCancelTask, useReopenTask, useTaskComments, useAddComment, useDeleteComment } from "@/hooks/useTasks";
+import { useTaskDetail, useCompleteTask, useCancelTask, useReopenTask, useTaskComments, useAddComment, useDeleteComment, useTaskSummary, useTaskSimilar } from "@/hooks/useTasks";
+import type { TaskSearchResult } from "@/lib/api/search";
 import { STATUS_BADGE_VARIANT, STATUS_LABELS } from "@/lib/api/constants";
 import type { TaskStatus } from "@/lib/api/types";
 
@@ -58,6 +60,10 @@ export default function TaskDetailPage({
   // 使用 React Query 获取任务详情
   const { data: task, isLoading, error } = useTaskDetail(id);
   
+  // 任务摘要和相似任务
+  const { data: taskSummary } = useTaskSummary(id);
+  const { data: similarTasks } = useTaskSimilar(id, 5);
+
   // Mutations
   const completeTask = useCompleteTask();
   const cancelTask = useCancelTask();
@@ -235,6 +241,45 @@ export default function TaskDetailPage({
           </CardContent>
         </Card>
 
+        {/* AI 生成的任务摘要 */}
+        <Card className="border-purple-200 dark:border-purple-700">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Brain className="w-4 h-4 text-purple-500" />
+              AI 任务摘要
+              {taskSummary?.summary === null && (
+                <Badge variant="outline" className="text-xs ml-2">生成中...</Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {taskSummary?.summary ? (
+              <div className="space-y-2">
+                <p className="text-gray-700 dark:text-gray-200">{taskSummary.summary}</p>
+                {taskSummary.keyChanges?.length > 0 && (
+                  <div>
+                    <span className="text-xs text-gray-500 font-medium">关键改动：</span>
+                    <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-300">
+                      {taskSummary.keyChanges.map((c: string, i: number) => <li key={i}>{c}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {taskSummary.techStack?.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {taskSummary.techStack.map((t: string, i: number) => (
+                      <Badge key={i} variant="outline" className="text-xs">{t}</Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-gray-500 dark:text-gray-400 text-sm">
+                {task.status === 'done' ? '暂无 AI 摘要' : '任务完成后将自动生成 AI 摘要'}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
         {/* 改动文件 */}
         <Card>
           <CardHeader>
@@ -254,6 +299,38 @@ export default function TaskDetailPage({
               </ul>
             ) : (
               <p className="text-gray-500 dark:text-gray-400">暂无改动文件</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 相似历史任务 */}
+        <Card className="border-purple-200 dark:border-purple-700 lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Brain className="w-4 h-4 text-purple-500" />
+              相似历史任务
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {similarTasks?.list && similarTasks.list.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {similarTasks.list.map((result: TaskSearchResult) => (
+                  <Link key={result.taskId} href={`/tasks/${result.taskId}`}>
+                    <div className="p-3 border rounded-lg hover:border-purple-300 dark:hover:border-purple-600 transition-colors cursor-pointer h-full">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <span className="font-mono text-xs text-purple-600 dark:text-purple-400">{result.taskId}</span>
+                        <Badge variant="outline" className="text-xs shrink-0">
+                          {(result.similarity * 100).toFixed(0)}%
+                        </Badge>
+                      </div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1 line-clamp-2">{result.title}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{result.summary}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 dark:text-gray-400 text-sm">暂无相似历史任务</p>
             )}
           </CardContent>
         </Card>

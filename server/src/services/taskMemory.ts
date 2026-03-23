@@ -1,10 +1,19 @@
 /**
  * Task Memory 服务
  * 任务机制模块 - 任务上下文/记忆化管理
- * 
+ *
  * 基于 SessionID 的上下文注入、工作进度持久化
  * 当前为内存存储，预留 DB 接入接口
+ * 新增：LLM 摘要生成、向量化存储、语义检索
  */
+
+import { Task } from '../models/task.js';
+import { llmService } from './llmService.js';
+import { addDocuments, query } from './vectorStore.js';
+
+const TASK_MEMORY_COLLECTION = 'task_memory';
+
+// ── 类型定义 ────────────────────────────────────────
 
 interface ContextMessage {
   id: string;
@@ -15,8 +24,8 @@ interface ContextMessage {
 
 interface TaskCheckpoint {
   id: string;
-  progress: number;         // 0-100
-  summary: string;          // 检查点摘要
+  progress: number;
+  summary: string;
   timestamp: string;
 }
 
@@ -25,18 +34,32 @@ interface TaskContext {
   sessionId: string;
   messages: ContextMessage[];
   checkpoints: TaskCheckpoint[];
-  summary?: string;        // 自动生成的摘要
+  summary?: string;
   createdAt: string;
   updatedAt: string;
 }
 
+export interface TaskSummary {
+  summary: string;
+  keyChanges: string[];
+  techStack: string[];
+  patterns: string[];
+}
+
+export interface TaskSearchResult {
+  taskId: string;
+  title: string;
+  summary: string;
+  similarity: number;
+  completedAt: string;
+}
+
+// ── 内存存储服务（原有功能）───────────────────────────
+
 class TaskMemoryService {
   private static instance: TaskMemoryService;
 
-  // Session -> TaskContext
   private contexts: Map<string, TaskContext> = new Map();
-
-  // 内存限制
   private readonly MAX_MESSAGES_PER_TASK = 200;
   private readonly MAX_CHECKPOINTS_PER_TASK = 20;
   private readonly MAX_CONTEXTS = 1000;
@@ -50,9 +73,6 @@ class TaskMemoryService {
     return TaskMemoryService.instance;
   }
 
-  /**
-   * 获取或创建任务上下文
-   */
   getOrCreateContext(taskId: string, sessionId: string): TaskContext {
     const key = `${sessionId}:${taskId}`;
     if (!this.contexts.has(key)) {
@@ -70,16 +90,10 @@ class TaskMemoryService {
     return this.contexts.get(key)!;
   }
 
-  /**
-   * 获取任务上下文
-   */
   getContext(taskId: string, sessionId: string): TaskContext | undefined {
     return this.contexts.get(`${sessionId}:${taskId}`);
   }
 
-  /**
-   * 注入上下文到 session（返回可用于 system prompt 的文本）
-   */
   buildContextPrompt(taskId: string, sessionId: string): string {
     const ctx = this.getContext(taskId, sessionId);
     if (!ctx) return '';
@@ -104,9 +118,6 @@ class TaskMemoryService {
     return lines.join('\n');
   }
 
-  /**
-   * 添加消息到上下文
-   */
   addMessage(taskId: string, sessionId: string, role: ContextMessage['role'], content: string): void {
     const ctx = this.getOrCreateContext(taskId, sessionId);
     ctx.messages.push({
@@ -117,15 +128,11 @@ class TaskMemoryService {
     });
     ctx.updatedAt = new Date().toISOString();
 
-    // 限制消息数量
     if (ctx.messages.length > this.MAX_MESSAGES_PER_TASK) {
       ctx.messages = ctx.messages.slice(-this.MAX_MESSAGES_PER_TASK);
     }
   }
 
-  /**
-   * 创建检查点
-   */
   createCheckpoint(taskId: string, sessionId: string, progress: number, summary: string): TaskCheckpoint {
     const ctx = this.getOrCreateContext(taskId, sessionId);
     const checkpoint: TaskCheckpoint = {
@@ -137,7 +144,6 @@ class TaskMemoryService {
     ctx.checkpoints.push(checkpoint);
     ctx.updatedAt = checkpoint.timestamp;
 
-    // 限制检查点数量
     if (ctx.checkpoints.length > this.MAX_CHECKPOINTS_PER_TASK) {
       ctx.checkpoints = ctx.checkpoints.slice(-this.MAX_CHECKPOINTS_PER_TASK);
     }
@@ -145,18 +151,12 @@ class TaskMemoryService {
     return checkpoint;
   }
 
-  /**
-   * 更新任务摘要
-   */
   updateSummary(taskId: string, sessionId: string, summary: string): void {
     const ctx = this.getOrCreateContext(taskId, sessionId);
     ctx.summary = summary;
     ctx.updatedAt = new Date().toISOString();
   }
 
-  /**
-   * 获取任务的所有上下文（给前端展示）
-   */
   getTaskMemorySummary(taskId: string): {
     messages: number;
     checkpoints: number;
@@ -176,19 +176,12 @@ class TaskMemoryService {
     return null;
   }
 
-  /**
-   * 清除任务上下文
-   */
   clearContext(taskId: string, sessionId: string): boolean {
     return this.contexts.delete(`${sessionId}:${taskId}`);
   }
 
-  /**
-   * 限制内存使用
-   */
   private enforceMemoryLimit(): void {
     if (this.contexts.size > this.MAX_CONTEXTS) {
-      // 删除最老的上下文
       const entries = Array.from(this.contexts.entries());
       entries.sort((a, b) => a[1].updatedAt.localeCompare(b[1].updatedAt));
       const toDelete = entries.slice(0, Math.floor(this.MAX_CONTEXTS * 0.2));
@@ -196,6 +189,171 @@ class TaskMemoryService {
         this.contexts.delete(key);
       }
     }
+  }
+
+  // ── 新增：LLM 摘要生成 ────────────────────────────────
+
+  /**
+   * 任务完成后生成摘要并向量化
+   */
+  async onTaskCompleted(task: Task): Promise<TaskSummary | null> {
+    try {
+      const sessionId = task.sessionId || task.taskId;
+      const ctx = this.getContext(task.taskId, sessionId);
+
+      // 1. 收集任务上下文：改动文件、Git commits、执行日志
+      const context = {
+        taskId: task.taskId,
+        title: task.title,
+        description: task.description,
+        tags: task.tags,
+        result: task.result,
+        assignedAgent: task.assignedAgent,
+        messages: ctx?.messages.slice(-20).map(m => `[${m.role}] ${m.content}`) || [],
+        checkpoints: ctx?.checkpoints.map(cp => `[${cp.progress}%] ${cp.summary}`) || [],
+        progress: task.progress,
+      };
+
+      // 2. 调用 LLM 生成结构化摘要
+      const response = await llmService.chat({
+        tier: 'light',
+        messages: [
+          {
+            role: 'system',
+            content: `你是一个任务分析助手。请根据以下任务信息生成结构化摘要。
+要求：返回一个合法的 JSON 对象，格式如下，不要添加任何额外说明：
+{
+  "summary": "任务完成情况的一两句话总结",
+  "keyChanges": ["关键改动1", "关键改动2"],
+  "techStack": ["使用的技术栈1", "使用的技术栈2"],
+  "patterns": ["设计模式或架构模式1", "模式2"]
+}`,
+          },
+          { role: 'user', content: JSON.stringify(context, null, 2) },
+        ],
+      });
+
+      let parsed: TaskSummary;
+      try {
+        parsed = JSON.parse(response.content) as TaskSummary;
+      } catch {
+        // 如果 JSON 解析失败，尝试提取 JSON
+        const jsonMatch = response.content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          parsed = JSON.parse(jsonMatch[0]) as TaskSummary;
+        } else {
+          parsed = {
+            summary: response.content.slice(0, 200),
+            keyChanges: [],
+            techStack: [],
+            patterns: [],
+          };
+        }
+      }
+
+      // 3. 向量化存储到 ChromaDB
+      const docContent = [
+        parsed.summary,
+        ...parsed.keyChanges,
+        ...parsed.techStack,
+        ...parsed.patterns,
+      ].join(' | ');
+
+      await addDocuments(TASK_MEMORY_COLLECTION, [docContent], [task.taskId], [{
+        taskId: task.taskId,
+        title: task.title,
+        completedAt: task.completedAt || new Date().toISOString(),
+        tags: task.tags.join(','),
+        filesChanged: parsed.keyChanges.join(','),
+        summary: parsed.summary,
+        techStack: parsed.techStack.join(','),
+      }]);
+
+      // 4. 更新内存摘要
+      this.updateSummary(task.taskId, sessionId, parsed.summary);
+
+      console.log(`[taskMemory] Task summary generated and vectorized for ${task.taskId}`);
+      return parsed;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[taskMemory] Failed to generate summary for ${task.taskId}:`, msg);
+      return null;
+    }
+  }
+
+  /**
+   * 语义检索相关历史任务
+   */
+  async searchSimilarTasks(queryText: string, topK: number = 5): Promise<TaskSearchResult[]> {
+    try {
+      const results = await query(TASK_MEMORY_COLLECTION, queryText, topK);
+
+      return results.map(r => {
+        const meta = r.metadata || {};
+        return {
+          taskId: String(meta.taskId || r.id),
+          title: String(meta.title || ''),
+          summary: r.document || '',
+          similarity: 1 - (r.distance || 0), // ChromaDB distance 转换为相似度
+          completedAt: String(meta.completedAt || ''),
+        };
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[taskMemory] Semantic search failed:`, msg);
+      return [];
+    }
+  }
+
+  /**
+   * 为新任务注入历史上下文
+   */
+  async enrichTaskContext(task: Task): Promise<string> {
+    try {
+      const similar = await this.searchSimilarTasks(
+        `${task.title} ${task.description} ${task.tags.join(' ')}`,
+        3
+      );
+
+      if (similar.length === 0) return '';
+
+      return similar
+        .map((s, i) =>
+          `[参考任务 ${i + 1}] ${s.title}\n摘要：${s.summary}\n相似度：${(s.similarity * 100).toFixed(1)}%`
+        )
+        .join('\n\n');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[taskMemory] Failed to enrich context for task:`, msg);
+      return '';
+    }
+  }
+
+  /**
+   * 获取任务摘要（从向量库）
+   */
+  async getTaskSummary(taskId: string): Promise<TaskSummary | null> {
+    // 尝试从内存中获取
+    for (const ctx of this.contexts.values()) {
+      if (ctx.taskId === taskId && ctx.summary) {
+        return {
+          summary: ctx.summary,
+          keyChanges: [],
+          techStack: [],
+          patterns: [],
+        };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 获取与某任务相似的历史任务
+   */
+  async getSimilarTasks(taskId: string, topK: number = 5): Promise<TaskSearchResult[]> {
+    const task = this.searchSimilarTasks(taskId, topK + 1);
+    // 排除自身
+    return (await task).filter(r => r.taskId !== taskId).slice(0, topK);
   }
 }
 

@@ -1,38 +1,52 @@
 /**
  * Task Lifecycle Hooks
  * 任务机制模块 - 任务生命周期钩子
- * 
+ *
  * 在任务状态变更时自动触发：
  * 1. 任务完成 → autoBump 版本升级
  * 2. 任务完成 → 群聊通知
- * 3. 任务完成 → taskMemory 摘要写入向量库
- * 4. 消息完成 → 向量库存储
+ * 3. 任务完成 → LLM 摘要生成 + 向量化存储
+ * 4. 状态变更 → 任务文件持久化
+ * 5. 任务创建 → 上下文快照记录
+ * 6. 消息完成 → 向量库存储
  */
 
 import { Task, TaskStatus } from '../models/task.js';
 import { executeAutoBump } from './autoBump.js';
-import { sendReply } from './messageReply.js';
 import { taskMemory } from './taskMemory.js';
+import { taskPersistence } from './taskPersistence.js';
+import { contextSnapshot } from './contextSnapshot.js';
 import { addDocuments } from './vectorStore.js';
+
+interface TaskLifecycleWithCreate {
+  onStatusChange: (hook: (task: Task, oldStatus: TaskStatus, newStatus: TaskStatus) => void | Promise<void>) => void;
+  onCreate?: (hook: (task: Task) => void | Promise<void>) => void;
+}
 
 /**
  * 注册任务生命周期钩子
  * 在 taskLifecycle 初始化时调用一次
  */
-export function registerTaskLifecycleHooks(taskLifecycle: {
-  onStatusChange: (hook: (task: Task, oldStatus: TaskStatus, newStatus: TaskStatus) => void | Promise<void>) => void;
-}): void {
+export function registerTaskLifecycleHooks(lifecycle: TaskLifecycleWithCreate): void {
   // 任务完成 → 自动版本升级
-  taskLifecycle.onStatusChange(onTaskDoneAutoBump);
+  lifecycle.onStatusChange(onTaskDoneAutoBump);
 
   // 任务完成/失败/取消 → 群聊通知
-  taskLifecycle.onStatusChange(onTaskDoneNotify);
+  lifecycle.onStatusChange(onTaskDoneNotify);
 
   // 任务被暂停 → 通知
-  taskLifecycle.onStatusChange(onTaskSuspendedNotify);
+  lifecycle.onStatusChange(onTaskSuspendedNotify);
 
-  // 任务完成 → taskMemory 摘要写入向量库
-  taskLifecycle.onStatusChange(onTaskDoneVectorize);
+  // 任务完成 → LLM 摘要生成 + 向量化
+  lifecycle.onStatusChange(onTaskDoneSummary);
+
+  // 状态变更 → 任务文件持久化
+  lifecycle.onStatusChange(onTaskStatusChangePersist);
+
+  // 任务创建 → 上下文快照记录 + 注入历史上下文
+  if (lifecycle.onCreate) {
+    lifecycle.onCreate(onTaskCreated);
+  }
 
   console.log('[taskLifecycleHooks] All hooks registered');
 }
@@ -52,20 +66,17 @@ async function onTaskDoneAutoBump(
   try {
     console.log(`[taskLifecycleHooks] Task ${task.taskId} done, triggering autoBump`);
 
-    // 获取当前版本设置（从全局配置中获取）
     const versionId = task.versionId || 'default';
 
-    // 触发自动版本升级
     await executeAutoBump({
       versionId,
-      currentVersion: '0.0.0', // 实际从 versionBump 获取
+      currentVersion: '0.0.0',
       triggerType: 'task_done',
       taskId: task.taskId,
       taskTitle: task.title,
       taskType: task.tags?.[0],
     });
   } catch (err) {
-    // 非关键路径，失败不阻塞主流程
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[taskLifecycleHooks] autoBump failed for task ${task.taskId}:`, msg);
   }
@@ -96,8 +107,6 @@ async function onTaskDoneNotify(
   ].filter(Boolean).join('\n');
 
   try {
-    // 向任务的创建者发送通知（通过 channel）
-    // 实际生产中需要从 task.contextSnapshot 获取 channel 信息
     console.log(`[taskLifecycleHooks] Notifying for task ${task.taskId}: ${content}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -115,8 +124,6 @@ async function onTaskSuspendedNotify(
 ): Promise<void> {
   if (newStatus !== 'suspended') return;
 
-  const content = `⏸️ 任务已被暂停：${task.title}`;
-
   try {
     console.log(`[taskLifecycleHooks] Task suspended: ${task.taskId}`);
   } catch (err) {
@@ -126,9 +133,9 @@ async function onTaskSuspendedNotify(
 }
 
 /**
- * 任务完成 → taskMemory 摘要写入向量库
+ * 任务完成 → LLM 摘要生成 + 向量化存储
  */
-async function onTaskDoneVectorize(
+async function onTaskDoneSummary(
   task: Task,
   oldStatus: TaskStatus,
   newStatus: TaskStatus
@@ -136,48 +143,55 @@ async function onTaskDoneVectorize(
   if (newStatus !== 'done') return;
 
   try {
-    // 获取任务记忆摘要
-    const summary = taskMemory.getTaskMemorySummary(task.taskId);
-    if (!summary) {
-      console.log(`[taskLifecycleHooks] No task memory found for ${task.taskId}, skipping vectorize`);
-      return;
+    // 调用 taskMemory 的 LLM 摘要生成（包含向量化存储）
+    const summary = await taskMemory.onTaskCompleted(task);
+    if (summary) {
+      console.log(`[taskLifecycleHooks] Task summary generated for ${task.taskId}: ${summary.summary.slice(0, 80)}...`);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[taskLifecycleHooks] Failed to generate task summary for ${task.taskId}:`, msg);
+  }
+}
+
+/**
+ * 状态变更 → 任务文件持久化
+ */
+async function onTaskStatusChangePersist(
+  task: Task,
+  oldStatus: TaskStatus,
+  newStatus: TaskStatus
+): Promise<void> {
+  if (oldStatus === newStatus) return;
+
+  try {
+    // 持久化任务文件到新目录
+    await taskPersistence.persist(task);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[taskLifecycleHooks] Failed to persist task file for ${task.taskId}:`, msg);
+  }
+}
+
+/**
+ * 任务创建 → 上下文快照 + 注入历史任务上下文
+ */
+async function onTaskCreated(task: Task): Promise<void> {
+  try {
+    // 1. 记录上下文快照
+    const snapshot = await contextSnapshot.capture(task.sessionId);
+    task.contextSnapshot = snapshot;
+
+    // 2. 语义检索相关历史任务并注入到描述
+    const historicalContext = await taskMemory.enrichTaskContext(task);
+    if (historicalContext) {
+      task.description += `\n\n---\n### 相关历史任务\n${historicalContext}`;
     }
 
-    // 构建要存储的文本
-    const sessionId = task.sessionId || task.taskId;
-    const ctx = taskMemory.getContext(task.taskId, sessionId);
-    const memoryText = [
-      `任务：${task.title}`,
-      `描述：${task.description || '无'}`,
-      `状态：${newStatus}`,
-      `执行者：${task.assignedAgent || '未知'}`,
-      summary.summary ? `摘要：${summary.summary}` : '',
-      `记忆消息数：${summary.messages}`,
-      `检查点数：${summary.checkpoints}`,
-      ctx ? `最新进度：${ctx.checkpoints.length > 0 ? ctx.checkpoints[ctx.checkpoints.length - 1].summary : '无'}` : '',
-    ].filter(Boolean).join('\n');
-
-    // 写入向量库
-    await addDocuments(
-      'task_memory',
-      [memoryText],
-      [`task_${task.taskId}`],
-      [{
-        taskId: task.taskId,
-        title: task.title,
-        status: newStatus,
-        assignedAgent: task.assignedAgent || '',
-        createdBy: task.createdBy || '',
-        completedAt: task.completedAt || new Date().toISOString(),
-        type: 'task_memory',
-      }]
-    );
-
-    console.log(`[taskLifecycleHooks] Task memory vectorized for ${task.taskId}`);
+    console.log(`[taskLifecycleHooks] Task created with context snapshot for ${task.taskId}`);
   } catch (err) {
-    // 非关键路径，失败不阻塞主流程
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[taskLifecycleHooks] Failed to vectorize task memory for ${task.taskId}:`, msg);
+    console.error(`[taskLifecycleHooks] Failed to enrich task context for ${task.taskId}:`, msg);
   }
 }
 
