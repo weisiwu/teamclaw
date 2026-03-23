@@ -103,6 +103,23 @@ export default function VersionsPage() {
         );
       })()}
 
+      {/* Results indicator when filtering */}
+      {search && (
+        <div className="page-section mb-2 flex items-center gap-2 text-sm text-muted-foreground">
+          <span>搜索结果: </span>
+          <span className="font-medium text-foreground">{filtered.length}</span>
+          <span>/ {versions.length} 条</span>
+          {filtered.length !== versions.length && (
+            <button
+              className="text-blue-600 hover:underline ml-1"
+              onClick={() => setSearch("")}
+            >
+              清除
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Filters */}
       <div className="page-section mb-6 flex flex-wrap items-center gap-4">
         <div className="relative flex-1 min-w-[200px]">

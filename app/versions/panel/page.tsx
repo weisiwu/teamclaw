@@ -415,7 +415,20 @@ export default function VersionPanelPage() {
             <Button onClick={() => refetch()} size="sm">重试</Button>
           </Card>
         ) : filteredTags.length === 0 ? (
-          <EmptyState icon={Tag} title="暂无标签" description="发布版本后自动创建" />
+          hasActiveFilters ? (
+            <EmptyState
+              icon={Tag}
+              title="没有匹配的标签"
+              description="尝试调整筛选条件，或清除筛选查看所有标签"
+              action={
+                <Button variant="outline" size="sm" onClick={clearFilters}>
+                  清除筛选
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState icon={Tag} title="暂无标签" description="发布版本后自动创建" />
+          )
         ) : viewMode === "grid" ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredTags.map((tag) => (

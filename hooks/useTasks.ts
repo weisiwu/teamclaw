@@ -137,14 +137,13 @@ export function useAddComment() {
 }
 
 // 删除评论 Mutation
-export function useDeleteComment() {
+export function useDeleteComment(taskId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ commentId }: { commentId: string; taskId: string }) =>
-      taskApi.deleteComment(commentId),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: commentKeys.list(variables.taskId) });
+    mutationFn: (commentId: string) => taskApi.deleteComment(commentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commentKeys.list(taskId) });
     },
   });
 }

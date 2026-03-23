@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -31,13 +31,15 @@ function isProtectedTag(name: string): boolean {
 export default function TagsPage() {
   const [tags, setTags] = useState<TagRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState(""); // raw input (uncontrolled during typing)
+  const [debouncedSearch, setDebouncedSearch] = useState(""); // actual filter applied after debounce
   const [prefix, setPrefix] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pageSize = 20;
 
@@ -58,6 +60,17 @@ export default function TagsPage() {
       setIsLoading(false);
     }
   };
+
+  // Debounce search input to avoid excessive re-renders
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(searchInput);
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [searchInput]);
 
   useEffect(() => {
     fetchTags(page, prefix);
@@ -83,8 +96,8 @@ export default function TagsPage() {
     }
   };
 
-  const filtered = search
-    ? tags.filter((t) => t.name.toLowerCase().includes(search.toLowerCase()))
+  const filtered = debouncedSearch
+    ? tags.filter((t) => t.name.toLowerCase().includes(debouncedSearch.toLowerCase()))
     : tags;
 
   return (
@@ -106,8 +119,8 @@ export default function TagsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
             placeholder="搜索 Tag 名称..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="pl-8"
           />
         </div>
@@ -120,11 +133,11 @@ export default function TagsPage() {
             className="w-24 font-mono"
           />
         </div>
-        {(search || prefix) && (
+        {(debouncedSearch || prefix) && (
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => { setSearch(""); setPrefix(""); setPage(1); }}
+            onClick={() => { setSearchInput(""); setDebouncedSearch(""); setPrefix(""); setPage(1); }}
           >
             清除筛选
           </Button>

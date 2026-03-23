@@ -91,7 +91,7 @@ export default function TaskDetailPage({
   // 评论相关
   const { data: comments = [] } = useTaskComments(id);
   const addComment = useAddComment();
-  const deleteComment = useDeleteComment();
+  const deleteComment = useDeleteComment(id);
   const [newComment, setNewComment] = useState("");
 
   // 处理添加评论
@@ -105,7 +105,7 @@ export default function TaskDetailPage({
   // 处理删除评论
   const handleDeleteComment = async () => {
     if (!deleteCommentId) return;
-    await deleteComment.mutateAsync({ commentId: deleteCommentId, taskId: id });
+    await deleteComment.mutateAsync(deleteCommentId);
     setDeleteCommentId(null);
   };
 
