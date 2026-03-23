@@ -72,11 +72,8 @@ import {
   TASK_PRIORITY_OPTIONS,
   STATUS_BADGE_VARIANT,
   STATUS_LABELS,
-  Task,
-  TaskStatus,
-  TaskPriority,
-  CreateTaskRequest
-} from "@/lib/api/types";
+} from "@/lib/api/constants";
+import type { Task, TaskStatus, TaskPriority, CreateTaskRequest } from "@/lib/api/types";
 
 // 优先级选项（与详情页、批量操作保持一致）
 const PRIORITY_OPTIONS = [

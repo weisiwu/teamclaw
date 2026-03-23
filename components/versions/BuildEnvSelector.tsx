@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { getBuildEnvironments, getBuildEnhancementSettings, saveBuildEnhancementSettings } from '@/lib/api/versions';
-import { BuildEnvironment } from '@/lib/api/types';
+import type { BuildEnvironment } from '@/lib/api/types';
 
 interface BuildEnvSelectorProps {
   value?: BuildEnvironment['name'];

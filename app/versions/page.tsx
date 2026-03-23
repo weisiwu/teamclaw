@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT, VERSION_STATUS_OPTIONS, VERSION_STATUS_LABELS, VERSION_STATUS_BADGE_VARIANT as VERSION_STATUS_BADGE } from "@/lib/api/types";
+import type { Version } from "@/lib/api/types";
+import { BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT, VERSION_STATUS_OPTIONS, VERSION_STATUS_LABELS, VERSION_STATUS_BADGE_VARIANT as VERSION_STATUS_BADGE } from "@/lib/api/constants";
 import { getVersions } from "@/lib/api/versions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";

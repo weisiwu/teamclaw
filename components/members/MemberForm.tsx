@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LegacySelect as Select } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
-import { Member, MemberRole, MemberStatus, MEMBER_ROLE_OPTIONS, CreateMemberRequest, UpdateMemberRequest } from "@/lib/api/types";
+import type { Member, MemberRole, MemberStatus, CreateMemberRequest, UpdateMemberRequest } from "@/lib/api/types";
+import { MEMBER_ROLE_OPTIONS } from "@/lib/api/constants";
 
 interface MemberFormProps {
   open: boolean;

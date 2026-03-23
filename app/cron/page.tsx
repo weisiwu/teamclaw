@@ -26,12 +26,8 @@ import {
   useUpdateCron,
   useCronRuns,
 } from "@/hooks/useCron";
-import {
-  CronTask,
-  CreateCronRequest,
-  CRON_STATUS_LABELS,
-  CRON_STATUS_BADGE_VARIANT,
-} from "@/lib/api/types";
+import type { CronTask, CreateCronRequest } from "@/lib/api/types";
+import { CRON_STATUS_LABELS, CRON_STATUS_BADGE_VARIANT } from "@/lib/api/constants";
 
 // 定时任务卡片组件
 function CronCard({

@@ -8,7 +8,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { X, Settings, Save, Loader2, History, Tag } from "lucide-react";
-import { VERSION_STATUS_LABELS } from "@/lib/api/types";
+import { VERSION_STATUS_LABELS } from "@/lib/api/constants";
 
 interface VersionSettings {
   autoBump: boolean;

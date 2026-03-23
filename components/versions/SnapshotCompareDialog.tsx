@@ -12,14 +12,13 @@ import {
   DialogContent, 
   DialogFooter,
 } from "@/components/ui/dialog";
+import type { VersionTag, VersionStatus } from "@/lib/api/types";
 import { 
   VERSION_STATUS_LABELS, 
   BUILD_STATUS_LABELS,
   BUILD_STATUS_BADGE_VARIANT,
   VERSION_TAG_OPTIONS,
-  VersionTag,
-  VersionStatus,
-} from "@/lib/api/types";
+} from "@/lib/api/constants";
 import { GitCompare, Check, Minus, Plus } from "lucide-react";
 
 export interface Snapshot {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Version, BuildEnvironment } from "@/lib/api/types";
+import type { Version, BuildEnvironment } from "@/lib/api/types";
 import { getVersions } from "@/lib/api/versions";
 import { getBuildEnvironments } from "@/lib/api/versions";
 import { Button } from "@/components/ui/button";

@@ -10,7 +10,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { MembersSkeleton } from "@/components/ui/projects-skeleton";
 import { useMemberList, useCreateMember, useUpdateMember, useDeleteMember, useBatchDeleteMembers } from "@/hooks/useMembers";
 import { usePermission } from "@/hooks/usePermission";
-import { Member, ROLE_LABELS, MEMBER_ROLE_OPTIONS, MemberRole, MemberStatus, CreateMemberRequest, UpdateMemberRequest } from "@/lib/api/types";
+import type { Member, MemberRole, MemberStatus, CreateMemberRequest, UpdateMemberRequest } from "@/lib/api/types";
+import { ROLE_LABELS, MEMBER_ROLE_OPTIONS } from "@/lib/api/constants";
 import { Pencil, Trash2, UserPlus,  Search, Users, ArrowUpDown, ArrowUp, ArrowDown, Download, Upload, X, Power, PowerOff, Eye } from "lucide-react";
 // xlsx lazy loaded — only needed for import/export, saves ~500KB from initial bundle
 type XLSXModule = typeof import("xlsx");

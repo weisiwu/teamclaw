@@ -5,7 +5,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Version, BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT } from "@/lib/api/types";
+import type { Version } from "@/lib/api/types";
+import { BUILD_STATUS_LABELS, BUILD_STATUS_BADGE_VARIANT } from "@/lib/api/constants";
 import { useBuildArtifacts, useVersionScreenshots, useVersionChangelog, useRefreshVersionSummary, useVersionArtifacts } from "@/lib/api/versions";
 import { useLatestBuild, useRebuildBuild, useRollbackBuild, createPackageAPI, getPackageDownloadUrl } from "@/lib/api/builds";
 import { Badge } from "@/components/ui/badge";

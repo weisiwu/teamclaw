@@ -24,11 +24,8 @@ import {
   Trash2
 } from "lucide-react";
 import { useTaskDetail, useCompleteTask, useCancelTask, useReopenTask, useTaskComments, useAddComment, useDeleteComment } from "@/hooks/useTasks";
-import { 
-  STATUS_BADGE_VARIANT,
-  STATUS_LABELS,
-  TaskStatus
-} from "@/lib/api/types";
+import { STATUS_BADGE_VARIANT, STATUS_LABELS } from "@/lib/api/constants";
+import type { TaskStatus } from "@/lib/api/types";
 
 // 优先级选项（与列表页保持一致）
 const PRIORITY_OPTIONS = [

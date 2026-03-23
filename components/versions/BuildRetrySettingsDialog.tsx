@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { getBuildEnhancementSettings, saveBuildEnhancementSettings } from '@/lib/api/versions';
-import { DEFAULT_BUILD_RETRY_SETTINGS } from '@/lib/api/types';
+import { DEFAULT_BUILD_RETRY_SETTINGS } from '@/lib/api/constants';
 
 interface BuildRetrySettingsDialogProps {
   open: boolean;

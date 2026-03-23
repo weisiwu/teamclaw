@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Version, VERSION_STATUS_BADGE_VARIANT, VERSION_STATUS_LABELS, VERSION_TAG_OPTIONS, VersionStatus } from "@/lib/api/types";
+import type { Version, VersionStatus } from "@/lib/api/types";
+import { VERSION_STATUS_BADGE_VARIANT, VERSION_STATUS_LABELS, VERSION_TAG_OPTIONS } from "@/lib/api/constants";
 import {
   Tag, Star, GitBranchIcon, FileText, Calendar, Search, X,
   ChevronDown, ChevronRight, FolderOpen, BarChart3, Grid3X3, List, RotateCcw

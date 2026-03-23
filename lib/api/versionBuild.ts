@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_BASE } from "./versionShared";
-import {
+import type {
   Version,
   VersionSnapshot,
   SnapshotListResponse,
@@ -20,10 +20,12 @@ import {
   BuildEnhancementSettings,
   BuildNotificationSettings,
   BuildEnvironment,
+} from "./types";
+import {
   BUILD_ENVIRONMENTS,
   DEFAULT_BUILD_RETRY_SETTINGS,
   DEFAULT_NOTIFICATION_SETTINGS,
-} from "./types";
+} from "./constants";
 
 // Re-export autoBumpVersion
 export { autoBumpVersion } from "./versionShared";

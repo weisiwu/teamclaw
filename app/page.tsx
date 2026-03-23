@@ -59,11 +59,11 @@ export default function Home() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">控制台</h1>
-          <p className="text-gray-500 dark:text-gray-400 dark:text-slate-400 mt-1">欢迎使用 TeamClaw 管理后台</p>
+          <p className="text-gray-500 dark:text-slate-400 mt-1">欢迎使用 TeamClaw 管理后台</p>
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-          <Activity className="w-4 h-4 text-gray-500 dark:text-gray-400 dark:text-slate-400" />
-          <span className="text-gray-500 dark:text-gray-400 dark:text-slate-400">系统运行正常</span>
+          <Activity className="w-4 h-4 text-gray-500 dark:text-slate-400" />
+          <span className="text-gray-500 dark:text-slate-400">系统运行正常</span>
         </div>
       </div>
 
@@ -184,7 +184,7 @@ export default function Home() {
                 <CardTitle className="text-lg">{item.label}</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-gray-500 dark:text-gray-400 dark:text-slate-400">{item.description}</p>
+                <p className="text-sm text-gray-500 dark:text-slate-400">{item.description}</p>
               </CardContent>
             </Card>
           </Link>
