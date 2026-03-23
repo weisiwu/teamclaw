@@ -4,7 +4,7 @@
  */
 
 import { Router } from 'express';
-import { success } from '../utils/response.js';
+import { success, error } from '../utils/response.js';
 import { configService } from '../services/configService.js';
 import { UpdateConfigRequest } from '../models/systemConfig.js';
 import { requireAdmin } from '../middleware/auth.js';
@@ -17,7 +17,7 @@ router.get('/', requireAdmin, async (req, res) => {
     const config = await configService.get();
     res.json(success(config));
   } catch (e: unknown) {
-    res.status(500).json({ success: false, error: (e as Error).message });
+    res.status(500).json(error(500, (e as Error).message, 'INTERNAL_ERROR'));
   }
 });
 
@@ -28,7 +28,7 @@ router.put('/', requireAdmin, async (req, res) => {
     const config = await configService.update(body, req.headers['x-admin-id'] as string || 'admin');
     res.json(success(config));
   } catch (e: unknown) {
-    res.status(400).json({ success: false, error: (e as Error).message });
+    res.status(400).json(error(400, (e as Error).message, 'BAD_REQUEST'));
   }
 });
 
@@ -38,7 +38,7 @@ router.post('/reset', requireAdmin, async (req, res) => {
     const config = await configService.reset(req.headers['x-admin-id'] as string || 'admin');
     res.json(success(config));
   } catch (e: unknown) {
-    res.status(500).json({ success: false, error: (e as Error).message });
+    res.status(500).json(error(500, (e as Error).message, 'INTERNAL_ERROR'));
   }
 });
 
@@ -48,7 +48,7 @@ router.get('/export', requireAdmin, async (req, res) => {
     const json = await configService.export();
     res.json(success({ config: JSON.parse(json) }));
   } catch (e: unknown) {
-    res.status(500).json({ success: false, error: (e as Error).message });
+    res.status(500).json(error(500, (e as Error).message, 'INTERNAL_ERROR'));
   }
 });
 
@@ -57,14 +57,14 @@ router.post('/import', requireAdmin, async (req, res) => {
   try {
     const body = req.body as { config?: unknown };
     if (!body.config) {
-      res.status(400).json({ success: false, error: 'Missing config field' });
+      res.status(400).json(error(400, 'Missing config field', 'BAD_REQUEST'));
       return;
     }
     const configStr = typeof body.config === 'string' ? body.config : JSON.stringify(body.config);
     const config = await configService.import(configStr, req.headers['x-admin-id'] as string || 'admin');
     res.json(success(config));
   } catch (e: unknown) {
-    res.status(400).json({ success: false, error: (e as Error).message });
+    res.status(400).json(error(400, (e as Error).message, 'BAD_REQUEST'));
   }
 });
 

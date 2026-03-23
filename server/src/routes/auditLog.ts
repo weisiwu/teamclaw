@@ -4,7 +4,7 @@
  */
 
 import { Router } from 'express';
-import { success } from '../utils/response.js';
+import { success, error } from '../utils/response.js';
 import { auditService } from '../services/auditService.js';
 import { AuditAction, AuditLogQuery } from '../models/auditLog.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -27,7 +27,7 @@ router.get('/', requireAuth, async (req, res) => {
     const result = await auditService.query(query);
     res.json(success(result));
   } catch (e: unknown) {
-    res.status(500).json({ success: false, error: (e as Error).message });
+    res.status(500).json(error(500, (e as Error).message, 'INTERNAL_ERROR'));
   }
 });
 
@@ -46,7 +46,7 @@ router.get('/export', requireAuth, async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="audit-logs-${Date.now()}.csv"`);
     res.send(csv);
   } catch (e: unknown) {
-    res.status(500).json({ success: false, error: (e as Error).message });
+    res.status(500).json(error(500, (e as Error).message, 'INTERNAL_ERROR'));
   }
 });
 

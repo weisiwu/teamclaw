@@ -6,6 +6,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { generatePreview } from '../services/docPreviewService.js';
 import { getDoc } from '../services/docService.js';
+import { success, error } from '../utils/response.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -27,11 +28,8 @@ router.get('/:docId/preview', async (req, res) => {
     const parsed = previewQuerySchema.safeParse(req.query);
     
     if (!parsed.success) {
-      return res.status(400).json({
-        code: 400,
-        message: 'Invalid query parameters',
-        errors: parsed.error.errors,
-      });
+      const body = error(400, 'Invalid query parameters', 'BAD_REQUEST');
+      return res.status(400).json({ ...body, errors: parsed.error.errors });
     }
 
     const { page, maxLines } = parsed.data;
@@ -39,34 +37,21 @@ router.get('/:docId/preview', async (req, res) => {
     // Get document info
     const doc = await getDoc(docId);
     if (!doc) {
-      return res.status(404).json({
-        code: 404,
-        message: 'Document not found',
-      });
+      return res.status(404).json(error(404, 'Document not found', 'NOT_FOUND'));
     }
 
     // Check if file exists
     if (!doc.path || !fs.existsSync(doc.path)) {
-      return res.status(404).json({
-        code: 404,
-        message: 'Document file not found',
-      });
+      return res.status(404).json(error(404, 'Document file not found', 'NOT_FOUND'));
     }
 
     // Generate preview
     const preview = await generatePreview(docId, doc.path, { page, maxLines });
 
-    return res.json({
-      code: 0,
-      message: 'success',
-      data: preview,
-    });
+    return res.json(success(preview));
   } catch (err: any) {
     console.error('[DocRoutes] Preview error:', err);
-    return res.status(500).json({
-      code: 500,
-      message: err.message || 'Failed to generate preview',
-    });
+    return res.status(500).json(error(500, err.message || 'Failed to generate preview', 'INTERNAL_ERROR'));
   }
 });
 
@@ -81,18 +66,12 @@ router.get('/:docId/download', async (req, res) => {
     // Get document info
     const doc = await getDoc(docId);
     if (!doc) {
-      return res.status(404).json({
-        code: 404,
-        message: 'Document not found',
-      });
+      return res.status(404).json(error(404, 'Document not found', 'NOT_FOUND'));
     }
 
     // Check if file exists
     if (!doc.path || !fs.existsSync(doc.path)) {
-      return res.status(404).json({
-        code: 404,
-        message: 'Document file not found',
-      });
+      return res.status(404).json(error(404, 'Document file not found', 'NOT_FOUND'));
     }
 
     // Get file stats
@@ -110,10 +89,7 @@ router.get('/:docId/download', async (req, res) => {
     stream.pipe(res);
   } catch (err: any) {
     console.error('[DocRoutes] Download error:', err);
-    res.status(500).json({
-      code: 500,
-      message: err.message || 'Failed to download document',
-    });
+    res.status(500).json(error(500, err.message || 'Failed to download document', 'INTERNAL_ERROR'));
   }
 });
 
@@ -132,20 +108,13 @@ router.get('/preview-supported', async (_req, res) => {
       { type: 'html', name: 'HTML', ext: ['.html', '.htm'] },
     ];
 
-    return res.json({
-      code: 0,
-      message: 'success',
-      data: {
-        types: supportedTypes,
-        maxFileSize: 10 * 1024 * 1024, // 10MB
-      },
-    });
+    return res.json(success({
+      types: supportedTypes,
+      maxFileSize: 10 * 1024 * 1024, // 10MB
+    }));
   } catch (err: any) {
     console.error('[DocRoutes] Get supported types error:', err);
-    res.status(500).json({
-      code: 500,
-      message: err.message || 'Failed to get supported types',
-    });
+    res.status(500).json(error(500, err.message || 'Failed to get supported types', 'INTERNAL_ERROR'));
   }
 });
 

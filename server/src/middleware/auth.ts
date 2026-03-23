@@ -7,6 +7,7 @@ import { Request, Response, NextFunction } from "express";
 import { checkPermission, PermissionCheckResult } from "../services/permissionService";
 import { AgentName, Role } from "../constants/roles";
 import { verifyToken, JwtPayload } from "../utils/jwt.js";
+import { error } from "../utils/response.js";
 
 // 扩展 Express Request
 export interface AuthRequest extends Request {
@@ -71,11 +72,7 @@ export function requirePermission(agent: AgentName): AuthRequestHandler {
 
     // 未携带有效身份信息
     if (!user) {
-      res.status(401).json({
-        code: 401,
-        data: null,
-        message: "未提供有效身份信息，请通过登录获取 Token",
-      });
+      res.status(401).json(error(401, '未提供有效身份信息，请通过登录获取 Token', 'UNAUTHORIZED'));
       return;
     }
 
@@ -85,11 +82,7 @@ export function requirePermission(agent: AgentName): AuthRequestHandler {
     req.permission = result;
 
     if (!result.allowed) {
-      res.status(403).json({
-        code: 403,
-        data: null,
-        message: result.reason || "没有权限",
-      });
+      res.status(403).json(error(403, result.reason || '没有权限', 'FORBIDDEN'));
       return;
     }
 
@@ -119,11 +112,7 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
   const user = extractUser(req);
 
   if (!user) {
-    res.status(401).json({
-      code: 401,
-      data: null,
-      message: "未提供有效身份信息，请通过登录获取 Token",
-    });
+    res.status(401).json(error(401, '未提供有效身份信息，请通过登录获取 Token', 'UNAUTHORIZED'));
     return;
   }
 
@@ -138,20 +127,12 @@ export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction
   const user = extractUser(req);
 
   if (!user) {
-    res.status(401).json({
-      code: 401,
-      data: null,
-      message: "未提供有效身份信息",
-    });
+    res.status(401).json(error(401, '未提供有效身份信息', 'UNAUTHORIZED'));
     return;
   }
 
   if (user.role !== "admin" && user.role !== "vice_admin") {
-    res.status(403).json({
-      code: 403,
-      data: null,
-      message: "需要管理员或副管理员权限",
-    });
+    res.status(403).json(error(403, '需要管理员或副管理员权限', 'FORBIDDEN'));
     return;
   }
 

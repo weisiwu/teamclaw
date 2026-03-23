@@ -15,7 +15,7 @@ router.get('/overview', async (req, res) => {
     const overview = await dashboardService.getOverview();
     res.json(success(overview));
   } catch (e) {
-    res.status(500).json(error(e instanceof Error ? e.message : 'Unknown error'));
+    res.status(500).json(error(500, e instanceof Error ? e.message : 'Unknown error', 'INTERNAL_ERROR'));
   }
 });
 

@@ -4,7 +4,7 @@
  */
 
 import { Router } from 'express';
-import { success } from '../utils/response.js';
+import { success, error } from '../utils/response.js';
 import { webhookService } from '../services/webhookService.js';
 import { CreateWebhookRequest, UpdateWebhookRequest } from '../models/webhook.js';
 
@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
     const result = await webhookService.list();
     res.json(success(result));
   } catch (e: unknown) {
-    res.status(500).json({ success: false, error: (e as Error).message });
+    res.status(500).json(error(500, (e as Error).message, 'INTERNAL_ERROR'));
   }
 });
 
@@ -25,12 +25,12 @@ router.get('/:id', async (req, res) => {
   try {
     const webhook = await webhookService.get(req.params.id);
     if (!webhook) {
-      res.status(404).json({ success: false, error: 'Webhook not found' });
+      res.status(404).json(error(404, 'Webhook not found', 'NOT_FOUND'));
       return;
     }
     res.json(success(webhook));
   } catch (e: unknown) {
-    res.status(500).json({ success: false, error: (e as Error).message });
+    res.status(500).json(error(500, (e as Error).message, 'INTERNAL_ERROR'));
   }
 });
 
@@ -39,7 +39,7 @@ router.post('/', async (req, res) => {
   try {
     const body = req.body as CreateWebhookRequest;
     if (!body.name || !body.url || !body.events) {
-      res.status(400).json({ success: false, error: 'Missing required fields: name, url, events' });
+      res.status(400).json(error(400, 'Missing required fields: name, url, events', 'BAD_REQUEST'));
       return;
     }
     const webhook = await webhookService.create(
@@ -48,7 +48,7 @@ router.post('/', async (req, res) => {
     );
     res.json(success(webhook));
   } catch (e: unknown) {
-    res.status(400).json({ success: false, error: (e as Error).message });
+    res.status(400).json(error(400, (e as Error).message, 'BAD_REQUEST'));
   }
 });
 
@@ -62,12 +62,12 @@ router.put('/:id', async (req, res) => {
       req.headers['x-admin-id'] as string || 'admin'
     );
     if (!webhook) {
-      res.status(404).json({ success: false, error: 'Webhook not found' });
+      res.status(404).json(error(404, 'Webhook not found', 'NOT_FOUND'));
       return;
     }
     res.json(success(webhook));
   } catch (e: unknown) {
-    res.status(400).json({ success: false, error: (e as Error).message });
+    res.status(400).json(error(400, (e as Error).message, 'BAD_REQUEST'));
   }
 });
 
@@ -79,12 +79,12 @@ router.delete('/:id', async (req, res) => {
       req.headers['x-admin-id'] as string || 'admin'
     );
     if (!deleted) {
-      res.status(404).json({ success: false, error: 'Webhook not found' });
+      res.status(404).json(error(404, 'Webhook not found', 'NOT_FOUND'));
       return;
     }
     res.json(success({ deleted: true }));
   } catch (e: unknown) {
-    res.status(400).json({ success: false, error: (e as Error).message });
+    res.status(400).json(error(400, (e as Error).message, 'BAD_REQUEST'));
   }
 });
 
@@ -94,7 +94,7 @@ router.post('/:id/test', async (req, res) => {
     const result = await webhookService.test(req.params.id);
     res.json(success(result));
   } catch (e: unknown) {
-    res.status(500).json({ success: false, error: (e as Error).message });
+    res.status(500).json(error(500, (e as Error).message, 'INTERNAL_ERROR'));
   }
 });
 
@@ -105,7 +105,7 @@ router.get('/:id/history', async (req, res) => {
     const history = await webhookService.getHistory(req.params.id, limit);
     res.json(success({ list: history, total: history.length }));
   } catch (e: unknown) {
-    res.status(500).json({ success: false, error: (e as Error).message });
+    res.status(500).json(error(500, (e as Error).message, 'INTERNAL_ERROR'));
   }
 });
 

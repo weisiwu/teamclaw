@@ -78,7 +78,7 @@ router.get('/docs', async (req, res) => {
 router.get('/tasks', (req, res) => {
   const { q, page = '1', pageSize = '10' } = req.query;
   if (!q || typeof q !== 'string') {
-    return res.status(400).json(error('INVALID_PARAMS', '需要 q 参数'));
+    return res.status(400).json(error(400, '需要 q 参数', 'INVALID_PARAMS'));
   }
   const pageNum = parseInt(page as string);
   const size = parseInt(pageSize as string);
@@ -90,7 +90,7 @@ router.get('/tasks', (req, res) => {
 router.get('/', async (req, res) => {
   const { q, page = '1', pageSize = '10' } = req.query;
   if (!q || typeof q !== 'string') {
-    return res.status(400).json(error('INVALID_PARAMS', '需要 q 参数'));
+    return res.status(400).json(error(400, '需要 q 参数', 'INVALID_PARAMS'));
   }
   const pageNum = parseInt(page as string);
   const size = parseInt(pageSize as string);
@@ -130,9 +130,9 @@ router.delete('/history', (req, res) => {
 // 索引文档 POST /api/v1/search/index (body: { docId })
 router.post('/index', async (req, res) => {
   const { docId } = req.body;
-  if (!docId) return res.status(400).json(error('INVALID_PARAMS', '需要 docId'));
+  if (!docId) return res.status(400).json(error(400, '需要 docId', 'INVALID_PARAMS'));
   const doc = docService.getDoc(docId);
-  if (!doc) return res.status(404).json(error('NOT_FOUND', '文档不存在'));
+  if (!doc) return res.status(404).json(error(404, '文档不存在', 'NOT_FOUND'));
   await indexDocInChroma(doc);
   res.json(success({ message: '文档已索引到向量数据库' }));
 });

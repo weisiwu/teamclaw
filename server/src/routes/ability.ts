@@ -14,7 +14,7 @@ router.get('/', (req, res) => {
 router.get('/:id', (req, res) => {
   const ability = abilityService.getAbility(req.params.id);
   if (!ability) {
-    return res.status(404).json(error('ABILITY_NOT_FOUND', '能力不存在'));
+    return res.status(404).json(error(404, '能力不存在', 'ABILITY_NOT_FOUND'));
   }
   res.json(success(ability));
 });
@@ -26,16 +26,16 @@ router.put('/:id/toggle', (req, res) => {
 
   // 只有管理员可以切换能力状态
   if (userRole !== 'admin' && userRole !== 'sub_admin') {
-    return res.status(403).json(error('FORBIDDEN', '只有管理员可以操作能力开关'));
+    return res.status(403).json(error(403, '只有管理员可以操作能力开关', 'FORBIDDEN'));
   }
 
   if (typeof enabled !== 'boolean') {
-    return res.status(400).json(error('INVALID_PARAMS', 'enabled 参数必须为 boolean'));
+    return res.status(400).json(error(400, 'enabled 参数必须为 boolean', 'INVALID_PARAMS'));
   }
 
   const ability = abilityService.updateAbility(req.params.id, enabled);
   if (!ability) {
-    return res.status(404).json(error('ABILITY_NOT_FOUND', '能力不存在'));
+    return res.status(404).json(error(404, '能力不存在', 'ABILITY_NOT_FOUND'));
   }
 
   res.json(success(ability));
@@ -45,7 +45,7 @@ router.put('/:id/toggle', (req, res) => {
 router.post('/reset', (req, res) => {
   const userRole = req.headers['x-user-role'] as string || 'user';
   if (userRole !== 'admin') {
-    return res.status(403).json(error('FORBIDDEN', '只有管理员可以重置能力'));
+    return res.status(403).json(error(403, '只有管理员可以重置能力', 'FORBIDDEN'));
   }
   abilityService.resetAbilities();
   res.json(success({ message: '能力已重置到默认状态' }));

@@ -3,29 +3,29 @@ import { success, error } from '@/server/src/utils/response';
 
 describe('API Response Utilities', () => {
   describe('success()', () => {
-    it('returns code 0 with data and default message', () => {
+    it('returns success:true, code 200 with data', () => {
       const result = success({ id: 1 });
-      expect(result.code).toBe(0);
+      expect(result.success).toBe(true);
+      expect(result.code).toBe(200);
       expect(result.data).toEqual({ id: 1 });
       expect(result.message).toBe('ok');
+      expect(result.requestId).toBeDefined();
     });
 
-    it('returns code 0 with custom message', () => {
-      const result = success(null, 'Operation completed');
-      expect(result.code).toBe(0);
-      expect(result.data).toBeNull();
-      expect(result.message).toBe('Operation completed');
+    it('accepts custom requestId', () => {
+      const result = success({ id: 1 }, 'custom-id');
+      expect(result.requestId).toBe('custom-id');
     });
 
-    it('returns code 0 with array data', () => {
+    it('returns with array data', () => {
       const result = success([1, 2, 3]);
-      expect(result.code).toBe(0);
+      expect(result.success).toBe(true);
       expect(result.data).toEqual([1, 2, 3]);
     });
 
-    it('returns code 0 with primitive data', () => {
+    it('returns with primitive data', () => {
       const result = success(42);
-      expect(result.code).toBe(0);
+      expect(result.success).toBe(true);
       expect(result.data).toBe(42);
     });
 
@@ -36,24 +36,30 @@ describe('API Response Utilities', () => {
   });
 
   describe('error()', () => {
-    it('accepts code (number) and message as two args', () => {
+    it('accepts statusCode and message as two args', () => {
       const result = error(404, 'Not found');
+      expect(result.success).toBe(false);
       expect(result.code).toBe(404);
-      expect(result.data).toBeNull();
+      expect(result.errorCode).toBe('NOT_FOUND');
       expect(result.message).toBe('Not found');
+      expect(result.requestId).toBeDefined();
+      expect(result.timestamp).toBeDefined();
     });
 
-    it('accepts only message string (defaults code to 500)', () => {
-      const result = error('Something went wrong');
-      expect(result.code).toBe(500);
-      expect(result.data).toBeNull();
-      expect(result.message).toBe('Something went wrong');
+    it('accepts statusCode, message, and errorCode', () => {
+      const result = error(400, 'Invalid params', 'VALIDATION_ERROR');
+      expect(result.success).toBe(false);
+      expect(result.code).toBe(400);
+      expect(result.errorCode).toBe('VALIDATION_ERROR');
+      expect(result.message).toBe('Invalid params');
     });
 
-    it('defaults empty message when code given without message', () => {
-      const result = error(403);
-      expect(result.code).toBe(403);
-      expect(result.message).toBe('');
+    it('accepts errorCode string and message (backward compat)', () => {
+      const result = error('INVALID_PARAMS', '需要 q 参数');
+      expect(result.success).toBe(false);
+      expect(result.code).toBe(400);
+      expect(result.errorCode).toBe('INVALID_PARAMS');
+      expect(result.message).toBe('需要 q 参数');
     });
 
     it('handles common HTTP error codes', () => {
@@ -66,9 +72,10 @@ describe('API Response Utilities', () => {
       ];
       for (const [code, msg] of cases) {
         const result = error(code, msg);
+        expect(result.success).toBe(false);
         expect(result.code).toBe(code);
         expect(result.message).toBe(msg);
-        expect(result.data).toBeNull();
+        expect(result.errorCode).toBeDefined();
       }
     });
   });

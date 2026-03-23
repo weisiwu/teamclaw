@@ -160,7 +160,7 @@ router.post('/', (req: Request, res: Response) => {
   }
 
   if (!isValidSemver(version)) {
-    res.status(400).json({ code: 400, message: '无效的版本号格式，需要 semver 如 1.0.0' });
+    res.status(400).json(error(400, '无效的版本号格式，需要 semver 如 1.0.0', 'BAD_REQUEST'));
     return;
   }
 

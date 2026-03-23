@@ -351,10 +351,30 @@ export function jsonSuccess(
   httpStatus = 200,
   extraHeaders: Record<string, string> = {}
 ): NextResponse {
-  return NextResponse.json({ code: 0, data, requestId }, {
-    status: httpStatus,
-    headers: { ...corsHeaders, ...extraHeaders },
-  });
+  return NextResponse.json(
+    { success: true, code: 200, data, message: 'ok', requestId: requestId || generateRequestId() },
+    { status: httpStatus, headers: { ...corsHeaders, ...extraHeaders } }
+  );
+}
+
+/** Map numeric AppErrorCode to string errorCode string */
+function appCodeToErrorCode(appCode: number): string {
+  const map: Record<number, string> = {
+    [AppErrorCode.ERR_VALIDATION_FAILED]:      'VALIDATION_ERROR',
+    [AppErrorCode.ERR_INVALID_JSON]:           'INVALID_JSON',
+    [AppErrorCode.ERR_MISSING_REQUIRED_FIELD]: 'MISSING_REQUIRED_FIELD',
+    [AppErrorCode.ERR_INVALID_FORMAT]:         'INVALID_FORMAT',
+    [AppErrorCode.ERR_NOT_FOUND]:              'NOT_FOUND',
+    [AppErrorCode.ERR_CONFLICT]:               'CONFLICT',
+    [AppErrorCode.ERR_DUPLICATE_ENTRY]:       'DUPLICATE_ENTRY',
+    [AppErrorCode.ERR_UNAUTHORIZED]:           'UNAUTHORIZED',
+    [AppErrorCode.ERR_FORBIDDEN]:             'FORBIDDEN',
+    [AppErrorCode.ERR_RATE_LIMITED]:           'RATE_LIMITED',
+    [AppErrorCode.ERR_INTERNAL]:               'INTERNAL_ERROR',
+    [AppErrorCode.ERR_NOT_IMPLEMENTED]:       'NOT_IMPLEMENTED',
+    [AppErrorCode.ERR_SERVICE_UNAVAILABLE]:    'SERVICE_UNAVAILABLE',
+  };
+  return map[appCode] ?? 'UNKNOWN_ERROR';
 }
 
 /**
@@ -371,8 +391,9 @@ export function jsonAppError(
   httpStatus: number,
   requestId?: string
 ): NextResponse {
+  const id = requestId || generateRequestId();
   return NextResponse.json(
-    { code: appCode, message, requestId },
+    { success: false, code: httpStatus, errorCode: appCodeToErrorCode(appCode), message, requestId: id, timestamp: new Date().toISOString() },
     { status: httpStatus, headers: { ...corsHeaders } }
   );
 }
@@ -384,10 +405,26 @@ export function jsonAppError(
  * For explicit app code + HTTP status separation, use jsonAppError() instead.
  */
 export function jsonError(message: string, status: number, requestId?: string): NextResponse {
+  const id = requestId || generateRequestId();
   return NextResponse.json(
-    { code: status, message, requestId },
+    { success: false, code: status, errorCode: httpStatusToErrorCode(status), message, requestId: id, timestamp: new Date().toISOString() },
     { status, headers: { ...corsHeaders } }
   );
+}
+
+/** Map HTTP status code to string errorCode */
+function httpStatusToErrorCode(status: number): string {
+  const map: Record<number, string> = {
+    400: 'BAD_REQUEST',
+    401: 'UNAUTHORIZED',
+    403: 'FORBIDDEN',
+    404: 'NOT_FOUND',
+    409: 'CONFLICT',
+    429: 'RATE_LIMITED',
+    500: 'INTERNAL_ERROR',
+    503: 'SERVICE_UNAVAILABLE',
+  };
+  return map[status] ?? 'UNKNOWN_ERROR';
 }
 
 /**
