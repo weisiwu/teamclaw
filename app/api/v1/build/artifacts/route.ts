@@ -1,30 +1,16 @@
 import path from "path";
 import fs from "fs/promises";
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/api-shared";
+import {
+  requireAuth,
+  generateRequestId,
+  jsonSuccess,
+  jsonError,
+  optionsResponse,
+  corsHeaders,
+} from "@/lib/api-shared";
 
-/** CORS headers for cross-origin API access */
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Request-ID",
-  "Access-Control-Max-Age": "86400",
-};
-
-/** Generate a short unique request ID */
-function generateRequestId(): string {
-  return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-/** Unified error response with CORS and requestId */
-function jsonError(message: string, status: number, requestId?: string): NextResponse {
-  return NextResponse.json(
-    { code: status, message, requestId },
-    { status, headers: corsHeaders }
-  );
-}
-
-const ARTIFACTS_DIR = path.join(process.cwd(), "public", "build-artifacts");
+export { optionsResponse as OPTIONS };
 
 export interface BuildArtifact {
   filename: string;
@@ -65,29 +51,17 @@ function parseArtifactFilename(filename: string): {
   platform: string;
   arch: string;
 } | null {
-  // teamclaw-v1.2.0-darwin-arm64.tar.gz
-  // teamclaw-v1.2.0-darwin-x64.tar.gz
-  // teamclaw-v1.2.0-linux-arm64.tar.gz
-  // teamclaw-v1.2.0-windows-x64.zip
-  const match = filename.match(
-    /^teamclaw-(.+)-(\w+)-(\w+)\.(tar\.gz|zip)$/
-  );
+  const match = filename.match(/^teamclaw-(.+)-(\w+)-(\w+)\.(tar\.gz|zip)$/);
   if (!match) return null;
   return {
     versionName: match[1],
-    env: "production", // default env
+    env: "production",
     platform: match[2],
     arch: match[3],
   };
 }
 
-/**
- * OPTIONS /api/v1/build/artifacts
- * CORS preflight
- */
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, { status: 204, headers: corsHeaders });
-}
+const ARTIFACTS_DIR = path.join(process.cwd(), "public", "build-artifacts");
 
 /**
  * List all artifacts for a given version
@@ -98,7 +72,6 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const versionName = searchParams.get("versionName");
 
-  // Pagination: default page=1, pageSize=20
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
   const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "20", 10)));
 
@@ -108,7 +81,6 @@ export async function GET(request: NextRequest) {
     const artifacts: BuildArtifact[] = [];
 
     if (versionName) {
-      // List artifacts for specific version
       const versionDir = getVersionArtifactDir(versionName);
       try {
         const files = await fs.readdir(versionDir);
@@ -134,7 +106,6 @@ export async function GET(request: NextRequest) {
         // Version dir doesn't exist, return empty
       }
     } else {
-      // List all versions that have artifacts
       const entries = await fs.readdir(ARTIFACTS_DIR, { withFileTypes: true });
       for (const entry of entries) {
         if (entry.isDirectory()) {
@@ -162,24 +133,25 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Sort by creation time descending
     artifacts.sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
-    // Apply pagination
     const total = artifacts.length;
     const startIndex = (page - 1) * pageSize;
     const paginatedArtifacts = artifacts.slice(startIndex, startIndex + pageSize);
 
-    return NextResponse.json({ code: 0, data: {
-      artifacts: paginatedArtifacts,
-      total,
-      page,
-      pageSize,
-      totalPages: Math.ceil(total / pageSize),
-    }, requestId }, { headers: corsHeaders });
+    return NextResponse.json({
+      code: 0,
+      data: {
+        artifacts: paginatedArtifacts,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+      requestId,
+    }, { headers: corsHeaders });
   } catch (error) {
     console.error("[BuildArtifacts] Error:", error);
     return jsonError("Internal server error", 500, requestId);
@@ -193,7 +165,6 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
 
-  // Auth: require authentication
   const authResult = requireAuth(request, requestId);
   if (authResult instanceof NextResponse) return authResult;
 
@@ -218,13 +189,12 @@ export async function DELETE(request: NextRequest) {
       throw err;
     }
 
-    // 检查版本目录是否为空，空则删除目录
     const remaining = await fs.readdir(versionDir);
     if (remaining.length === 0) {
       await fs.rmdir(versionDir);
     }
 
-    return NextResponse.json({ code: 0, message: 'ok', data: { filename, versionName }, requestId }, { headers: corsHeaders });
+    return jsonSuccess({ filename, versionName }, requestId);
   } catch (error) {
     console.error('[BuildArtifacts] Delete error:', error);
     return jsonError('Failed to delete artifact', 500, requestId);
@@ -239,7 +209,6 @@ export async function DELETE(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
 
-  // Auth: require authentication
   const authResult = requireAuth(request, requestId);
   if (authResult instanceof NextResponse) return authResult;
 
@@ -247,7 +216,6 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const versionName = formData.get("versionName") as string | null;
-    // env available for future use: (formData.get("env") as string) || "production"
     const platform = (formData.get("platform") as string) || "unknown";
     const arch = (formData.get("arch") as string) || "unknown";
 
@@ -269,24 +237,22 @@ export async function POST(request: NextRequest) {
     const versionDir = getVersionArtifactDir(versionName);
     await fs.mkdir(versionDir, { recursive: true });
 
-    // Generate filename if not provided
     const ext = file.name.endsWith(".zip") ? ".zip" : ".tar.gz";
     const filename = `teamclaw-${versionName}-${platform}-${arch}${ext}`;
     const filePath = path.join(versionDir, filename);
 
-    // Write file
     const buffer = Buffer.from(await file.arrayBuffer());
     await fs.writeFile(filePath, buffer);
 
     const stat = await fs.stat(filePath);
 
-    return NextResponse.json({ code: 0, data: {
+    return jsonSuccess({
       filename,
       size: formatSize(stat.size),
       sizeBytes: stat.size,
       downloadUrl: `/build-artifacts/${versionName.replace(/[^a-zA-Z0-9.-]/g, "_")}/${filename}`,
       createdAt: stat.birthtime.toISOString(),
-    } as BuildArtifact, requestId }, { headers: corsHeaders });
+    } as BuildArtifact, requestId);
   } catch (error) {
     console.error("[BuildArtifacts] Upload error:", error);
     return jsonError("Internal server error", 500, requestId);

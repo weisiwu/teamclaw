@@ -1,53 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { requireElevatedRole } from "@/lib/api-shared";
+import {
+  requireElevatedRole,
+  generateRequestId,
+  jsonSuccess,
+  jsonError,
+  optionsResponse,
+} from "@/lib/api-shared";
 
 /** Allowed env values for build triggers */
 const VALID_ENVS = new Set(["production", "staging", "development", "test"]);
-
-/** CORS headers for cross-origin API access */
-const buildCorsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Request-ID, X-User-Id, X-User-Role",
-  "Access-Control-Max-Age": "86400",
-};
-
-/** Generate a short unique request ID */
-function generateReqId(): string {
-  return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-/**
- * Unified JSON error response helper (uses buildCorsHeaders for CORS preflight with auth headers)
- */
-const jsonError = (message: string, status: number, requestId?: string): NextResponse =>
-  NextResponse.json({ code: status, message, requestId }, { status, headers: buildCorsHeaders });
-
-// Keep jsonBuildError as alias for backward compatibility
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const jsonBuildError = jsonError;
-
-/**
- * Unified success response helper
- */
-const jsonSucc = (data: unknown, requestId?: string): NextResponse =>
-  NextResponse.json({ code: 0, data, requestId }, { headers: { ...buildCorsHeaders } });
 
 /**
  * OPTIONS /api/v1/build/trigger
  * CORS preflight
  */
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, { status: 204, headers: buildCorsHeaders });
-}
+export { optionsResponse as OPTIONS };
 
 /**
  * POST /api/v1/build/trigger
  * 触发构建任务 — 需要 admin 或 vice_admin 权限
  */
 export async function POST(request: NextRequest) {
-  const requestId = request.headers.get("X-Request-ID") || generateReqId();
+  const requestId = request.headers.get("X-Request-ID") || generateRequestId();
 
   // Auth: require admin or vice_admin
   const authResult = requireElevatedRole(request, requestId);
@@ -85,7 +59,7 @@ export async function POST(request: NextRequest) {
   // Currently a mock implementation
   console.log(`[Build Trigger][${requestId}][user:${authResult.id}] buildId=${generatedBuildId}, version=${versionName}, env=${env}`);
 
-  return jsonSucc({
+  return jsonSuccess({
     buildId: generatedBuildId,
     versionId,
     versionName,
@@ -101,7 +75,7 @@ export async function POST(request: NextRequest) {
  * 获取构建状态（预留）— requires auth
  */
 export async function GET(request: NextRequest) {
-  const requestId = request.headers.get("X-Request-ID") || generateReqId();
+  const requestId = request.headers.get("X-Request-ID") || generateRequestId();
 
   // Auth: require any logged-in user
   const authResult = requireElevatedRole(request, requestId);
@@ -119,7 +93,7 @@ export async function GET(request: NextRequest) {
   }
 
   // mock: always return building
-  return jsonSucc({
+  return jsonSuccess({
     buildId,
     status: "building",
     progress: 50,

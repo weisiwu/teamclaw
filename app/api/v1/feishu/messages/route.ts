@@ -1,48 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/api-shared";
+import {
+  getFeishuConfig,
+  getAppAccessToken,
+  jsonSuccess,
+  jsonError,
+  requireAuth,
+  optionsResponse,
+  FEISHU_BASE_URL,
+} from "@/lib/api/feishu";
 
-const FEISHU_BASE_URL = "https://open.feishu.cn";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
-
-function jsonSuccess(data: unknown) {
-  return NextResponse.json({ code: 0, data }, { headers: corsHeaders });
-}
-
-function jsonError(message: string, status: number) {
-  return NextResponse.json({ code: status, message }, { status, headers: corsHeaders });
-}
-
-function getFeishuConfig(): { appId: string; appSecret: string } | null {
-  const appId = process.env.FEISHU_APP_ID;
-  const appSecret = process.env.FEISHU_APP_SECRET;
-  if (appId && appSecret) return { appId, appSecret };
-  return null;
-}
-
-async function getAppAccessToken(appId: string, appSecret: string): Promise<string> {
-  const response = await fetch(`${FEISHU_BASE_URL}/open-apis/auth/v3/tenant_access_token/internal`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
-  });
-  if (!response.ok) throw new Error(`Auth failed: ${response.status}`);
-  const data = await response.json() as { code: number; tenant_access_token?: string; msg?: string };
-  if (data.code !== 0) throw new Error(`Feishu auth error: ${data.code} ${data.msg}`);
-  return data.tenant_access_token!;
-}
+export { optionsResponse as OPTIONS };
 
 /**
  * GET /api/v1/feishu/messages
  * 获取飞书消息列表
  */
 export async function GET(request: NextRequest) {
-  // Auth: require any logged-in user
-  const authResult = requireAuth(request);
+  const requestId = request.headers.get("X-Request-ID") || `feishu_msg_${Date.now().toString(36)}`;
+
+  const authResult = requireAuth(request, requestId);
   if (authResult instanceof NextResponse) return authResult;
 
   try {
@@ -53,7 +29,7 @@ export async function GET(request: NextRequest) {
         messages: [],
         notice: "飞书 API 未配置，请设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET 环境变量",
         configured: false,
-      });
+      }, requestId);
     }
 
     const { searchParams } = new URL(request.url);
@@ -64,7 +40,7 @@ export async function GET(request: NextRequest) {
     const sortType = searchParams.get("sort_type") ?? "ByCreateTimeDesc";
 
     if (!containerId) {
-      return jsonError("缺少参数: container_id（群聊 ID）", 400);
+      return jsonError("缺少参数: container_id（群聊 ID）", 400, requestId);
     }
 
     const accessToken = await getAppAccessToken(config.appId, config.appSecret);
@@ -131,13 +107,9 @@ export async function GET(request: NextRequest) {
       pageToken: data.data?.page_token,
       hasMore: data.data?.has_more ?? false,
       configured: true,
-    });
+    }, requestId);
   } catch (err) {
     console.error("[GET /api/v1/feishu/messages]", err);
-    return jsonError(`获取飞书消息失败: ${err instanceof Error ? err.message : String(err)}`, 500);
+    return jsonError(`获取飞书消息失败: ${err instanceof Error ? err.message : String(err)}`, 500, requestId);
   }
-}
-
-export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: corsHeaders });
 }
