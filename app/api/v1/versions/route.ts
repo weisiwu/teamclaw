@@ -1,10 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import { versionStore, type Version } from "./version-store";
-import { generateRequestId, jsonSuccess, jsonError, handleApiError, optionsResponse, requireAuth } from "@/lib/api-shared";
+import { generateRequestId, jsonSuccess, jsonError, handleApiError, optionsResponse, requireAuth, corsHeaders } from "@/lib/api-shared";
+
+// ETag + Cache-Control constants (aligned with iter-87 server-side pattern)
+const CACHE_MAX_AGE = 60;        // 60s browser cache
+const STALE_WHILE_REVALIDATE = 120; // serve stale up to 120s while revalidating
+
+/**
+ * Generate a weak ETag from the list response data.
+ * Uses total + page info and boundary version IDs for a stable, cheap hash.
+ */
+function buildVersionsETag(
+  total: number,
+  page: number,
+  pageSize: number,
+  paginatedVersions: Version[]
+): string {
+  const first = paginatedVersions[0]?.id ?? "";
+  const last = paginatedVersions[paginatedVersions.length - 1]?.id ?? "";
+  const raw = `${total}-${page}-${pageSize}-${first}-${last}`;
+  // Weak validator (W/) — good enough for conditional GET on mutable store data
+  let hash = 0;
+  for (let i = 0; i < raw.length; i++) {
+    hash = ((hash << 5) - hash) + raw.charCodeAt(i);
+    hash |= 0;
+  }
+  return `W/"${Math.abs(hash).toString(16)}"`;
+}
 
 /**
  * GET /api/v1/versions
- * List all versions with pagination and filtering
+ * List all versions with pagination and filtering.
+ * Supports conditional requests via If-None-Match / ETag.
  */
 export async function GET(request: NextRequest) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
@@ -58,13 +85,29 @@ export async function GET(request: NextRequest) {
     const start = (page - 1) * pageSize;
     const paginatedVersions = versions.slice(start, start + pageSize);
 
+    // ETag + conditional request (iter-98 API optimization)
+    const etag = buildVersionsETag(total, page, pageSize, paginatedVersions);
+    const ifNoneMatch = request.headers.get("If-None-Match");
+    if (ifNoneMatch === etag) {
+      return new NextResponse(null, {
+        status: 304,
+        headers: { ...corsHeaders, ETag: etag },
+      });
+    }
+
+    const cacheHeaders = {
+      ...corsHeaders,
+      "Cache-Control": `private, max-age=${CACHE_MAX_AGE}, stale-while-revalidate=${STALE_WHILE_REVALIDATE}`,
+      ETag: etag,
+    };
+
     return jsonSuccess({
       data: paginatedVersions,
       total,
       page,
       pageSize,
       totalPages: Math.ceil(total / pageSize),
-    }, requestId);
+    }, requestId, 200, cacheHeaders);
   } catch (err) {
     console.error("[versions]", err);
     return jsonError("Internal server error", 500, requestId);

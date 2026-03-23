@@ -291,10 +291,15 @@ export function generateRequestId(): string {
   return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function jsonSuccess(data: unknown, requestId?: string, httpStatus = 200): NextResponse {
+export function jsonSuccess(
+  data: unknown,
+  requestId?: string,
+  httpStatus = 200,
+  extraHeaders: Record<string, string> = {}
+): NextResponse {
   return NextResponse.json({ code: 0, data, requestId }, {
     status: httpStatus,
-    headers: { ...corsHeaders },
+    headers: { ...corsHeaders, ...extraHeaders },
   });
 }
 
