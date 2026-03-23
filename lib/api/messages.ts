@@ -32,7 +32,18 @@ export interface Message {
 }
 
 export interface QueueStatus {
-  list: Pick<Message, 'messageId' | 'userId' | 'userName' | 'role' | 'content' | 'priority' | 'status' | 'timestamp'>[];
+  list: Pick<
+    Message,
+    | 'messageId'
+    | 'userId'
+    | 'userName'
+    | 'role'
+    | 'content'
+    | 'priority'
+    | 'status'
+    | 'timestamp'
+    | 'channel'
+  >[];
   total: number;
   currentProcessing: string | null;
 }
@@ -82,10 +93,7 @@ export interface PaginatedMessages {
 
 // ========== API 函数 ==========
 
-async function apiRequest<T>(
-  url: string,
-  options?: RequestInit
-): Promise<T> {
+async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...options,
     headers: {
@@ -104,9 +112,7 @@ async function apiRequest<T>(
 /**
  * 接收外部消息
  */
-export async function receiveMessage(
-  data: ReceiveMessageRequest
-): Promise<ReceiveMessageResponse> {
+export async function receiveMessage(data: ReceiveMessageRequest): Promise<ReceiveMessageResponse> {
   return apiRequest<ReceiveMessageResponse>(`${API_BASE}/messages`, {
     method: 'POST',
     body: JSON.stringify(data),
@@ -124,9 +130,7 @@ export async function getQueueStatus(): Promise<QueueStatus> {
  * 获取队列详情
  */
 export async function getQueueDetails(queueId?: string): Promise<QueueDetails> {
-  const url = queueId
-    ? `${API_BASE}/messages/queue/${queueId}`
-    : `${API_BASE}/messages/queue`;
+  const url = queueId ? `${API_BASE}/messages/queue/${queueId}` : `${API_BASE}/messages/queue`;
   return apiRequest<QueueDetails>(url);
 }
 
@@ -156,9 +160,7 @@ export async function getMessageHistory(
   if (params.channel) searchParams.set('channel', params.channel);
 
   const query = searchParams.toString();
-  return apiRequest<PaginatedMessages>(
-    `${API_BASE}/messages/history${query ? `?${query}` : ''}`
-  );
+  return apiRequest<PaginatedMessages>(`${API_BASE}/messages/history${query ? `?${query}` : ''}`);
 }
 
 /**
@@ -205,7 +207,11 @@ export async function getMessageStats() {
 /**
  * 获取 DLQ 列表
  */
-export async function getDLQEntries(params?: { page?: number; pageSize?: number; channel?: string }) {
+export async function getDLQEntries(params?: {
+  page?: number;
+  pageSize?: number;
+  channel?: string;
+}) {
   const searchParams = new URLSearchParams();
   if (params?.page) searchParams.set('page', String(params.page));
   if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
@@ -272,9 +278,13 @@ export async function getRateLimitStats(): Promise<{ data: RateLimitStats }> {
  * 限流检查
  */
 export async function checkRateLimit(
-  userId: string, role: string, channel: string
+  userId: string,
+  role: string,
+  channel: string
 ): Promise<{ data: RateLimitResult }> {
-  return apiRequest(`${API_BASE}/messages/ratelimit/check?userId=${userId}&role=${role}&channel=${channel}`);
+  return apiRequest(
+    `${API_BASE}/messages/ratelimit/check?userId=${userId}&role=${role}&channel=${channel}`
+  );
 }
 
 // ========== 断路器 API ==========
@@ -305,7 +315,9 @@ export async function getCircuitBreakerStats(
 /**
  * 重置断路器
  */
-export async function resetCircuitBreaker(channel: string): Promise<{ data: { channel: string; reset: boolean } }> {
+export async function resetCircuitBreaker(
+  channel: string
+): Promise<{ data: { channel: string; reset: boolean } }> {
   return apiRequest(`${API_BASE}/messages/circuit/${channel}/reset`, { method: 'POST' });
 }
 
@@ -326,7 +338,7 @@ export interface UnifiedMessage {
 
 export interface ChannelSession {
   userGlobalId: string;
-  latestByChannel: Partial<Record<string, UnifiedMessage> >;
+  latestByChannel: Partial<Record<string, UnifiedMessage>>;
   lastActivity: string;
   totalUnread: number;
 }
@@ -335,8 +347,20 @@ export interface ChannelSession {
  * 获取统一收件箱
  */
 export async function getUnifiedInbox(params?: {
-  page?: number; pageSize?: number; channel?: string; role?: string; unreadOnly?: boolean;
-}): Promise<{ data: { list: UnifiedMessage[]; total: number; page: number; pageSize: number; unreadTotal: number } }> {
+  page?: number;
+  pageSize?: number;
+  channel?: string;
+  role?: string;
+  unreadOnly?: boolean;
+}): Promise<{
+  data: {
+    list: UnifiedMessage[];
+    total: number;
+    page: number;
+    pageSize: number;
+    unreadTotal: number;
+  };
+}> {
   const sp = new URLSearchParams();
   if (params?.page) sp.set('page', String(params.page));
   if (params?.pageSize) sp.set('pageSize', String(params.pageSize));
@@ -351,7 +375,9 @@ export async function getUnifiedInbox(params?: {
  * 获取跨渠道会话列表
  */
 export async function getUserSessions(params?: {
-  page?: number; pageSize?: number; hasUnread?: boolean;
+  page?: number;
+  pageSize?: number;
+  hasUnread?: boolean;
 }): Promise<{ data: { list: ChannelSession[]; total: number } }> {
   const sp = new URLSearchParams();
   if (params?.page) sp.set('page', String(params.page));
@@ -364,14 +390,19 @@ export async function getUserSessions(params?: {
 /**
  * 获取跨渠道会话详情
  */
-export async function getSessionMessages(userGlobalId: string): Promise<{ data: { userGlobalId: string; messages: UnifiedMessage[]; total: number } }> {
+export async function getSessionMessages(
+  userGlobalId: string
+): Promise<{ data: { userGlobalId: string; messages: UnifiedMessage[]; total: number } }> {
   return apiRequest(`${API_BASE}/messages/unified/sessions/${userGlobalId}`);
 }
 
 /**
  * 标记已读
  */
-export async function markUnifiedRead(globalId?: string, userGlobalId?: string): Promise<{ data: { marked: number } }> {
+export async function markUnifiedRead(
+  globalId?: string,
+  userGlobalId?: string
+): Promise<{ data: { marked: number } }> {
   return apiRequest(`${API_BASE}/messages/unified/read`, {
     method: 'POST',
     body: JSON.stringify({ globalId, userGlobalId }),
@@ -415,7 +446,9 @@ export async function getRouterRules(): Promise<{ data: { rules: RouteRule[]; to
 /**
  * 添加/更新路由规则
  */
-export async function upsertRouterRule(rule: RouteRule): Promise<{ data: { ruleId: string; added: boolean } }> {
+export async function upsertRouterRule(
+  rule: RouteRule
+): Promise<{ data: { ruleId: string; added: boolean } }> {
   return apiRequest(`${API_BASE}/messages/router/rules`, {
     method: 'POST',
     body: JSON.stringify(rule),
@@ -425,7 +458,9 @@ export async function upsertRouterRule(rule: RouteRule): Promise<{ data: { ruleI
 /**
  * 删除路由规则
  */
-export async function deleteRouterRule(ruleId: string): Promise<{ data: { ruleId: string; deleted: boolean } }> {
+export async function deleteRouterRule(
+  ruleId: string
+): Promise<{ data: { ruleId: string; deleted: boolean } }> {
   return apiRequest(`${API_BASE}/messages/router/rules/${ruleId}`, { method: 'DELETE' });
 }
 
@@ -433,7 +468,11 @@ export async function deleteRouterRule(ruleId: string): Promise<{ data: { ruleId
  * 手动路由测试
  */
 export async function testRouterRoute(params: {
-  channel: string; userId: string; role: string; content: string; priority?: number;
+  channel: string;
+  userId: string;
+  role: string;
+  content: string;
+  priority?: number;
 }): Promise<{ data: RouteResult }> {
   return apiRequest(`${API_BASE}/messages/router/route`, {
     method: 'POST',

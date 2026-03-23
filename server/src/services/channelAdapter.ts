@@ -1,7 +1,7 @@
 /**
  * Channel Adapter 服务
  * 消息机制模块 - 消息通道适配器
- * 
+ *
  * 统一不同平台（飞书、微信、Slack、Web）的消息格式
  */
 
@@ -18,7 +18,11 @@ export function adaptFeishuMessage(raw: Record<string, unknown>): ReceiveMessage
 
   return {
     channel: 'feishu',
-    userId: String((sender?.sender_id as any)?.open_id || (sender?.sender_id as any)?.user_id || ''),
+    userId: String(
+      (sender?.sender_id as { open_id?: string; user_id?: string })?.open_id ||
+        (sender?.sender_id as { open_id?: string; user_id?: string })?.user_id ||
+        ''
+    ),
     userName: String(sender?.sender_name || '未知用户'),
     role: detectRoleFromFeishu(sender),
     content: String(content.text || content.content || ''),
@@ -40,7 +44,11 @@ export function adaptWechatMessage(raw: Record<string, unknown>): ReceiveMessage
     content: String(raw.Content || raw.Recognition || ''),
     type: detectWechatType(raw),
     mentionedAgent: detectMentionedAgent(String(raw.Content || '')),
-    timestamp: String(raw.CreateTime ? new Date(Number(raw.CreateTime) * 1000).toISOString() : new Date().toISOString()),
+    timestamp: String(
+      raw.CreateTime
+        ? new Date(Number(raw.CreateTime) * 1000).toISOString()
+        : new Date().toISOString()
+    ),
   };
 }
 
@@ -63,7 +71,10 @@ export function adaptWebMessage(raw: Record<string, unknown>): ReceiveMessageReq
 /**
  * 统一入口：根据 channel 调用对应适配器
  */
-export function adaptMessage(raw: Record<string, unknown>, channel: Message['channel']): ReceiveMessageRequest {
+export function adaptMessage(
+  raw: Record<string, unknown>,
+  channel: Message['channel']
+): ReceiveMessageRequest {
   switch (channel) {
     case 'feishu':
       return adaptFeishuMessage(raw);
@@ -83,7 +94,7 @@ function detectRoleFromFeishu(sender: Record<string, unknown> | undefined): Mess
   // 飞书特殊成员或管理员标识
   const isAdmin = sender?.is_admin === true || sender?.is_boss === true;
   const isViceAdmin = sender?.is_vice_admin === true;
-  
+
   if (isAdmin) return 'admin';
   if (isViceAdmin) return 'vice_admin';
   return 'employee';
@@ -106,12 +117,18 @@ function detectRoleFromWechat(raw: Record<string, unknown>): Message['role'] {
 function detectWechatType(raw: Record<string, unknown>): Message['type'] {
   const msgType = String(raw.MsgType || '');
   switch (msgType) {
-    case '1': return 'text';
-    case '3': return 'image';
-    case '34': return 'voice';
-    case '47': return 'emoji';
-    case '49': return 'file';
-    default: return 'text';
+    case '1':
+      return 'text';
+    case '3':
+      return 'image';
+    case '34':
+      return 'voice';
+    case '47':
+      return 'emoji';
+    case '49':
+      return 'file';
+    default:
+      return 'text';
   }
 }
 
@@ -128,3 +145,133 @@ function detectMentionedAgent(content: string): string | undefined {
   }
   return undefined;
 }
+
+// ============ UnifiedMessage Interface ============
+
+export interface UnifiedMessage {
+  messageId: string;
+  channel: 'wechat' | 'feishu' | 'web';
+  userId: string;
+  userName: string;
+  content: string;
+  type: 'text' | 'file' | 'image' | 'voice';
+  mentionedAgent?: string;
+  groupId: string;
+  timestamp: string;
+  rawData?: unknown;
+}
+
+// ============ ChannelAdapter Class ============
+
+import { WechatService } from './wechatService.js';
+import { FeishuService } from './feishuService.js';
+export interface ChannelService {
+  sendToGroup(groupId: string, content: string): Promise<void>;
+}
+
+/**
+ * ChannelAdapter Class
+ * 统一通道管理 - 注册通道、接收消息、发送消息
+ */
+export class ChannelAdapter {
+  private channels: Map<string, ChannelService> = new Map();
+
+  /**
+   * 注册通道
+   */
+  registerChannel(name: string, service: ChannelService): void {
+    this.channels.set(name, service);
+    console.log(`[ChannelAdapter] Channel registered: ${name}`);
+  }
+
+  /**
+   * 注册微信通道
+   */
+  registerWechat(service: WechatService): void {
+    this.registerChannel('wechat', service);
+  }
+
+  /**
+   * 注册飞书通道
+   */
+  registerFeishu(service: FeishuService): void {
+    this.registerChannel('feishu', service);
+  }
+
+  /**
+   * 接收消息（统一入口）
+   * 将各通道的原始消息格式转换为 UnifiedMessage
+   */
+  async receive(channel: string, rawMessage: unknown): Promise<UnifiedMessage> {
+    const msg = rawMessage as Record<string, unknown>;
+
+    if (channel === 'wechat') {
+      const adapted = adaptWechatMessage(msg);
+      return {
+        messageId: String(msg.msgid ?? msg.MsgId ?? Date.now()),
+        channel: 'wechat',
+        userId: adapted.userId,
+        userName: adapted.userName,
+        content: adapted.content,
+        type: adapted.type || 'text',
+        mentionedAgent: adapted.mentionedAgent,
+        groupId: String(msg.roomid ?? msg.RoomId ?? adapted.userId),
+        timestamp: adapted.timestamp || new Date().toISOString(),
+        rawData: rawMessage,
+      };
+    }
+
+    if (channel === 'feishu') {
+      const adapted = adaptFeishuMessage(msg);
+      return {
+        messageId: String(msg.message_id ?? Date.now()),
+        channel: 'feishu',
+        userId: adapted.userId,
+        userName: adapted.userName,
+        content: adapted.content,
+        type: adapted.type || 'text',
+        mentionedAgent: adapted.mentionedAgent,
+        groupId: String(msg.chat_id ?? msg.chatId ?? adapted.userId),
+        timestamp: adapted.timestamp || new Date().toISOString(),
+        rawData: rawMessage,
+      };
+    }
+
+    // Web channel
+    const adapted = adaptWebMessage(msg);
+    return {
+      messageId: String(msg.id ?? Date.now()),
+      channel: 'web',
+      userId: adapted.userId,
+      userName: adapted.userName,
+      content: adapted.content,
+      type: 'text',
+      mentionedAgent: adapted.mentionedAgent,
+      groupId: String(msg.groupId ?? adapted.userId),
+      timestamp: adapted.timestamp || new Date().toISOString(),
+      rawData: rawMessage,
+    };
+  }
+
+  /**
+   * 发送消息（统一出口）
+   */
+  async send(channel: string, groupId: string, content: string): Promise<void> {
+    const service = this.channels.get(channel);
+    if (service) {
+      await service.sendToGroup(groupId, content);
+    } else {
+      console.warn(`[ChannelAdapter] Channel not registered: ${channel}`);
+    }
+  }
+
+  /**
+   * 获取已注册通道列表
+   */
+  getChannels(): string[] {
+    return Array.from(this.channels.keys());
+  }
+}
+
+// Singleton instance
+export const channelAdapter = new ChannelAdapter();

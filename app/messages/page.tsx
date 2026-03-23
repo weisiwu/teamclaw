@@ -1,14 +1,14 @@
 'use client';
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { LegacySelect as Select } from "@/components/ui/select";
-import { PriorityBadge, StatusBadge, RoleBadge } from "@/components/messages/PriorityBadge";
-import { useQueueStatus, usePreemptMessage, useSendMessage } from "@/hooks/useMessages";
-import { EmptyState } from "@/components/ui/empty-state";
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { LegacySelect as Select } from '@/components/ui/select';
+import { PriorityBadge, StatusBadge, RoleBadge } from '@/components/messages/PriorityBadge';
+import { useQueueStatus, usePreemptMessage, useSendMessage } from '@/hooks/useMessages';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   MessageSquare,
   Zap,
@@ -20,7 +20,34 @@ import {
   User,
   Info,
   Loader2,
-} from "lucide-react";
+} from 'lucide-react';
+
+/** Channel badge colors */
+function ChannelBadge({ channel }: { channel: string }) {
+  const config: Record<string, { label: string; className: string }> = {
+    feishu: {
+      label: '飞书',
+      className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    },
+    wechat: {
+      label: '微信',
+      className: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+    },
+    web: {
+      label: 'Web',
+      className: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
+    },
+  };
+  const cfg = config[channel] ?? {
+    label: channel,
+    className: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+  };
+  return (
+    <Badge variant="default" className={`text-xs px-1.5 py-0.5 ${cfg.className}`}>
+      {cfg.label}
+    </Badge>
+  );
+}
 
 function QueuePageContent() {
   const { data: queue, isLoading, error, refetch } = useQueueStatus();
@@ -29,20 +56,20 @@ function QueuePageContent() {
 
   // 测试发送表单
   const [testForm, setTestForm] = useState({
-    channel: "web" as const,
-    userId: "test_user_001",
-    userName: "测试用户",
-    role: "employee" as const,
-    content: "",
+    channel: 'web' as const,
+    userId: 'test_user_001',
+    userName: '测试用户',
+    role: 'employee' as const,
+    content: '',
   });
 
   const handleSendTest = async () => {
     if (!testForm.content.trim()) return;
     try {
       await sendMutation.mutateAsync(testForm);
-      setTestForm({ ...testForm, content: "" });
+      setTestForm({ ...testForm, content: '' });
     } catch (err) {
-      console.error("Failed to send message:", err);
+      console.error('Failed to send message:', err);
     }
   };
 
@@ -50,7 +77,7 @@ function QueuePageContent() {
     try {
       await preemptMutation.mutateAsync(messageId);
     } catch (err) {
-      console.error("Failed to preempt:", err);
+      console.error('Failed to preempt:', err);
     }
   };
 
@@ -97,7 +124,7 @@ function QueuePageContent() {
   }
 
   const currentMsg = queue?.currentProcessing
-    ? queue.list.find((m) => m.messageId === queue.currentProcessing)
+    ? queue.list.find(m => m.messageId === queue.currentProcessing)
     : null;
 
   return (
@@ -135,9 +162,7 @@ function QueuePageContent() {
             </div>
             <div>
               <p className="text-xs text-green-600 font-medium">处理中</p>
-              <p className="text-xl font-bold text-green-900">
-                {currentMsg ? "1" : "0"}
-              </p>
+              <p className="text-xl font-bold text-green-900">{currentMsg ? '1' : '0'}</p>
             </div>
           </CardContent>
         </Card>
@@ -187,6 +212,7 @@ function QueuePageContent() {
               </div>
               <PriorityBadge priority={currentMsg.priority} />
               <StatusBadge status={currentMsg.status} />
+              <ChannelBadge channel={currentMsg.channel} />
               <span className="text-sm text-gray-500 dark:text-gray-400">{currentMsg.content}</span>
             </div>
           </CardContent>
@@ -200,21 +226,17 @@ function QueuePageContent() {
             <CardTitle className="text-base flex items-center gap-2">
               <MessageSquare className="w-4 h-4" />
               排队消息
-              {queue?.total ? ` (${queue.total})` : ""}
+              {queue?.total ? ` (${queue.total})` : ''}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {!queue?.list || queue.list.length === 0 ? (
-              <EmptyState
-              icon={MessageSquare}
-              title="队列空闲"
-              description="暂无待处理消息"
-            />
+              <EmptyState icon={MessageSquare} title="队列空闲" description="暂无待处理消息" />
             ) : (
               <div className="space-y-3">
                 {queue.list
-                  .filter((m) => m.status !== "processing")
-                  .map((msg) => (
+                  .filter(m => m.status !== 'processing')
+                  .map(msg => (
                     <div
                       key={msg.messageId}
                       className="border rounded-lg p-3 hover:shadow-sm transition-shadow"
@@ -225,6 +247,7 @@ function QueuePageContent() {
                           <span className="text-sm font-medium">{msg.userName}</span>
                           <RoleBadge role={msg.role} />
                           <StatusBadge status={msg.status} />
+                          <ChannelBadge channel={msg.channel} />
                         </div>
                         <div className="flex items-center gap-2">
                           <PriorityBadge priority={msg.priority} />
@@ -239,9 +262,11 @@ function QueuePageContent() {
                           </Button>
                         </div>
                       </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">{msg.content}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
+                        {msg.content}
+                      </p>
                       <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                        {new Date(msg.timestamp).toLocaleString("zh-CN")}
+                        {new Date(msg.timestamp).toLocaleString('zh-CN')}
                       </p>
                     </div>
                   ))}
@@ -259,41 +284,64 @@ function QueuePageContent() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">用户名</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
+                  用户名
+                </label>
                 <Input
                   value={testForm.userName}
-                  onChange={(e) => setTestForm({ ...testForm, userName: e.target.value })}
+                  onChange={e => setTestForm({ ...testForm, userName: e.target.value })}
                   placeholder="测试用户"
                   className="h-8 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">角色</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
+                  角色
+                </label>
                 <Select
                   options={[
-                    { value: "admin", label: "管理员" },
-                    { value: "vice_admin", label: "副管理员" },
-                    { value: "employee", label: "员工" },
+                    { value: 'admin', label: '管理员' },
+                    { value: 'vice_admin', label: '副管理员' },
+                    { value: 'employee', label: '员工' },
                   ]}
                   value={testForm.role}
-                  onChange={(e) =>
+                  onChange={e =>
                     setTestForm({ ...testForm, role: e.target.value as typeof testForm.role })
+                  }
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
+                  通道
+                </label>
+                <Select
+                  options={[
+                    { value: 'web', label: 'Web' },
+                    { value: 'feishu', label: '飞书' },
+                    { value: 'wechat', label: '微信' },
+                  ]}
+                  value={testForm.channel}
+                  onChange={e =>
+                    setTestForm({ ...testForm, channel: e.target.value as typeof testForm.channel })
                   }
                   className="h-8 text-sm"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">消息内容</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
+                消息内容
+              </label>
               <Input
                 value={testForm.content}
-                onChange={(e) => setTestForm({ ...testForm, content: e.target.value })}
+                onChange={e => setTestForm({ ...testForm, content: e.target.value })}
                 placeholder="输入测试消息（试试加【紧急】看抢占效果）"
                 className="text-sm"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSendTest();
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleSendTest();
                 }}
               />
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
@@ -306,7 +354,7 @@ function QueuePageContent() {
               className="w-full"
             >
               <Send className="w-4 h-4 mr-2" />
-              {sendMutation.isPending ? "发送中..." : "发送消息"}
+              {sendMutation.isPending ? '发送中...' : '发送消息'}
             </Button>
 
             {/* 优先级说明 */}
@@ -317,19 +365,27 @@ function QueuePageContent() {
               </p>
               <div className="space-y-1 text-xs text-gray-500 dark:text-gray-400">
                 <div className="flex items-center gap-2">
-                  <Badge variant="error" className="text-xs">P30</Badge>
+                  <Badge variant="error" className="text-xs">
+                    P30
+                  </Badge>
                   <span>管理员 + 紧急消息 (10×3)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="warning" className="text-xs">P15</Badge>
+                  <Badge variant="warning" className="text-xs">
+                    P15
+                  </Badge>
                   <span>副管理员 + 高优先级 (7×2)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="info" className="text-xs">P10</Badge>
+                  <Badge variant="info" className="text-xs">
+                    P10
+                  </Badge>
                   <span>管理员 + 普通消息 (10×1)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="default" className="text-xs">P3</Badge>
+                  <Badge variant="default" className="text-xs">
+                    P3
+                  </Badge>
                   <span>员工 + 普通消息 (3×1)</span>
                 </div>
               </div>

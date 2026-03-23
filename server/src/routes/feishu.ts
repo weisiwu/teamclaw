@@ -10,7 +10,12 @@
 
 import { Router, Request, Response } from 'express';
 import { success, error } from '../utils/response.js';
-import { getFeishuMessages, getFeishuChatMembers } from '../services/feishuService.js';
+import {
+  getFeishuMessages,
+  getFeishuChatMembers,
+  FeishuService,
+} from '../services/feishuService.js';
+import { processMessage } from '../services/messagePipeline.js';
 
 const router = Router();
 
@@ -32,7 +37,9 @@ router.get('/messages', async (req: Request, res: Response) => {
 
     // Return error if no Feishu config is available
     if (!config) {
-      return res.status(503).json(error(503, '飞书未配置，请在 .env 中设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET'));
+      return res
+        .status(503)
+        .json(error(503, '飞书未配置，请在 .env 中设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET'));
     }
 
     const {
@@ -63,7 +70,7 @@ router.get('/messages', async (req: Request, res: Response) => {
 
     // Parse message content and format response
     const messages = result.messages.map(msg => {
-      let content = msg.body.content;
+      const content = msg.body.content;
       let parsedContent = content;
 
       // Try to parse JSON content (Feishu message content is JSON string)
@@ -88,15 +95,19 @@ router.get('/messages', async (req: Request, res: Response) => {
       };
     });
 
-    res.json(success({
-      messages,
-      pageToken: result.pageToken,
-      hasMore: result.hasMore,
-      configured: true,
-    }));
+    res.json(
+      success({
+        messages,
+        pageToken: result.pageToken,
+        hasMore: result.hasMore,
+        configured: true,
+      })
+    );
   } catch (err) {
     console.error('[GET /api/v1/feishu/messages] error:', err);
-    res.status(500).json(error(500, `获取飞书消息失败: ${err instanceof Error ? err.message : String(err)}`));
+    res
+      .status(500)
+      .json(error(500, `获取飞书消息失败: ${err instanceof Error ? err.message : String(err)}`));
   }
 });
 
@@ -107,7 +118,9 @@ router.get('/chats', async (req: Request, res: Response) => {
     const config = getFeishuConfig();
 
     if (!config) {
-      return res.status(503).json(error(503, '飞书未配置，请在 .env 中设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET'));
+      return res
+        .status(503)
+        .json(error(503, '飞书未配置，请在 .env 中设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET'));
     }
 
     const { page_size = '20', page_token } = req.query as Record<string, string>;
@@ -125,7 +138,7 @@ router.get('/chats', async (req: Request, res: Response) => {
       {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
         },
       }
     );
@@ -134,7 +147,7 @@ router.get('/chats', async (req: Request, res: Response) => {
       throw new Error(`Feishu API error: ${response.status}`);
     }
 
-    const data = await response.json() as {
+    const data = (await response.json()) as {
       code: number;
       msg: string;
       data?: {
@@ -153,20 +166,24 @@ router.get('/chats', async (req: Request, res: Response) => {
       throw new Error(`Feishu API error: ${data.code} ${data.msg}`);
     }
 
-    res.json(success({
-      chats: (data.data?.items || []).map(chat => ({
-        chatId: chat.chat_id,
-        name: chat.name,
-        description: chat.description,
-        memberCount: chat.member_count,
-      })),
-      pageToken: data.data?.page_token,
-      hasMore: data.data?.has_more ?? false,
-      configured: true,
-    }));
+    res.json(
+      success({
+        chats: (data.data?.items || []).map(chat => ({
+          chatId: chat.chat_id,
+          name: chat.name,
+          description: chat.description,
+          memberCount: chat.member_count,
+        })),
+        pageToken: data.data?.page_token,
+        hasMore: data.data?.has_more ?? false,
+        configured: true,
+      })
+    );
   } catch (err) {
     console.error('[GET /api/v1/feishu/chats] error:', err);
-    res.status(500).json(error(500, `获取群聊列表失败: ${err instanceof Error ? err.message : String(err)}`));
+    res
+      .status(500)
+      .json(error(500, `获取群聊列表失败: ${err instanceof Error ? err.message : String(err)}`));
   }
 });
 
@@ -176,7 +193,9 @@ router.get('/chats/:chatId/members', async (req: Request, res: Response) => {
     const config = getFeishuConfig();
 
     if (!config) {
-      return res.status(503).json(error(503, '飞书未配置，请在 .env 中设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET'));
+      return res
+        .status(503)
+        .json(error(503, '飞书未配置，请在 .env 中设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET'));
     }
 
     const { chatId } = req.params;
@@ -190,35 +209,46 @@ router.get('/chats/:chatId/members', async (req: Request, res: Response) => {
       pageToken: page_token,
     });
 
-    res.json(success({
-      members: result.members.map(m => ({
-        memberId: m.memberId,
-        name: m.name,
-        avatarUrl: m.avatarUrl,
-      })),
-      pageToken: result.pageToken,
-      hasMore: result.hasMore,
-      configured: true,
-    }));
+    res.json(
+      success({
+        members: result.members.map(m => ({
+          memberId: m.memberId,
+          name: m.name,
+          avatarUrl: m.avatarUrl,
+        })),
+        pageToken: result.pageToken,
+        hasMore: result.hasMore,
+        configured: true,
+      })
+    );
   } catch (err) {
     console.error('[GET /api/v1/feishu/chats/:chatId/members] error:', err);
-    res.status(500).json(error(500, `获取群成员失败: ${err instanceof Error ? err.message : String(err)}`));
+    res
+      .status(500)
+      .json(error(500, `获取群成员失败: ${err instanceof Error ? err.message : String(err)}`));
   }
 });
 
 // Helper: simple app access token fetch (duplicated from feishuService to avoid circular deps)
 async function getAppAccessTokenSimple(appId: string, appSecret: string): Promise<string> {
-  const response = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
-  });
+  const response = await fetch(
+    'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
+    }
+  );
 
   if (!response.ok) {
     throw new Error(`Failed to get app access token: ${response.status}`);
   }
 
-  const data = await response.json() as { code: number; msg: string; tenant_access_token?: string };
+  const data = (await response.json()) as {
+    code: number;
+    msg: string;
+    tenant_access_token?: string;
+  };
 
   if (data.code !== 0) {
     throw new Error(`Feishu auth error: ${data.code} ${data.msg}`);
@@ -226,5 +256,59 @@ async function getAppAccessTokenSimple(appId: string, appSecret: string): Promis
 
   return data.tenant_access_token!;
 }
+
+// ============ POST /api/v1/feishu/webhook ============
+// 飞书事件订阅回调（接收群聊消息）
+router.post('/webhook', async (req: Request, res: Response) => {
+  const config = getFeishuConfig();
+
+  if (!config) {
+    return res.status(503).json(error(503, '飞书未配置'));
+  }
+
+  const { timestamp, nonce, signature } = req.query as Record<string, string>;
+  const bodyStr = JSON.stringify(req.body);
+
+  // 验证签名
+  const feishuService = new FeishuService({
+    appId: config.appId,
+    appSecret: config.appSecret,
+    verificationToken: process.env.FEISHU_VERIFICATION_TOKEN,
+    encryptKey: process.env.FEISHU_ENCRYPT_KEY,
+  });
+
+  if (process.env.FEISHU_ENCRYPT_KEY) {
+    if (!feishuService.verifySignature(timestamp, nonce, bodyStr, signature)) {
+      return res.status(403).json(error(403, '签名验证失败'));
+    }
+  }
+
+  // 处理事件
+  try {
+    const unified = await feishuService.handleEvent(req.body);
+
+    if (unified) {
+      await processMessage({
+        channel: 'feishu',
+        userId: unified.userId,
+        userName: unified.userName,
+        role: 'employee',
+        content: unified.content,
+        mentionedAgent: unified.mentionedAgent,
+        timestamp: unified.timestamp,
+        rawPayload: req.body,
+      });
+
+      console.log(`[feishu webhook] Message queued: ${unified.messageId}`);
+    }
+
+    return res.json(success({ ret: 0 }));
+  } catch (err) {
+    console.error('[feishu webhook] Error:', err);
+    return res
+      .status(500)
+      .json(error(500, `处理失败: ${err instanceof Error ? err.message : String(err)}`));
+  }
+});
 
 export default router;

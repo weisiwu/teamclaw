@@ -15,22 +15,25 @@ const FEISHU_BASE_URL = 'https://open.feishu.cn';
  * 文档: https://open.feishu.cn/document/server-docs/authentication-management/access-token/app_access_token_internal
  */
 async function getAppAccessToken(appId: string, appSecret: string): Promise<string> {
-  const response = await fetch(`${FEISHU_BASE_URL}/open-apis/auth/v3/tenant_access_token/internal`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      app_id: appId,
-      app_secret: appSecret,
-    }),
-  });
+  const response = await fetch(
+    `${FEISHU_BASE_URL}/open-apis/auth/v3/tenant_access_token/internal`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        app_id: appId,
+        app_secret: appSecret,
+      }),
+    }
+  );
 
   if (!response.ok) {
     throw new Error(`Failed to get app access token: ${response.status} ${response.statusText}`);
   }
 
-  const data = await response.json() as { code: number; msg: string; app_access_token: string };
+  const data = (await response.json()) as { code: number; msg: string; app_access_token: string };
 
   if (data.code !== 0) {
     throw new Error(`Feishu API error: ${data.code} ${data.msg}`);
@@ -49,7 +52,7 @@ export async function getFeishuMessages(params: {
   containerIdType: 'chat' | 'thread' | 'p2p' | 'group';
   containerId: string;
   startTime?: string; // ISO timestamp
-  endTime?: string;   // ISO timestamp
+  endTime?: string; // ISO timestamp
   pageSize?: number;
   pageToken?: string;
   sortType?: 'ByCreateTimeAsc' | 'ByCreateTimeDesc';
@@ -65,7 +68,17 @@ export async function getFeishuMessages(params: {
   pageToken?: string;
   hasMore: boolean;
 }> {
-  const { appId, appSecret, containerIdType, containerId, startTime, endTime, pageSize = 20, pageToken, sortType = 'ByCreateTimeDesc' } = params;
+  const {
+    appId,
+    appSecret,
+    containerIdType,
+    containerId,
+    startTime,
+    endTime,
+    pageSize = 20,
+    pageToken,
+    sortType = 'ByCreateTimeDesc',
+  } = params;
 
   // Get access token
   const accessToken = await getAppAccessToken(appId, appSecret);
@@ -94,7 +107,7 @@ export async function getFeishuMessages(params: {
   const response = await fetch(url, {
     method: 'GET',
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
+      Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
   });
@@ -103,7 +116,7 @@ export async function getFeishuMessages(params: {
     throw new Error(`Failed to fetch Feishu messages: ${response.status} ${response.statusText}`);
   }
 
-  const data = await response.json() as {
+  const data = (await response.json()) as {
     code: number;
     msg: string;
     data?: {
@@ -165,7 +178,7 @@ export async function getFeishuUserInfo(params: {
     {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
       },
     }
   );
@@ -174,7 +187,7 @@ export async function getFeishuUserInfo(params: {
     return { name: '未知用户' };
   }
 
-  const data = await response.json() as {
+  const data = (await response.json()) as {
     code: number;
     data?: {
       user?: {
@@ -231,7 +244,7 @@ export async function getFeishuChatMembers(params: {
     {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
       },
     }
   );
@@ -240,7 +253,7 @@ export async function getFeishuChatMembers(params: {
     throw new Error(`Failed to fetch chat members: ${response.status}`);
   }
 
-  const data = await response.json() as {
+  const data = (await response.json()) as {
     code: number;
     msg: string;
     data?: {
@@ -289,24 +302,31 @@ export async function sendFeishuMessage(params: {
 
   const accessToken = await getAppAccessToken(appId, appSecret);
 
-  const response = await fetch(`${FEISHU_BASE_URL}/open-apis/im/v1/messages?receive_id_type=${receiveIdType}`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      receive_id: receiveId,
-      msg_type: msgType,
-      content,
-    }),
-  });
+  const response = await fetch(
+    `${FEISHU_BASE_URL}/open-apis/im/v1/messages?receive_id_type=${receiveIdType}`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        receive_id: receiveId,
+        msg_type: msgType,
+        content,
+      }),
+    }
+  );
 
   if (!response.ok) {
     throw new Error(`Failed to send Feishu message: ${response.status} ${response.statusText}`);
   }
 
-  const data = await response.json() as { code: number; msg: string; data?: { message_id: string } };
+  const data = (await response.json()) as {
+    code: number;
+    msg: string;
+    data?: { message_id: string };
+  };
 
   if (data.code !== 0) {
     throw new Error(`Feishu API error: ${data.code} ${data.msg}`);
@@ -330,24 +350,31 @@ export async function sendFeishuCard(params: {
 
   const accessToken = await getAppAccessToken(appId, appSecret);
 
-  const response = await fetch(`${FEISHU_BASE_URL}/open-apis/im/v1/messages?receive_id_type=${receiveIdType}`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      receive_id: receiveId,
-      msg_type: 'interactive',
-      content: JSON.stringify(card),
-    }),
-  });
+  const response = await fetch(
+    `${FEISHU_BASE_URL}/open-apis/im/v1/messages?receive_id_type=${receiveIdType}`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        receive_id: receiveId,
+        msg_type: 'interactive',
+        content: JSON.stringify(card),
+      }),
+    }
+  );
 
   if (!response.ok) {
     throw new Error(`Failed to send Feishu card: ${response.status} ${response.statusText}`);
   }
 
-  const data = await response.json() as { code: number; msg: string; data?: { message_id: string } };
+  const data = (await response.json()) as {
+    code: number;
+    msg: string;
+    data?: { message_id: string };
+  };
 
   if (data.code !== 0) {
     throw new Error(`Feishu API error: ${data.code} ${data.msg}`);
@@ -367,4 +394,137 @@ export function getFeishuConfig(): { appId: string; appSecret: string; chatId?: 
     return { appId, appSecret, chatId };
   }
   return null;
+}
+
+// ============ FeishuService Class ============
+
+import * as crypto from 'crypto';
+import { UnifiedMessage } from './channelAdapter.js';
+
+export interface FeishuMention {
+  key: string;
+  id: string;
+  name: string;
+  tenant_key?: string;
+}
+
+export interface FeishuEvent {
+  schema?: string;
+  header?: {
+    event_id?: string;
+    event_type?: string;
+    create_time?: string;
+    token?: string;
+    app_id?: string;
+    tenant_key?: string;
+  };
+  event?: Record<string, unknown>;
+}
+
+/**
+ * FeishuService Class
+ * 飞书完整集成 - 签名验证、事件回调、消息发送
+ */
+export class FeishuService {
+  private appId: string;
+  private appSecret: string;
+  private verificationToken?: string;
+  private encryptKey?: string;
+
+  constructor(params: {
+    appId: string;
+    appSecret: string;
+    verificationToken?: string;
+    encryptKey?: string;
+  }) {
+    this.appId = params.appId;
+    this.appSecret = params.appSecret;
+    this.verificationToken = params.verificationToken;
+    this.encryptKey = params.encryptKey;
+  }
+
+  /**
+   * 验证飞书事件订阅签名
+   */
+  verifySignature(timestamp: string, nonce: string, body: string, signature: string): boolean {
+    if (!this.encryptKey) return true;
+
+    const str = this.encryptKey + timestamp + nonce + body;
+    const sha256 = crypto.createHash('sha256').update(str).digest('hex');
+    const expected = crypto.createHash('sha1').update(sha256).digest('hex');
+    return expected === signature;
+  }
+
+  /**
+   * 接收事件回调（群聊消息）
+   */
+  async handleEvent(event: FeishuEvent): Promise<UnifiedMessage | null> {
+    try {
+      const header = event.header;
+      const eventBody = event.event as Record<string, unknown>;
+
+      if (!header?.event_type) return null;
+
+      // 只处理群聊消息事件
+      if (header.event_type !== 'im.message.receive_v1') return null;
+
+      const sender = eventBody.sender as Record<string, unknown> | undefined;
+      const senderId = sender?.sender_id as Record<string, unknown> | undefined;
+      const content = JSON.parse((eventBody.content as string) || '{}');
+
+      return {
+        messageId: String(eventBody.message_id ?? header.event_id ?? Date.now()),
+        channel: 'feishu',
+        userId: String(senderId?.open_id ?? senderId?.user_id ?? ''),
+        userName: String(sender?.sender_id?.open_id ?? '飞书用户'),
+        content: String(content.text || content.content || ''),
+        type: 'text',
+        mentionedAgent: this.parseAtMention(content.mentions as FeishuMention[] | undefined),
+        groupId: String(eventBody.chat_id ?? ''),
+        timestamp: String(header.create_time || new Date().toISOString()),
+        rawData: event,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 发送消息到群聊
+   */
+  async sendToGroup(chatId: string, content: string): Promise<void> {
+    await sendFeishuMessage({
+      appId: this.appId,
+      appSecret: this.appSecret,
+      receiveIdType: 'chat_id',
+      receiveId: chatId,
+      msgType: 'text',
+      content: JSON.stringify({ text: content }),
+    });
+  }
+
+  /**
+   * 获取 Tenant Access Token
+   */
+  async getTenantToken(): Promise<string> {
+    return getAppAccessToken(this.appId, this.appSecret);
+  }
+
+  /**
+   * @Agent 识别（飞书 at 格式）
+   */
+  parseAtMention(mentions: FeishuMention[] | undefined): string | null {
+    if (!mentions || !Array.isArray(mentions)) return null;
+
+    const agentNames = ['main', 'pm', 'coder', 'reviewer', 'devops'];
+    for (const mention of mentions) {
+      const name = (mention.name || '').toLowerCase();
+      for (const agent of agentNames) {
+        if (name === agent) {
+          return agent;
+        }
+      }
+    }
+    return null;
+  }
 }
