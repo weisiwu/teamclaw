@@ -41,7 +41,7 @@ export async function getBranchesAPI(): Promise<BranchListResponse> {
   } catch {
     // Fall through to mock
   }
-  await delay(300);
+  await delay(50);
   return { data: [...mockBranches], total: mockBranches.length };
 }
 

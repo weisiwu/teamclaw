@@ -267,7 +267,7 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // 自动创建 Git Tag（模拟）
 async function autoCreateGitTag(version: Version, options?: { prefix?: string; message?: string }): Promise<{ success: boolean; tagName: string; message?: string }> {
-  await delay(300);
+  await delay(50);
   
   // 确定 Tag 前缀
   let tagPrefix = versionSettings.tagPrefix;
@@ -290,7 +290,7 @@ async function autoCreateGitTag(version: Version, options?: { prefix?: string; m
 
 // 手动创建 Git Tag（增强版）
 export async function createGitTag(versionId: string, request?: CreateTagRequest): Promise<CreateTagResponse> {
-  await delay(300);
+  await delay(50);
 
   const version = mockVersions.find((v) => v.id === versionId);
   if (!version) {
@@ -457,7 +457,7 @@ export async function getVersions(
     // Fall through to mock
   }
 
-  await delay(300);
+  await delay(50);
 
   let filtered = [...mockVersions];
   if (status !== "all") {
@@ -489,7 +489,7 @@ export async function getVersion(id: string): Promise<Version | null> {
   } catch {
     // Fall through to mock
   }
-  await delay(200);
+  await delay(50);
   return mockVersions.find((v) => v.id === id) || null;
 }
 
@@ -509,7 +509,7 @@ export async function createVersion(request: CreateVersionRequest): Promise<Vers
     // Fall through to mock
   }
 
-  await delay(300);
+  await delay(50);
 
   const newVersion: Version = {
     id: `v${Date.now()}`,
@@ -561,7 +561,7 @@ export async function updateVersion(
     // Fall through to mock
   }
 
-  await delay(300);
+  await delay(50);
 
   const index = mockVersions.findIndex((v) => v.id === id);
   if (index === -1) return null;
@@ -647,7 +647,7 @@ export async function deleteVersion(id: string): Promise<boolean> {
     // Fall through to mock
   }
 
-  await delay(200);
+  await delay(50);
 
   const index = mockVersions.findIndex((v) => v.id === id);
   if (index === -1) return false;
@@ -658,7 +658,7 @@ export async function deleteVersion(id: string): Promise<boolean> {
 
 // 为版本添加标签
 export async function addVersionTag(versionId: string, tag: VersionTag): Promise<Version | null> {
-  await delay(200);
+  await delay(50);
 
   const version = mockVersions.find((v) => v.id === versionId);
   if (!version) return null;
@@ -671,7 +671,7 @@ export async function addVersionTag(versionId: string, tag: VersionTag): Promise
 
 // 移除版本标签
 export async function removeVersionTag(versionId: string, tag: VersionTag): Promise<Version | null> {
-  await delay(200);
+  await delay(50);
 
   const version = mockVersions.find((v) => v.id === versionId);
   if (!version) return null;
@@ -682,7 +682,7 @@ export async function removeVersionTag(versionId: string, tag: VersionTag): Prom
 
 // 指定主版本
 export async function setMainVersion(versionId: string): Promise<Version | null> {
-  await delay(300);
+  await delay(50);
   
   // 先清除其他版本的主版本标记
   mockVersions.forEach(v => { v.isMain = false; });
@@ -696,7 +696,7 @@ export async function setMainVersion(versionId: string): Promise<Version | null>
 
 // 触发构建
 export async function triggerBuild(versionId: string): Promise<{ success: boolean; buildId: string }> {
-  await delay(300);
+  await delay(50);
   
   const index = mockVersions.findIndex((v) => v.id === versionId);
   if (index === -1) return { success: false, buildId: '' };
@@ -716,7 +716,7 @@ export async function downloadArtifact(
   versionId: string, 
   format: string = 'zip'
 ): Promise<{ success: boolean; url: string }> {
-  await delay(200);
+  await delay(50);
   
   const version = mockVersions.find((v) => v.id === versionId);
   if (!version || !version.artifactUrl) {
@@ -777,7 +777,7 @@ export async function addDownloadRecord(record: {
 
 // 获取版本快照列表
 export async function getVersionSnapshots(versionId: string): Promise<SnapshotListResponse> {
-  await delay(300);
+  await delay(50);
   
   const snapshots = mockSnapshots.filter(s => s.versionId === versionId);
   return {
@@ -788,7 +788,7 @@ export async function getVersionSnapshots(versionId: string): Promise<SnapshotLi
 
 // 创建快照
 export async function createSnapshot(versionId: string, request: CreateSnapshotRequest): Promise<VersionSnapshot> {
-  await delay(300);
+  await delay(50);
   
   const version = mockVersions.find((v) => v.id === versionId);
   if (!version) {
@@ -842,7 +842,7 @@ export async function restoreSnapshot(snapshotId: string): Promise<Version> {
 
 // 获取分支列表
 export async function getBranches(): Promise<BranchListResponse> {
-  await delay(300);
+  await delay(50);
   return {
     data: [...mockBranches],
     total: mockBranches.length,
@@ -872,7 +872,7 @@ export async function createBranch(request: CreateBranchRequest): Promise<GitBra
 
 // 删除分支
 export async function deleteBranch(branchId: string): Promise<boolean> {
-  await delay(300);
+  await delay(50);
   
   const index = mockBranches.findIndex(b => b.id === branchId);
   if (index === -1) return false;
@@ -888,7 +888,7 @@ export async function deleteBranch(branchId: string): Promise<boolean> {
 
 // 设置主分支
 export async function setMainBranch(branchId: string): Promise<GitBranch | null> {
-  await delay(300);
+  await delay(50);
   
   // 先清除其他分支的主分支标记
   mockBranches.forEach(b => { b.isMain = false; });
@@ -902,7 +902,7 @@ export async function setMainBranch(branchId: string): Promise<GitBranch | null>
 
 // 重命名分支
 export async function renameBranch(request: RenameBranchRequest): Promise<GitBranch | null> {
-  await delay(300);
+  await delay(50);
   
   const index = mockBranches.findIndex(b => b.id === request.branchId);
   if (index === -1) return null;
@@ -919,7 +919,7 @@ export async function renameBranch(request: RenameBranchRequest): Promise<GitBra
 
 // 切换分支保护状态
 export async function toggleBranchProtection(request: BranchProtectionRequest): Promise<GitBranch | null> {
-  await delay(200);
+  await delay(50);
   
   const index = mockBranches.findIndex(b => b.id === request.branchId);
   if (index === -1) return null;
@@ -956,7 +956,7 @@ export async function bumpVersion(versionId: string, bumpType: VersionBumpType):
     // Fall through to mock
   }
   
-  await delay(300);
+  await delay(50);
   
   const index = mockVersions.findIndex(v => v.id === versionId);
   if (index === -1) {
@@ -1005,7 +1005,7 @@ export async function bumpVersion(versionId: string, bumpType: VersionBumpType):
 
 // 获取发布记录
 export async function getReleaseLogs(versionId?: string): Promise<ReleaseLog[]> {
-  await delay(200);
+  await delay(50);
   
   if (versionId) {
     return mockReleaseLogs.filter(r => r.versionId === versionId);
@@ -1624,7 +1624,7 @@ export async function updateUpgradeConfig(
   versionId: string, 
   updates: Partial<VersionUpgradeConfig>
 ): Promise<VersionUpgradeConfig> {
-  await delay(200);
+  await delay(50);
   let config = mockUpgradeConfigs.find(c => c.versionId === versionId);
   
   if (!config) {
@@ -2338,7 +2338,7 @@ export function getBuildEnvironments(): BuildEnvironment[] {
 export async function batchDownloadArtifacts(
   request: BatchDownloadRequest
 ): Promise<BatchDownloadResponse> {
-  await delay(300);
+  await delay(50);
   
   const results = await Promise.all(
     request.versionIds.map(async (versionId) => {
@@ -2380,7 +2380,7 @@ export async function verifyDownloadUrl(
   versionId: string,
   url: string
 ): Promise<DownloadUrlVerification> {
-  await delay(200);
+  await delay(50);
   
   const version = mockVersions.find((v) => v.id === versionId);
   if (!version) {
