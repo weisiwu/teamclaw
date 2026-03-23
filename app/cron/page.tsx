@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Plus,
   Trash2,
@@ -14,6 +15,7 @@ import {
   X,
   Clock,
   History,
+  Loader2,
 } from "lucide-react";
 import {
   useCronList,
@@ -39,6 +41,7 @@ function CronCard({
   onStop,
   onDelete,
   onViewLogs,
+  pendingId,
 }: {
   cron: CronTask;
   onEdit: (cron: CronTask) => void;
@@ -46,7 +49,10 @@ function CronCard({
   onStop: (id: string) => void;
   onDelete: (id: string) => void;
   onViewLogs: (cron: CronTask) => void;
+  pendingId: string | null;
 }) {
+  const isPending = pendingId === cron.id;
+
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-4">
@@ -82,6 +88,7 @@ function CronCard({
               size="sm"
               variant="outline"
               onClick={() => onEdit(cron)}
+              disabled={isPending}
             >
               <Edit className="w-4 h-4 mr-1" />
               编辑
@@ -90,6 +97,7 @@ function CronCard({
               size="sm"
               variant="outline"
               onClick={() => onViewLogs(cron)}
+              disabled={isPending}
             >
               <History className="w-4 h-4 mr-1" />
               日志
@@ -99,16 +107,26 @@ function CronCard({
                 size="sm"
                 variant="outline"
                 onClick={() => onStop(cron.id)}
+                disabled={isPending}
               >
-                <PauseCircle className="w-4 h-4 mr-1" />
+                {isPending ? (
+                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                ) : (
+                  <PauseCircle className="w-4 h-4 mr-1" />
+                )}
                 停止
               </Button>
             ) : (
               <Button
                 size="sm"
                 onClick={() => onStart(cron.id)}
+                disabled={isPending}
               >
-                <PlayCircle className="w-4 h-4 mr-1" />
+                {isPending ? (
+                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                ) : (
+                  <PlayCircle className="w-4 h-4 mr-1" />
+                )}
                 启动
               </Button>
             )}
@@ -116,8 +134,13 @@ function CronCard({
               variant="ghost"
               size="icon"
               onClick={() => onDelete(cron.id)}
+              disabled={isPending}
             >
-              <Trash2 className="w-4 h-4 text-red-500" />
+              {isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+              ) : (
+                <Trash2 className="w-4 h-4 text-red-500" />
+              )}
             </Button>
           </div>
         </div>
@@ -354,6 +377,8 @@ export default function CronPage() {
   const [viewLogsCron, setViewLogsCron] = useState<CronTask | null>(null);
   const [searchName, setSearchName] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "running" | "stopped">("all");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
 
   // 使用 React Query 获取数据
   const { data, isLoading, error } = useCronList();
@@ -398,21 +423,40 @@ export default function CronPage() {
     setViewLogsCron(null);
   };
 
-  // 删除处理
-  const handleDelete = async (id: string) => {
-    if (confirm("确定要删除这个定时任务吗？")) {
-      await deleteCron.mutateAsync(id);
+  // 删除处理（先确认再执行）
+  const handleDelete = (id: string) => {
+    setConfirmDeleteId(id);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmDeleteId) return;
+    setPendingId(confirmDeleteId);
+    try {
+      await deleteCron.mutateAsync(confirmDeleteId);
+    } finally {
+      setPendingId(null);
+      setConfirmDeleteId(null);
     }
   };
 
   // 启动处理
   const handleStart = async (id: string) => {
-    await startCron.mutateAsync(id);
+    setPendingId(id);
+    try {
+      await startCron.mutateAsync(id);
+    } finally {
+      setPendingId(null);
+    }
   };
 
   // 停止处理
   const handleStop = async (id: string) => {
-    await stopCron.mutateAsync(id);
+    setPendingId(id);
+    try {
+      await stopCron.mutateAsync(id);
+    } finally {
+      setPendingId(null);
+    }
   };
 
   return (
@@ -481,6 +525,7 @@ export default function CronPage() {
                 onStop={handleStop}
                 onDelete={handleDelete}
                 onViewLogs={handleViewLogs}
+                pendingId={pendingId}
               />
             ))
           )}
@@ -500,6 +545,30 @@ export default function CronPage() {
         cron={viewLogsCron}
         onClose={handleCloseLogsModal}
       />
+
+      {/* 删除确认弹窗 */}
+      <Dialog open={!!confirmDeleteId} onOpenChange={(open) => !open && setConfirmDeleteId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认删除</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600 py-4">
+            确定要删除定时任务 <strong>{confirmDeleteId ? filteredData.find(c => c.id === confirmDeleteId)?.name : ""}</strong> 吗？此操作不可撤销。
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={deleteCron.isPending}
+            >
+              {deleteCron.isPending ? "删除中..." : "确认删除"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
