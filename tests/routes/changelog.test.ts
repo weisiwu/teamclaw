@@ -245,7 +245,7 @@ describe('GET /api/v1/versions/[id]/timeline handler', () => {
   });
 
   it('each event has required fields', () => {
-    const result = handleGetTimeline('v-1') as { data: { events: TimelineEvent[] } };
+    const result = handleGetTimeline('v-1') as { data: { events: TimelineEvent[]; total: number } };
     const event = result.data.events[0];
     expect(event).toHaveProperty('id');
     expect(event).toHaveProperty('versionId');
@@ -266,18 +266,18 @@ describe('GET /api/v1/versions/[id]/timeline handler', () => {
   });
 
   it('filters by type=commit', () => {
-    const result = handleGetTimeline('v-1', { type: 'commit' }) as { data: { events: TimelineEvent[] } };
+    const result = handleGetTimeline('v-1', { type: 'commit' }) as { data: { events: TimelineEvent[]; total: number } };
     expect(result.data.events.every(e => e.type === 'commit')).toBe(true);
   });
 
   it('filters by type=tag', () => {
-    const result = handleGetTimeline('v-1', { type: 'tag' }) as { data: { events: TimelineEvent[] } };
+    const result = handleGetTimeline('v-1', { type: 'tag' }) as { data: { events: TimelineEvent[]; total: number } };
     expect(result.data.total).toBe(1);
     expect(result.data.events[0].description).toContain('Tagged');
   });
 
   it('respects limit parameter', () => {
-    const result = handleGetTimeline('v-1', { limit: '2' }) as { data: { events: TimelineEvent[] } };
+    const result = handleGetTimeline('v-1', { limit: '2' }) as { data: { events: TimelineEvent[]; total: number } };
     expect(result.data.events).toHaveLength(2);
   });
 
@@ -289,7 +289,7 @@ describe('GET /api/v1/versions/[id]/timeline handler', () => {
   });
 
   it('events contain timestamps', () => {
-    const result = handleGetTimeline('v-1') as { data: { events: TimelineEvent[] } };
+    const result = handleGetTimeline('v-1') as { data: { events: TimelineEvent[]; total: number } };
     const timestamps = result.data.events.map(e => e.timestamp);
     expect(timestamps.length).toBe(3);
     // Verify all timestamps are valid ISO strings
@@ -299,7 +299,7 @@ describe('GET /api/v1/versions/[id]/timeline handler', () => {
   });
 
   it('includes metadata when present', () => {
-    const result = handleGetTimeline('v-1', { type: 'build' }) as { data: { events: TimelineEvent[] } };
+    const result = handleGetTimeline('v-1', { type: 'build' }) as { data: { events: TimelineEvent[]; total: number } };
     expect(result.data.events[0].metadata).toBeDefined();
     expect(result.data.events[0].metadata?.status).toBe('success');
   });

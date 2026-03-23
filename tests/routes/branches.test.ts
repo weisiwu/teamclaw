@@ -236,12 +236,12 @@ describe('POST /api/v1/branches handler', () => {
   });
 
   it('rejects invalid branch name characters', () => {
-    const result = handlePostBranch({ name: 'feature@new' }) as { error: { code: number } };
+    const result = handlePostBranch({ name: 'feature@new' }) as { error: { code: number; message: string } };
     expect(result.error.code).toBe(400);
   });
 
   it('rejects branch name with space', () => {
-    const result = handlePostBranch({ name: 'feature new' }) as { error: { code: number } };
+    const result = handlePostBranch({ name: 'feature new' }) as { error: { code: number; message: string } };
     expect(result.error.code).toBe(400);
   });
 
@@ -270,7 +270,7 @@ describe('GET /api/v1/branches/[id] handler', () => {
   });
 
   it('returns 404 for non-existent branch', () => {
-    const result = handleGetBranchById('nonexistent') as { error: { code: number } };
+    const result = handleGetBranchById('nonexistent') as { error: { code: number; message: string } };
     expect(result.error.code).toBe(404);
   });
 });
@@ -289,7 +289,7 @@ describe('PUT /api/v1/branches/[id] handler', () => {
   });
 
   it('returns 404 for non-existent branch', () => {
-    const result = handlePutBranch('nonexistent', { description: 'test' }) as { error: { code: number } };
+    const result = handlePutBranch('nonexistent', { description: 'test' }) as { error: { code: number; message: string } };
     expect(result.error.code).toBe(404);
   });
 });
@@ -303,7 +303,7 @@ describe('DELETE /api/v1/branches/[id] handler', () => {
   });
 
   it('returns 404 for non-existent branch', () => {
-    const result = handleDeleteBranch('nonexistent') as { error: { code: number } };
+    const result = handleDeleteBranch('nonexistent') as { error: { code: number; message: string } };
     expect(result.error.code).toBe(404);
   });
 });
@@ -317,7 +317,7 @@ describe('PUT /api/v1/branches/[id]/protect handler', () => {
   });
 
   it('rejects protecting main branch', () => {
-    const result = handlePutProtect('branch-main', { protected: true }) as { error: { code: number } };
+    const result = handlePutProtect('branch-main', { protected: true }) as { error: { code: number; message: string } };
     expect(result.error.code).toBe(403);
     expect(result.error.message).toContain('无法修改主分支');
   });
@@ -337,23 +337,23 @@ describe('PUT /api/v1/branches/[id]/rename handler', () => {
   });
 
   it('rejects renaming main branch', () => {
-    const result = handlePutRename('branch-main', { newName: 'main-renamed' }) as { error: { code: number } };
+    const result = handlePutRename('branch-main', { newName: 'main-renamed' }) as { error: { code: number; message: string } };
     expect(result.error.code).toBe(403);
   });
 
   it('rejects renaming protected branch', () => {
-    const result = handlePutRename('branch-feature-b', { newName: 'feature/b-renamed' }) as { error: { code: number } };
+    const result = handlePutRename('branch-feature-b', { newName: 'feature/b-renamed' }) as { error: { code: number; message: string } };
     expect(result.error.code).toBe(403);
     expect(result.error.message).toContain('已保护');
   });
 
   it('rejects empty new name', () => {
-    const result = handlePutRename('branch-feature-a', {}) as { error: { code: number } };
+    const result = handlePutRename('branch-feature-a', {}) as { error: { code: number; message: string } };
     expect(result.error.code).toBe(400);
   });
 
   it('rejects invalid new name characters', () => {
-    const result = handlePutRename('branch-feature-a', { newName: 'bad@name' }) as { error: { code: number } };
+    const result = handlePutRename('branch-feature-a', { newName: 'bad@name' }) as { error: { code: number; message: string } };
     expect(result.error.code).toBe(400);
   });
 });

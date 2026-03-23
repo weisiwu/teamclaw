@@ -352,6 +352,40 @@ export const VERSION_TAG_OPTIONS = [
 
 export type VersionTag = typeof VERSION_TAG_OPTIONS[number]["value"];
 
+// ========== 产物格式类型 ==========
+export type ArtifactFormat = 'zip' | 'apk' | 'exe' | 'dmg' | 'pkg' | 'ipa' | 'tar.gz' | 'other';
+
+export interface Artifact {
+  id: string;
+  format: ArtifactFormat;
+  url: string;
+  fileName: string;
+  fileSize: number; // bytes
+  createdAt: string;
+}
+
+export const ARTIFACT_FORMAT_LABELS: Record<ArtifactFormat, string> = {
+  zip: 'ZIP 压缩包',
+  apk: 'Android 安装包',
+  exe: 'Windows 安装包',
+  dmg: 'macOS 安装包',
+  pkg: 'macOS 安装包',
+  ipa: 'iOS 安装包',
+  'tar.gz': 'TAR.GZ 压缩包',
+  other: '其他文件',
+};
+
+export const ARTIFACT_FORMAT_ICONS: Record<ArtifactFormat, string> = {
+  zip: '📦',
+  apk: '📱',
+  exe: '🖥️',
+  dmg: '🍎',
+  pkg: '🍎',
+  ipa: '📱',
+  'tar.gz': '📦',
+  other: '📄',
+};
+
 // ========== 版本快照类型 ==========
 
 export interface VersionSnapshot {
@@ -366,6 +400,8 @@ export interface VersionSnapshot {
   artifactUrl: string | null;
   gitBranch: string;
   createdAt: string;
+  // 多格式产物列表 (iter-92)
+  artifacts?: Artifact[];
 }
 
 // 创建快照请求
@@ -395,6 +431,8 @@ export interface Version {
   buildStatus: BuildStatus;
   artifactUrl: string | null;
   tags: VersionTag[];
+  // 多格式产物列表 (iter-92)
+  artifacts?: Artifact[];
   // Git Tag 信息
   gitTag?: string;
   gitTagCreatedAt?: string;
