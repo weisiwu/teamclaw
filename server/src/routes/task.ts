@@ -6,7 +6,6 @@
 import { Router } from 'express';
 import { success, error } from '../utils/response.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireAdmin } from '../middleware/auth.js';
 import { taskLifecycle } from '../services/taskLifecycle.js';
 import { taskFlow } from '../services/taskFlow.js';
 import { taskMemory } from '../services/taskMemory.js';

@@ -446,28 +446,6 @@ router.get('/:id', validateIdParam(), (req: Request, res: Response) => {
   }));
 });
 
-// GET /api/v1/versions/:id/timeline — get full change timeline for a version
-router.get('/:id/timeline', (req: Request, res: Response) => {
-  const { id } = req.params;
-  const row = db.prepare('SELECT id, version FROM versions WHERE id = ?').get(id) as { id: string; version: string } | undefined;
-  if (!row) {
-    res.status(404).json(error(404, 'Version not found'));
-    return;
-  }
-  try {
-    const { getVersionTimeline } = require('../services/changeTracker.js');
-    const events = getVersionTimeline(id);
-    res.json(success({
-      versionId: id,
-      version: row.version,
-      events,
-    }));
-  } catch (err) {
-    console.error('[version] Timeline fetch error:', err);
-    res.status(500).json(error(500, 'Failed to fetch timeline'));
-  }
-});
-
 // GET /api/v1/versions/:id/timeline/stream — SSE real-time event stream (iter-49)
 router.get('/:id/timeline/stream', (req: Request, res: Response) => {
   const { id } = req.params;
