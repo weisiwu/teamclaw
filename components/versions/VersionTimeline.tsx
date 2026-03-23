@@ -41,7 +41,9 @@ interface TimelineEvent {
   description: string;
   timestamp: string;
   branchName?: string;
-  data?: VersionMessageScreenshot | VersionChangelog | { createdBy: string };
+  actor?: string;
+  actorId?: string;
+  data?: VersionMessageScreenshot | VersionChangelog | { createdBy: string } | Record<string, unknown>;
 }
 
 export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOpen, onClose, availableBranches = [], versionId }: VersionTimelineProps) {
@@ -143,6 +145,13 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
         title: evt.title,
         description: evt.description || '',
         timestamp: evt.timestamp,
+        actor: evt.actor,
+        actorId: evt.actorId,
+        data: evt.screenshot
+          ? { ...evt.screenshot, createdAt: evt.timestamp }
+          : evt.changelog
+          ? { title: evt.description, content: evt.description, changes: [], ...evt.changelog }
+          : undefined,
       }))
     : [
         {
@@ -244,6 +253,44 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
     md += `**创建者**: ${versionInfo.createdBy}\n\n`;
     md += `---\n\n`;
 
+    // When API events are available, export complete timeline
+    if (versionId && apiEvents && apiEvents.length > 0) {
+      md += `## 完整时间线\n\n`;
+      // Sort by timestamp descending
+      const sortedEvents = [...apiEvents].sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+      sortedEvents.forEach((evt) => {
+        const evtType = evt.type === 'version_created' ? '版本创建'
+          : evt.type === 'version_rollback' ? '版本回滚'
+          : evt.type === 'bump_executed' ? '版本 bump'
+          : evt.type === 'changelog_generated' ? '变更摘要'
+          : evt.type === 'screenshot_linked' ? '截图关联'
+          : evt.type === 'manual_note' ? '备注' : evt.type;
+        const time = new Date(evt.timestamp).toLocaleString("zh-CN");
+        md += `### ${evt.title}\n\n`;
+        md += `- **类型**: ${evtType}\n`;
+        md += `- **时间**: ${time}\n`;
+        if (evt.actor) md += `- **操作者**: ${evt.actor}\n`;
+        md += `- **描述**: ${evt.description}\n`;
+        if (evt.screenshot) {
+          if (evt.screenshot.senderName) md += `- **发送者**: ${evt.screenshot.senderName}\n`;
+          if (evt.screenshot.messageContent) md += `- **消息内容**: ${evt.screenshot.messageContent}\n`;
+        }
+        if (evt.changelog) {
+          const { features, fixes, improvements, breaking, docs } = evt.changelog;
+          if (features?.length) md += `- **新功能**: ${features.join(", ")}\n`;
+          if (fixes?.length) md += `- **修复**: ${fixes.join(", ")}\n`;
+          if (improvements?.length) md += `- **改进**: ${improvements.join(", ")}\n`;
+          if (breaking?.length) md += `- **破坏性变更**: ${breaking.join(", ")}\n`;
+          if (docs?.length) md += `- **文档**: ${docs.join(", ")}\n`;
+        }
+        md += "\n";
+      });
+      md += `---\n\n`;
+    }
+
+    // Fallback: export from props (when no API timeline)
     if (changelog) {
       md += `## 变更摘要\n\n`;
       md += `**${changelog.title}**\n\n`;
@@ -425,6 +472,11 @@ export function VersionTimeline({ screenshots = [], changelog, versionInfo, isOp
                         <Badge variant="default" className="text-xs">
                           {event.branchName}
                         </Badge>
+                      )}
+                      {event.actor && (
+                        <span className="text-xs text-muted-foreground/70">
+                          by {event.actor}
+                        </span>
                       )}
                       <span className="text-xs text-muted-foreground ml-auto">
                         {new Date(event.timestamp).toLocaleString("zh-CN")}
