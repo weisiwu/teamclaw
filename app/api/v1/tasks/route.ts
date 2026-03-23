@@ -1,6 +1,6 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { taskApi } from "@/lib/api/tasks";
-import { generateRequestId, jsonSuccess, jsonError, optionsResponse } from "@/lib/api-shared";
+import { generateRequestId, jsonSuccess, jsonError, optionsResponse, requireAuth } from "@/lib/api-shared";
 import type { TaskFilters, CreateTaskRequest } from "@/lib/api/types";
 
 /**
@@ -9,6 +9,10 @@ import type { TaskFilters, CreateTaskRequest } from "@/lib/api/types";
  */
 export async function GET(request: NextRequest) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
+
+  // Auth: require any logged-in user
+  const authResult = requireAuth(request, requestId);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
     const { searchParams } = new URL(request.url);
@@ -41,6 +45,10 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
+
+  // Auth: require any logged-in user
+  const authResult = requireAuth(request, requestId);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
     const body: CreateTaskRequest = await request.json();

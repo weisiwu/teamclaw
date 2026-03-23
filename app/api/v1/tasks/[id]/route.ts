@@ -1,6 +1,6 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { taskApi } from "@/lib/api/tasks";
-import { generateRequestId, jsonSuccess, jsonError, optionsResponse } from "@/lib/api-shared";
+import { generateRequestId, jsonSuccess, jsonError, optionsResponse, requireAuth } from "@/lib/api-shared";
 import type { UpdateTaskRequest } from "@/lib/api/types";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -12,6 +12,10 @@ type RouteContext = { params: Promise<{ id: string }> };
 export async function GET(request: NextRequest, { params }: RouteContext) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
   const { id } = await params;
+
+  // Auth: require any logged-in user
+  const authResult = requireAuth(request, requestId);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
     const task = await taskApi.getById(id);
@@ -32,6 +36,10 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
   const { id } = await params;
+
+  // Auth: require any logged-in user
+  const authResult = requireAuth(request, requestId);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
     const body: UpdateTaskRequest = await request.json();
@@ -71,6 +79,10 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
   const { id } = await params;
+
+  // Auth: require any logged-in user
+  const authResult = requireAuth(request, requestId);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
     await taskApi.delete(id);

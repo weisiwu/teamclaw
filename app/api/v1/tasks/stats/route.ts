@@ -1,6 +1,6 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { taskApi } from "@/lib/api/tasks";
-import { generateRequestId, jsonSuccess, jsonError, optionsResponse } from "@/lib/api-shared";
+import { generateRequestId, jsonSuccess, jsonError, optionsResponse, requireAuth } from "@/lib/api-shared";
 
 /**
  * GET /api/v1/tasks/stats
@@ -8,6 +8,10 @@ import { generateRequestId, jsonSuccess, jsonError, optionsResponse } from "@/li
  */
 export async function GET(request: NextRequest) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
+
+  // Auth: require any logged-in user
+  const authResult = requireAuth(request, requestId);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
     // Get all tasks (pageSize large enough to get all)

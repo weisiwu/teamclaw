@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/api-shared";
 
 const FEISHU_BASE_URL = "https://open.feishu.cn";
 
@@ -40,6 +41,10 @@ async function getAppAccessToken(appId: string, appSecret: string): Promise<stri
  * 获取飞书消息列表
  */
 export async function GET(request: NextRequest) {
+  // Auth: require any logged-in user
+  const authResult = requireAuth(request);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const config = getFeishuConfig();
 
