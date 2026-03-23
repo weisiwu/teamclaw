@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useTags } from "@/lib/api/tags";
 import { GitTag } from "@/lib/api/types";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import {
   Tag, GitCommit, User, Calendar, Search, X,
   ChevronDown, ChevronRight, List, Grid3X3, ArrowUpDown,
-  ExternalLink, Copy, Hash, AlertTriangle
+  ExternalLink, Copy, Hash, AlertTriangle, RefreshCw
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -222,7 +222,7 @@ function TagRow({
 
 export default function VersionPanelPage() {
   const router = useRouter();
-  const { data, isLoading, error, refetch } = useTags();
+  const { data, isLoading, error, refetch, isRefetching } = useTags();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
@@ -231,6 +231,19 @@ export default function VersionPanelPage() {
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
 
   const tags = useMemo(() => data?.data || [], [data]);
+
+  // Keyboard shortcut: R = refresh
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger when typing in input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "r" || e.key === "R") {
+        refetch();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [refetch]);
 
   // Filter and sort tags
   const filteredTags = useMemo(() => {
@@ -299,6 +312,17 @@ export default function VersionPanelPage() {
               </Badge>
             </div>
             <div className="flex items-center gap-2">
+              {/* Refresh */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetch()}
+                disabled={isRefetching}
+                title="刷新列表 (R)"
+              >
+                <RefreshCw className={`w-4 h-4 mr-1 ${isRefetching ? "animate-spin" : ""}`} />
+                {isRefetching ? "刷新中..." : "刷新"}
+              </Button>
               {/* View mode toggle */}
               <div className="flex border border-gray-300 dark:border-slate-500 rounded-md overflow-hidden">
                 <button
