@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
-import { generateRequestId, jsonSuccess, jsonError, optionsResponse } from "@/lib/api-shared";
+import { generateRequestId, jsonSuccess, jsonError, optionsResponse, requireAuth, requireElevatedRole } from "@/lib/api-shared";
 import { getAllBranches, createBranch } from "@/lib/branch-store";
 
-// GET /api/v1/branches
+// GET /api/v1/branches — public (read-only)
 export async function GET(request: NextRequest) {
   const requestId = generateRequestId();
   try {
@@ -28,9 +28,12 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/v1/branches
+// POST /api/v1/branches — requires auth
 export async function POST(request: NextRequest) {
   const requestId = generateRequestId();
+  const authResult = requireAuth(request, requestId);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const body = await request.json() as { name?: string; author?: string; versionId?: string; baseBranch?: string; description?: string };
 
@@ -41,7 +44,7 @@ export async function POST(request: NextRequest) {
       return jsonError("分支名称只能包含字母、数字、_、.、/、-", 400, requestId);
     }
 
-    const branch = createBranch({ name: body.name, author: body.author, versionId: body.versionId, baseBranch: body.baseBranch, description: body.description });
+    const branch = createBranch({ name: body.name, author: body.author || authResult.id, versionId: body.versionId, baseBranch: body.baseBranch, description: body.description });
     return jsonSuccess(branch, requestId);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

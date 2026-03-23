@@ -1,13 +1,16 @@
 import { NextRequest } from "next/server";
-import { generateRequestId, jsonSuccess, jsonError, optionsResponse } from "@/lib/api-shared";
+import { generateRequestId, jsonSuccess, jsonError, optionsResponse, requireAuth } from "@/lib/api-shared";
 import { getBranch, updateBranch } from "@/lib/branch-store";
 
-// PUT /api/v1/branches/[id]/protect — 设置保护状态
+// PUT /api/v1/branches/[id]/protect — requires auth
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const requestId = generateRequestId();
+  const authResult = requireAuth(request, requestId);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const { id } = await params;
     const body = await request.json() as { protected?: boolean };

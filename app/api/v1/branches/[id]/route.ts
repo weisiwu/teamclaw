@@ -1,8 +1,8 @@
-import { NextRequest } from "next/server";
-import { generateRequestId, jsonSuccess, jsonError, optionsResponse } from "@/lib/api-shared";
+import { NextRequest, NextResponse } from "next/server";
+import { generateRequestId, jsonSuccess, jsonError, optionsResponse, requireAuth } from "@/lib/api-shared";
 import { getBranch, getBranchByName, updateBranch, deleteBranch } from "@/lib/branch-store";
 
-// GET /api/v1/branches/[id]
+// GET /api/v1/branches/[id] — public (read-only)
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -19,15 +19,21 @@ export async function GET(
   }
 }
 
-// PUT /api/v1/branches/[id]
+// PUT /api/v1/branches/[id] — requires auth
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const requestId = generateRequestId();
+  const authResult = requireAuth(request, requestId);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const { id } = await params;
     const body = await request.json() as { description?: string; commitMessage?: string; author?: string };
+    const existing = getBranch(id) || getBranchByName(id);
+    if (!existing) return jsonError("分支不存在", 404, requestId);
+
     const branch = updateBranch(id, {
       ...(body.description !== undefined && { description: body.description }),
       ...(body.commitMessage !== undefined && { commitMessage: body.commitMessage }),
@@ -40,14 +46,21 @@ export async function PUT(
   }
 }
 
-// DELETE /api/v1/branches/[id]
+// DELETE /api/v1/branches/[id] — requires auth
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const requestId = generateRequestId();
+  const authResult = requireAuth(request, requestId);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const { id } = await params;
+    const branch = getBranch(id) || getBranchByName(id);
+    if (!branch) return jsonError("分支不存在", 404, requestId);
+    if (branch.isMain) return jsonError("无法删除主分支", 403, requestId);
+
     const result = deleteBranch(id);
     if (!result.deleted) return jsonError("分支不存在", 404, requestId);
     return jsonSuccess({ deleted: true }, requestId);
