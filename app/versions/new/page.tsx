@@ -19,8 +19,12 @@ export default function NewVersionPage() {
     branch: "main",
     commitHash: "",
   });
+  const [touched, setTouched] = useState({ version: false, title: false });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const versionError = touched.version && !form.version.trim() ? "版本号不能为空" : "";
+  const titleError = touched.title && !form.title.trim() ? "标题不能为空" : "";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,9 +97,14 @@ export default function NewVersionPage() {
             placeholder="例如: v1.0.0"
             value={form.version}
             onChange={(e) => setForm({ ...form, version: e.target.value })}
-            className="mt-1 font-mono"
-            required
+            onBlur={() => setTouched(t => ({ ...t, version: true }))}
+            className={`mt-1 font-mono ${versionError ? "border-red-500 focus:ring-red-500" : ""}`}
+            aria-invalid={!!versionError}
+            aria-describedby={versionError ? "version-error" : undefined}
           />
+          {versionError && (
+            <p id="version-error" className="mt-1 text-xs text-red-500">{versionError}</p>
+          )}
         </div>
 
         {/* Title */}
@@ -108,9 +117,14 @@ export default function NewVersionPage() {
             placeholder="版本标题"
             value={form.title}
             onChange={(e) => setForm({ ...form, title: e.target.value })}
-            className="mt-1"
-            required
+            onBlur={() => setTouched(t => ({ ...t, title: true }))}
+            className={`mt-1 ${titleError ? "border-red-500 focus:ring-red-500" : ""}`}
+            aria-invalid={!!titleError}
+            aria-describedby={titleError ? "title-error" : undefined}
           />
+          {titleError && (
+            <p id="title-error" className="mt-1 text-xs text-red-500">{titleError}</p>
+          )}
         </div>
 
         {/* Description */}

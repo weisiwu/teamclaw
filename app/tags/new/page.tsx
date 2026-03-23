@@ -17,8 +17,11 @@ export default function NewTagPage() {
     commitHash: "",
     message: "",
   });
+  const [touched, setTouched] = useState({ name: false });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const nameError = touched.name && !form.name.trim() ? "Tag 名称不能为空" : "";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,9 +78,14 @@ export default function NewTagPage() {
             placeholder="例如: v1.0.0"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
-            className="mt-1 font-mono"
-            required
+            onBlur={() => setTouched(t => ({ ...t, name: true }))}
+            className={`mt-1 font-mono ${nameError ? "border-red-500 focus:ring-red-500" : ""}`}
+            aria-invalid={!!nameError}
+            aria-describedby={nameError ? "name-error" : undefined}
           />
+          {nameError && (
+            <p id="name-error" className="mt-1 text-xs text-red-500">{nameError}</p>
+          )}
           <p className="text-xs text-gray-400 mt-1">
             受保护 Tag 格式：v1.0.0、v2.0.0 等（匹配 ^v\d+\.0\.0$）
           </p>

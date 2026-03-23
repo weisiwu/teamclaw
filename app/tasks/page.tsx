@@ -492,7 +492,7 @@ function CreateTaskModal({
         
         <div className="flex justify-end gap-3 mt-6">
           <Button variant="outline" onClick={onClose} disabled={isCreating}>
-            取消
+            {isCreating ? "取消" : "取消"}
           </Button>
           <Button
             onClick={handleCreate}
@@ -802,6 +802,7 @@ function TasksContent() {
               variant="outline" 
               onClick={() => data?.data && downloadCSV(data.data, `tasks-${new Date().toISOString().split('T')[0]}.csv`)}
               disabled={!data?.data || data.data.length === 0}
+              title={!data?.data || data.data.length === 0 ? "暂无任务数据可导出" : undefined}
             >
               <Download className="w-4 h-4 mr-2" />
               导出 CSV
