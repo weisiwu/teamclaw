@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Shield, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import type { SystemConfig } from '../../../lib/api/adminConfig';
 import { PermissionGuard } from '@/components/layout/PermissionGuard';
@@ -18,7 +18,7 @@ export default function AdminConfigPage() {
   const [abilitiesLoading, setAbilitiesLoading] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
-  const fetchConfig = async () => {
+  const fetchConfig = useCallback(async () => {
     try {
       const res = await fetch('/api/v1/admin/config');
       const data = await res.json();
@@ -28,9 +28,9 @@ export default function AdminConfigPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toastError]);
 
-  useEffect(() => { fetchConfig(); }, []);
+  useEffect(() => { fetchConfig(); }, [fetchConfig]);
   useEffect(() => { if (activeTab === 'permissions') fetchAbilities(); }, [activeTab]);
 
   const fetchAbilities = async () => {
