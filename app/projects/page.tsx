@@ -8,10 +8,12 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ProjectsSkeleton } from '@/components/ui/projects-skeleton';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 
 export default function ProjectsPage() {
   const { data, isLoading, error, refetch } = useProjects();
   const deleteMutation = useDeleteProject();
+  const { success, error: toastError } = useToast();
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
   const gridRef = useRef<HTMLDivElement>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; projectId: string; projectName: string }>({
@@ -202,9 +204,15 @@ export default function ProjectsPage() {
             </Button>
             <Button
               variant="destructive"
-              onClick={() => {
-                deleteMutation.mutate(deleteConfirm.projectId);
+              loading={deleteMutation.isPending}
+              onClick={async () => {
                 setDeleteConfirm((prev) => ({ ...prev, open: false }));
+                try {
+                  await deleteMutation.mutateAsync(deleteConfirm.projectId);
+                  success(`项目 "${deleteConfirm.projectName}" 已删除`);
+                } catch {
+                  toastError('删除失败，请重试');
+                }
               }}
             >
               <Trash2 className="w-4 h-4 mr-1" />

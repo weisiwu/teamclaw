@@ -9,6 +9,7 @@ import { LegacySelect as Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useToast } from "@/components/ui/toast";
 import { 
   Plus, 
   Search, 
@@ -201,14 +202,20 @@ function QuickAddTaskForm({
   onCreated: () => void;
 }) {
   const [title, setTitle] = useState("");
+  const [localError, setLocalError] = useState<string | null>(null);
   const createTask = useCreateTask();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
-    await createTask.mutateAsync({ title: title.trim(), description: "", priority: 5 });
-    setTitle("");
-    onCreated();
+    setLocalError(null);
+    try {
+      await createTask.mutateAsync({ title: title.trim(), description: "", priority: 5 });
+      setTitle("");
+      onCreated();
+    } catch {
+      setLocalError('创建失败，请重试');
+    }
   };
 
   return (
@@ -232,6 +239,9 @@ function QuickAddTaskForm({
           <X className="w-4 h-4" />
         </Button>
       </div>
+      {localError && (
+        <p className="mt-2 text-xs text-red-500">{localError}</p>
+      )}
     </form>
   );
 }
@@ -363,6 +373,7 @@ function CreateTaskModal({
   onClose: () => void;
 }) {
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const { success, error: toastError } = useToast();
   const [formData, setFormData] = useState<CreateTaskRequest>({
     title: "",
     description: "",
@@ -397,9 +408,14 @@ function CreateTaskModal({
 
   const handleCreate = async () => {
     if (!formData.title.trim()) return;
-    await createTask.mutateAsync(formData);
-    setFormData({ title: "", description: "", priority: 5 });
-    onClose();
+    try {
+      await createTask.mutateAsync(formData);
+      setFormData({ title: "", description: "", priority: 5 });
+      success('任务已创建');
+      onClose();
+    } catch {
+      toastError('创建失败，请重试');
+    }
   };
 
   // Cmd/Ctrl+Enter 提交
@@ -501,6 +517,7 @@ function TasksContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { success, error: toastError } = useToast();
   
   // 批量删除状态
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
@@ -676,12 +693,14 @@ function TasksContent() {
   
   const handleBatchDelete = async () => {
     try {
-      for (const id of Array.from(selectedTaskIds)) {
-        await deleteTask.mutateAsync(id);
-      }
+      await Promise.all(
+        Array.from(selectedTaskIds).map(id => deleteTask.mutateAsync(id))
+      );
       setSelectedTaskIds(new Set());
       setBatchDeleteConfirm(false);
+      success(`已删除 ${selectedTaskIds.size} 个任务`);
     } catch (err) {
+      toastError('批量删除失败，请重试');
       console.error("Failed to batch delete tasks:", err);
     }
   };
@@ -727,12 +746,22 @@ function TasksContent() {
 
   const handleConfirmDelete = async () => {
     if (!deleteConfirmId) return;
-    await deleteTask.mutateAsync(deleteConfirmId);
-    setDeleteConfirmId(null);
+    try {
+      await deleteTask.mutateAsync(deleteConfirmId);
+      setDeleteConfirmId(null);
+      success('任务已删除');
+    } catch {
+      toastError('删除失败，请重试');
+    }
   };
   
   const handleComplete = async (id: string) => {
-    await completeTask.mutateAsync(id);
+    try {
+      await completeTask.mutateAsync(id);
+      success('任务已完成');
+    } catch {
+      toastError('操作失败，请重试');
+    }
   };
   
   const handleCancel = async (id: string) => {
@@ -741,12 +770,22 @@ function TasksContent() {
 
   const handleConfirmCancel = async () => {
     if (!cancelConfirmId) return;
-    await cancelTask.mutateAsync(cancelConfirmId);
-    setCancelConfirmId(null);
+    try {
+      await cancelTask.mutateAsync(cancelConfirmId);
+      setCancelConfirmId(null);
+      success('任务已取消');
+    } catch {
+      toastError('操作失败，请重试');
+    }
   };
   
   const handleReopen = async (id: string) => {
-    await reopenTask.mutateAsync(id);
+    try {
+      await reopenTask.mutateAsync(id);
+      success('任务已重新开启');
+    } catch {
+      toastError('操作失败，请重试');
+    }
   };
 
   return (
@@ -816,6 +855,7 @@ function TasksContent() {
               onCreated={() => {
                 setIsQuickAddOpen(false);
                 refetch();
+                success('任务已创建');
               }}
             />
           )}

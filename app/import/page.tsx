@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { importProject, fetchImportStatus } from '../../lib/api/projects';
 
@@ -27,6 +27,18 @@ export default function ImportPage() {
 
   // 轮询导入状态
   const [taskData, setTaskData] = useState<Awaited<ReturnType<typeof fetchImportStatus>>['task'] | null>(null);
+  // 轮询 interval ref，避免内存泄漏
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 清理轮询 interval
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, []);
 
   const pollStatus = useCallback(async (tid: string) => {
     try {
@@ -38,8 +50,10 @@ export default function ImportPage() {
         setError('导入失败，请重试');
         setCurrentStep(1);
       }
+      return data;
     } catch {
       // ignore polling errors
+      return null;
     }
   }, []);
 
@@ -76,11 +90,19 @@ export default function ImportPage() {
   const handleStep2Next = () => {
     if (!taskId) return;
     setCurrentStep(3);
+    // 清理旧的轮询
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
     // 开始轮询
-    const interval = setInterval(() => {
-      pollStatus(taskId).then(() => {
-        if (taskData?.status === 'done' || taskData?.status === 'error') {
-          clearInterval(interval);
+    pollIntervalRef.current = setInterval(() => {
+      pollStatus(taskId).then((data) => {
+        if (data?.task.status === 'done' || data?.task.status === 'error') {
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
         }
       });
     }, 3000);
@@ -96,6 +118,10 @@ export default function ImportPage() {
     setTaskId(null);
     setTaskData(null);
     setError(null);
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
   };
 
   // 渲染步骤指示器
