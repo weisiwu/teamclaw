@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { z } from 'zod';
+
 import { success, error } from '../utils/response.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { requireProjectAccess } from '../middleware/projectAccess.js';
@@ -11,7 +11,7 @@ import { versionRepo } from '../db/repositories/versionRepo.js';
 import { getDb } from '../db/sqlite.js';
 import { isValidSemver } from '../services/semver.js';
 import { createTag } from '../services/gitService.js';
-import { autoCreateTagForVersion, createTagRecord } from '../services/tagService.js';
+import { createTagRecord } from '../services/tagService.js';
 import { onVersionCreated } from '../services/changeTracker.js';
 import { AuthRequest } from '../middleware/auth.js';
 import path from 'path';
@@ -26,21 +26,9 @@ import versionSummaryRouter from './versionSummary.js';
 import versionBumpRouter from './versionBump.js';
 import versionSettingsRouter from './versionSettings.js';
 import versionChangeStatsRouter from './versionChangeStats.js';
+import versionDiffRouter from './versionDiff.js';
 
 const router = Router();
-
-const idParamSchema = z.string().min(1, 'id is required').max(100).regex(/^[a-zA-Z0-9_-]+$/, 'id contains invalid characters');
-
-function validateId(paramName = 'id') {
-  return (req: Request, _res: Response, next: Function) => {
-    const result = idParamSchema.safeParse(req.params[paramName]);
-    if (!result.success) {
-      _res.status(400).json(error(400, `Invalid ${paramName}: ${result.error.errors[0].message}`));
-      return;
-    }
-    next();
-  };
-}
 
 // GET /api/v1/versions — 列表
 router.get('/', async (req: Request, res: Response) => {
@@ -51,7 +39,11 @@ router.get('/', async (req: Request, res: Response) => {
   const hasScreenshot = req.query.hasScreenshot as string;
   const hasSummary = req.query.hasSummary as string;
 
-  const allRows = await versionRepo.search({ status: status !== 'all' ? status : undefined, branch, limit: 1000 });
+  const allRows = await versionRepo.search({
+    status: status !== 'all' ? status : undefined,
+    branch,
+    limit: 1000,
+  });
 
   const screenshotIndex = new Map<string, boolean>();
   for (const shot of ScreenshotModel.getAllScreenshots()) {
@@ -101,44 +93,52 @@ router.get('/', async (req: Request, res: Response) => {
     };
   });
 
-  res.json(success({
-    data,
-    total,
-    page,
-    pageSize,
-    totalPages: Math.ceil(total / pageSize),
-  }));
+  res.json(
+    success({
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    })
+  );
 });
 
 // GET /api/v1/versions/:id — 详情
 router.get('/:id', validateIdParam(), (req: Request, res: Response) => {
   const db = getDb();
-  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined;
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
   const summaryRecord = VersionSummaryModel.findByVersionId(req.params.id);
-  const tagRow = db.prepare('SELECT protected FROM tags WHERE version_id = ? LIMIT 1').get(req.params.id) as { protected: number } | undefined;
-  res.json(success({
-    id: row.id,
-    version: row.version,
-    branch: row.branch,
-    commit_hash: row.commit_hash,
-    created_by: row.created_by,
-    created_at: row.created_at,
-    build_status: row.build_status,
-    tag_created: row.tag_created === 1,
-    tagged: row.tag_created === 1,
-    gitTag: row.git_tag || undefined,
-    gitTagCreatedAt: row.git_tag_created_at || undefined,
-    protected: tagRow ? tagRow.protected === 1 : false,
-    hasScreenshot: ScreenshotModel.findByVersionId(req.params.id).length > 0,
-    hasSummary: !!summaryRecord,
-    summary: summaryRecord?.content || row.summary || undefined,
-    summaryGeneratedAt: summaryRecord?.generatedAt || undefined,
-    summaryGeneratedBy: summaryRecord?.generatedBy || undefined,
-  }));
+  const tagRow = db
+    .prepare('SELECT protected FROM tags WHERE version_id = ? LIMIT 1')
+    .get(req.params.id) as { protected: number } | undefined;
+  res.json(
+    success({
+      id: row.id,
+      version: row.version,
+      branch: row.branch,
+      commit_hash: row.commit_hash,
+      created_by: row.created_by,
+      created_at: row.created_at,
+      build_status: row.build_status,
+      tag_created: row.tag_created === 1,
+      tagged: row.tag_created === 1,
+      gitTag: row.git_tag || undefined,
+      gitTagCreatedAt: row.git_tag_created_at || undefined,
+      protected: tagRow ? tagRow.protected === 1 : false,
+      hasScreenshot: ScreenshotModel.findByVersionId(req.params.id).length > 0,
+      hasSummary: !!summaryRecord,
+      summary: summaryRecord?.content || row.summary || undefined,
+      summaryGeneratedAt: summaryRecord?.generatedAt || undefined,
+      summaryGeneratedBy: summaryRecord?.generatedBy || undefined,
+    })
+  );
 });
 
 // POST /api/v1/versions — 创建版本
@@ -168,15 +168,19 @@ router.post('/', (req: Request, res: Response) => {
   const now = new Date().toISOString();
   const vBranch = branch || 'main';
 
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO versions (id, version, branch, summary, created_by, created_at, build_status, tag_created)
     VALUES (?, ?, ?, ?, ?, ?, 'pending', 0)
-  `).run(id, version, vBranch, description || '', 'system', now);
+  `
+  ).run(id, version, vBranch, description || '', 'system', now);
 
   let tagCreated = false;
   let gitTagName: string | undefined;
   const semverReleaseRegex = /^\d+\.\d+\.\d+$/;
-  const effectiveProjectPath = projectPath || path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', id);
+  const effectiveProjectPath =
+    projectPath ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', id);
 
   if (semverReleaseRegex.test(version)) {
     gitTagName = `v${version}`;
@@ -223,30 +227,34 @@ router.post('/', (req: Request, res: Response) => {
     console.warn('[version] Failed to record creation event:', err);
   }
 
-  res.status(201).json(success({
-    id,
-    version,
-    title,
-    description: description || '',
-    status: (status as 'draft' | 'published' | 'archived') || 'draft',
-    tags: tags || [],
-    branch: vBranch,
-    buildStatus: 'pending',
-    createdAt: now,
-    updatedAt: now,
-    isMain: false,
-    commitCount: 0,
-    changedFiles: [],
-    tagCreated,
-    gitTag: tagCreated ? gitTagName : undefined,
-    gitTagCreatedAt: tagCreated ? new Date().toISOString() : undefined,
-  }));
+  res.status(201).json(
+    success({
+      id,
+      version,
+      title,
+      description: description || '',
+      status: (status as 'draft' | 'published' | 'archived') || 'draft',
+      tags: tags || [],
+      branch: vBranch,
+      buildStatus: 'pending',
+      createdAt: now,
+      updatedAt: now,
+      isMain: false,
+      commitCount: 0,
+      changedFiles: [],
+      tagCreated,
+      gitTag: tagCreated ? gitTagName : undefined,
+      gitTagCreatedAt: tagCreated ? new Date().toISOString() : undefined,
+    })
+  );
 });
 
 // PUT /api/v1/versions/:id — 更新版本
 router.put('/:id', validateIdParam(), requireAdmin, (req: Request, res: Response) => {
   const db = getDb();
-  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined;
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -257,52 +265,64 @@ router.put('/:id', validateIdParam(), requireAdmin, (req: Request, res: Response
     db.prepare('UPDATE versions SET summary = ? WHERE id = ?').run(description, req.params.id);
   }
 
-  const updatedRow = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown>;
+  const updatedRow = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<
+    string,
+    unknown
+  >;
 
-  res.json(success({
-    version: {
-      id: updatedRow.id,
-      version: updatedRow.version,
-      title: req.params.id,
-      description: description || updatedRow.summary || '',
-      status: updatedRow.status || 'draft',
-      tags: [],
-      branch: updatedRow.branch,
-      buildStatus: updatedRow.build_status,
-      createdAt: updatedRow.created_at,
-      updatedAt: new Date().toISOString(),
-    },
-  }));
+  res.json(
+    success({
+      version: {
+        id: updatedRow.id,
+        version: updatedRow.version,
+        title: req.params.id,
+        description: description || updatedRow.summary || '',
+        status: updatedRow.status || 'draft',
+        tags: [],
+        branch: updatedRow.branch,
+        buildStatus: updatedRow.build_status,
+        createdAt: updatedRow.created_at,
+        updatedAt: new Date().toISOString(),
+      },
+    })
+  );
 });
 
 // DELETE /api/v1/versions/:id — 删除
-router.delete('/:id', validateIdParam(), requireProjectAccess, (req: AuthRequest, res: Response) => {
-  const db = getDb();
-  const row = db.prepare('SELECT id, version, created_by FROM versions WHERE id = ?').get(req.params.id) as
-    { id: string; version: string; created_by: string } | undefined;
-  if (!row) {
-    res.status(404).json(error(404, 'Version not found'));
-    return;
+router.delete(
+  '/:id',
+  validateIdParam(),
+  requireProjectAccess,
+  (req: AuthRequest, res: Response) => {
+    const db = getDb();
+    const row = db
+      .prepare('SELECT id, version, created_by FROM versions WHERE id = ?')
+      .get(req.params.id) as { id: string; version: string; created_by: string } | undefined;
+    if (!row) {
+      res.status(404).json(error(404, 'Version not found'));
+      return;
+    }
+
+    auditService.log({
+      action: 'version_delete',
+      actor: req.user?.id || 'unknown',
+      target: req.params.id,
+      details: { version: row.version, deletedBy: req.user?.id, originalCreator: row.created_by },
+      ipAddress: (req.ip || req.socket.remoteAddress) as string | undefined,
+      userAgent: req.headers['user-agent'] as string | undefined,
+    });
+
+    db.prepare('DELETE FROM versions WHERE id = ?').run(req.params.id);
+    res.json(success({ deleted: true }));
   }
-
-  auditService.log({
-    action: 'version_delete',
-    actor: req.user?.id || 'unknown',
-    target: req.params.id,
-    details: { version: row.version, deletedBy: req.user?.id, originalCreator: row.created_by },
-    ipAddress: (req.ip || req.socket.remoteAddress) as string | undefined,
-    userAgent: req.headers['user-agent'] as string | undefined,
-  });
-
-  db.prepare('DELETE FROM versions WHERE id = ?').run(req.params.id);
-  res.json(success({ deleted: true }));
-});
+);
 
 // ========== Aggregate Sub-Routes ==========
 router.use('/', versionBuildRouter);
 router.use('/', versionRollbackRouter);
 router.use('/', versionTagRouter);
 router.use('/', versionCompareRouter);
+router.use('/', versionDiffRouter);
 router.use('/', versionScreenshotRouter);
 router.use('/', versionSummaryRouter);
 router.use('/', versionBumpRouter);

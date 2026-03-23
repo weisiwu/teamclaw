@@ -1,6 +1,12 @@
 /**
  * Changelog Generator — Call AI model to generate structured changelog
+ * Supports AI-powered generation and rule-based fallback
  */
+
+import { existsSync } from 'fs';
+import { join } from 'path';
+import { getGitLog } from './gitService.js';
+import os from 'os';
 
 interface CommitInfo {
   hash: string;
@@ -135,9 +141,7 @@ export async function generateChangelogFromCommits(
     };
   }
 
-  const commitList = commits
-    .map(c => `- ${c.hash || '*'} ${c.message}`)
-    .join('\n');
+  const commitList = commits.map(c => `- ${c.hash || '*'} ${c.message}`).join('\n');
 
   const prompt = `为以下提交记录生成结构化变更日志：
 
@@ -189,15 +193,106 @@ ${commitList}
 
   return {
     title: `${versionId} 版本更新`,
-    content: [
-      features.length > 0 ? `新增 ${features.length} 项功能` : '',
-      fixes.length > 0 ? `修复 ${fixes.length} 个问题` : '',
-      improvements.length > 0 ? `${improvements.length} 项优化` : '',
-    ].filter(Boolean).join('；') || `${versionId} 包含多项更新`,
+    content:
+      [
+        features.length > 0 ? `新增 ${features.length} 项功能` : '',
+        fixes.length > 0 ? `修复 ${fixes.length} 个问题` : '',
+        improvements.length > 0 ? `${improvements.length} 项优化` : '',
+      ]
+        .filter(Boolean)
+        .join('；') || `${versionId} 包含多项更新`,
     features: [...new Set(features)],
     fixes: [...new Set(fixes)],
     improvements: [...new Set(improvements)],
     breaking: [...new Set(breaking)],
     docs: [...new Set(docs)],
   };
+}
+
+/**
+ * Generate AI-powered changelog for a version directly from git commits
+ * Fetches commits from the project path and generates structured changelog
+ */
+export async function generateAIChangelog(
+  versionId: string,
+  options: {
+    projectPath?: string;
+    maxCommits?: number;
+    branch?: string;
+  } = {}
+): Promise<GeneratedChangelog> {
+  const projectPath =
+    options.projectPath ||
+    join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', versionId);
+
+  const maxCommits = options.maxCommits || 30;
+
+  if (!existsSync(join(projectPath, '.git'))) {
+    return {
+      title: `${versionId} 版本`,
+      content: `版本 ${versionId} 的变更日志。`,
+      features: [],
+      fixes: [],
+      improvements: [],
+      breaking: [],
+      docs: [],
+    };
+  }
+
+  try {
+    const commits = getGitLog(projectPath, { maxCount: maxCommits, branch: options.branch });
+    const commitText = commits.map(c => `${c.hash.slice(0, 7)} ${c.message}`).join('\n');
+
+    return await generateChangelogFromCommits(versionId, commitText, options.branch);
+  } catch (err) {
+    console.warn('generateAIChangelog failed:', err);
+    return {
+      title: `${versionId} 版本`,
+      content: `版本 ${versionId} 的变更日志生成失败。`,
+      features: [],
+      fixes: [],
+      improvements: [],
+      breaking: [],
+      docs: [],
+    };
+  }
+}
+
+/**
+ * Generate a markdown-formatted changelog from a GeneratedChangelog
+ */
+export function formatChangelogAsMarkdown(changelog: GeneratedChangelog, version: string): string {
+  const lines: string[] = [`## ${version} ${changelog.title}`, '', changelog.content, ''];
+
+  if (changelog.features.length > 0) {
+    lines.push('### ✨ 新功能', '');
+    changelog.features.forEach(f => lines.push(`- ${f}`));
+    lines.push('');
+  }
+
+  if (changelog.improvements.length > 0) {
+    lines.push('### ⚡ 优化改进', '');
+    changelog.improvements.forEach(i => lines.push(`- ${i}`));
+    lines.push('');
+  }
+
+  if (changelog.fixes.length > 0) {
+    lines.push('### 🐛 Bug 修复', '');
+    changelog.fixes.forEach(f => lines.push(`- ${f}`));
+    lines.push('');
+  }
+
+  if (changelog.breaking.length > 0) {
+    lines.push('### ⚠️ 破坏性变更', '');
+    changelog.breaking.forEach(b => lines.push(`- ${b}`));
+    lines.push('');
+  }
+
+  if (changelog.docs.length > 0) {
+    lines.push('### 📝 文档更新', '');
+    changelog.docs.forEach(d => lines.push(`- ${d}`));
+    lines.push('');
+  }
+
+  return lines.join('\n');
 }

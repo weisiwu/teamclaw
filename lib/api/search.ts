@@ -2,11 +2,7 @@
  * Search API - Enhanced search with filters and history
  */
 
-import {
-  SearchFilter,
-  SearchHistoryRecord,
-  EnhancedSearchResult,
-} from './types';
+import { SearchFilter, SearchHistoryRecord, EnhancedSearchResult } from './types';
 
 const API_BASE = '/api/v1';
 
@@ -52,7 +48,7 @@ export async function getSearchSuggestions(query: string, limit?: number): Promi
   const params = new URLSearchParams();
   params.set('q', query);
   if (limit) params.set('limit', String(limit));
-  
+
   const res = await fetch(`${API_BASE}/search/suggestions?${params}`);
   const json = await res.json();
   if (json.code !== 0) throw new Error(json.message);
@@ -60,11 +56,14 @@ export async function getSearchSuggestions(query: string, limit?: number): Promi
 }
 
 // Get search history
-export async function getSearchHistory(userId?: string, limit?: number): Promise<SearchHistoryRecord[]> {
+export async function getSearchHistory(
+  userId?: string,
+  limit?: number
+): Promise<SearchHistoryRecord[]> {
   const params = new URLSearchParams();
   if (userId) params.set('userId', userId);
   if (limit) params.set('limit', String(limit));
-  
+
   const res = await fetch(`${API_BASE}/search/history?${params}`);
   const json = await res.json();
   if (json.code !== 0) throw new Error(json.message);
@@ -140,9 +139,46 @@ export async function getTaskContext(taskId: string): Promise<{ contextSnapshot:
 }
 
 // 获取相似历史任务
-export async function getTaskSimilar(taskId: string, topK = 5): Promise<{ list: TaskSearchResult[]; total: number }> {
+export async function getTaskSimilar(
+  taskId: string,
+  topK = 5
+): Promise<{ list: TaskSearchResult[]; total: number }> {
   const res = await fetch(`${API_BASE}/tasks/${encodeURIComponent(taskId)}/similar?topK=${topK}`);
   const json = await res.json();
   if (json.code !== 0) throw new Error(json.message);
+  return json.data;
+}
+
+// ── 版本语义搜索 ──────────────────────────────────────
+
+export interface VersionSearchResult {
+  versionId: string;
+  versionTag: string;
+  summary: string;
+  createdAt: string;
+  similarity: number;
+  relevanceLabel: 'high' | 'medium' | 'low';
+}
+
+export interface VersionSearchResponse {
+  list: VersionSearchResult[];
+  total: number;
+  query: string;
+}
+
+// 语义搜索历史版本
+export async function searchVersionsSemantic(
+  q: string,
+  topK = 5,
+  minSimilarity = 0.3
+): Promise<VersionSearchResponse> {
+  const params = new URLSearchParams();
+  params.set('q', q);
+  params.set('topK', String(topK));
+  params.set('minSimilarity', String(minSimilarity));
+
+  const res = await fetch(`${API_BASE}/search/versions?${params}`);
+  const json = await res.json();
+  if (json.code !== 0) throw new Error(json.message || '版本搜索失败');
   return json.data;
 }

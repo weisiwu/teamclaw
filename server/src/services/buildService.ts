@@ -1,12 +1,15 @@
 /**
  * Build Service — Execute project builds and collect artifacts
  * Reads package.json to determine build command, executes it, collects output
+ * Supports both exec (batch) and spawn (SSE streaming) modes
  */
 
 import { exec } from 'child_process';
+import { spawn, ChildProcess } from 'child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { join, basename, extname } from 'path';
 import { promisify } from 'util';
+import { EventEmitter } from 'events';
 
 const execAsync = promisify(exec);
 
@@ -22,9 +25,9 @@ export interface BuildResult {
 }
 
 export interface BuildArtifact {
-  path: string;        // relative path within project
-  name: string;        // display name
-  size: number;        // bytes
+  path: string; // relative path within project
+  name: string; // display name
+  size: number; // bytes
   type: ArtifactType;
   downloadUrl: string; // relative URL for download
 }
@@ -306,3 +309,155 @@ export function getBuildConfig(projectPath: string): {
     packageManager,
   };
 }
+
+// ========== SSE Streaming Build Service ==========
+
+export interface BuildLogEntry {
+  timestamp: string;
+  type: 'stdout' | 'stderr' | 'info' | 'error' | 'complete';
+  content: string;
+}
+
+export interface StreamingBuildResult extends BuildResult {
+  logs: BuildLogEntry[];
+}
+
+/**
+ * StreamingBuildService — EventEmitter-based build with real-time SSE log streaming
+ * Uses spawn instead of exec for streaming stdout/stderr
+ */
+export class StreamingBuildService extends EventEmitter {
+  private activeProcesses: Map<string, ChildProcess> = new Map();
+
+  /**
+   * Execute build with streaming log output
+   * Emits 'log' events: { type: 'stdout'|'stderr', content: string }
+   * Emits 'complete' event: BuildResult
+   */
+  async buildWithStream(
+    buildId: string,
+    projectPath: string,
+    options: {
+      buildCommand?: string;
+      timeoutMs?: number;
+      env?: Record<string, string>;
+    } = {}
+  ): Promise<StreamingBuildResult> {
+    const { buildCommand: customCommand, timeoutMs = 300000, env = {} } = options;
+    const startTime = Date.now();
+    const logs: BuildLogEntry[] = [];
+
+    const command = customCommand || getBuildCommand(projectPath);
+    if (!command) {
+      const errResult: StreamingBuildResult = {
+        success: false,
+        duration: 0,
+        command: 'none',
+        cwd: projectPath,
+        output: '',
+        errorOutput: 'No build command found',
+        artifacts: [],
+        exitCode: 1,
+        logs,
+      };
+      this.emit('complete', errResult);
+      return errResult;
+    }
+
+    // Parse command string into args (handle "npm run build" style)
+    const parts = command.split(' ');
+    const cmd = parts[0];
+    const args = parts.slice(1);
+
+    const buildEnv = { ...process.env, ...env, NODE_ENV: 'production' };
+
+    const child = spawn(cmd, args, {
+      cwd: projectPath,
+      env: buildEnv,
+      shell: true,
+    });
+
+    this.activeProcesses.set(buildId, child);
+
+    const addLog = (type: BuildLogEntry['type'], content: string) => {
+      const entry: BuildLogEntry = {
+        timestamp: new Date().toISOString(),
+        type,
+        content,
+      };
+      logs.push(entry);
+      this.emit('log', entry);
+    };
+
+    child.stdout?.on('data', (data: Buffer) => {
+      addLog('stdout', data.toString());
+    });
+
+    child.stderr?.on('data', (data: Buffer) => {
+      addLog('stderr', data.toString());
+    });
+
+    child.on('error', (err: Error) => {
+      addLog('error', `Process error: ${err.message}`);
+    });
+
+    return new Promise(resolve => {
+      const timeout = setTimeout(() => {
+        child.kill('SIGTERM');
+        addLog('error', 'Build timed out');
+      }, timeoutMs);
+
+      child.on('close', (code: number | null) => {
+        clearTimeout(timeout);
+        this.activeProcesses.delete(buildId);
+        const duration = Date.now() - startTime;
+        const output = logs
+          .filter(l => l.type === 'stdout')
+          .map(l => l.content)
+          .join('');
+        const errorOutput = logs
+          .filter(l => l.type === 'stderr')
+          .map(l => l.content)
+          .join('');
+
+        addLog('complete', `Build finished with exit code ${code}`);
+
+        const result: StreamingBuildResult = {
+          success: code === 0,
+          duration,
+          command: command || '',
+          cwd: projectPath,
+          output: output.slice(-50000),
+          errorOutput: errorOutput.slice(-50000),
+          artifacts: collectArtifacts(projectPath),
+          exitCode: code ?? 1,
+          logs,
+        };
+
+        this.emit('complete', result);
+        resolve(result);
+      });
+    });
+  }
+
+  /**
+   * Cancel an active build process
+   */
+  cancelBuild(buildId: string): boolean {
+    const child = this.activeProcesses.get(buildId);
+    if (!child) return false;
+    child.kill('SIGTERM');
+    this.activeProcesses.delete(buildId);
+    return true;
+  }
+
+  /**
+   * Get list of active build IDs
+   */
+  getActiveBuilds(): string[] {
+    return [...this.activeProcesses.keys()];
+  }
+}
+
+// Singleton instance for SSE builds
+export const streamingBuildService = new StreamingBuildService();

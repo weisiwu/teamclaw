@@ -4,7 +4,17 @@
  * Serves downloads via static file serving
  */
 
-import { existsSync, mkdirSync, writeFileSync, readdirSync, rmSync, statSync, createReadStream, copyFileSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  createReadStream,
+  copyFileSync,
+  createWriteStream,
+} from 'fs';
 import { join, basename, extname, dirname } from 'path';
 
 // Global artifacts root: ~/.openclaw/artifacts
@@ -97,7 +107,10 @@ export async function copyArtifact(
 /**
  * List all artifacts for a project/version
  */
-export function listArtifacts(projectName: string, version: string): Array<{
+export function listArtifacts(
+  projectName: string,
+  version: string
+): Array<{
   path: string;
   name: string;
   size: number;
@@ -108,7 +121,10 @@ export function listArtifacts(projectName: string, version: string): Array<{
 
   if (!existsSync(dir)) return [];
 
-  function scanDir(dirPath: string, basePath: string): Array<{
+  function scanDir(
+    dirPath: string,
+    basePath: string
+  ): Array<{
     path: string;
     name: string;
     size: number;
@@ -156,7 +172,11 @@ export function listArtifacts(projectName: string, version: string): Array<{
 /**
  * Get a single artifact info
  */
-export function getArtifactInfo(projectName: string, version: string, artifactPath: string): {
+export function getArtifactInfo(
+  projectName: string,
+  version: string,
+  artifactPath: string
+): {
   path: string;
   name: string;
   size: number;
@@ -198,7 +218,11 @@ export function deleteArtifacts(projectName: string, version: string): boolean {
 /**
  * Delete a single artifact
  */
-export function deleteArtifact(projectName: string, version: string, artifactPath: string): boolean {
+export function deleteArtifact(
+  projectName: string,
+  version: string,
+  artifactPath: string
+): boolean {
   const filePath = getArtifactFilePath(projectName, version, artifactPath);
 
   if (!existsSync(filePath)) return true;
@@ -222,7 +246,8 @@ export function getArtifactsRootDir(): string {
  * Get artifact by fileId (stub - artifactStore uses project/version/artifactPath)
  * Returns null; caller should fall back to uploads directory
  */
-export async function getArtifact(fileId: string): Promise<{ path: string } | null> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function getArtifact(_fileId: string): Promise<{ path: string } | null> {
   return null;
 }
 
@@ -322,4 +347,128 @@ export async function importArtifactsFromDir(
 
   copyDir(sourceDir, destDir);
   return count;
+}
+
+// ========== Artifact ZIP Packaging ==========
+
+interface ArchivePackage {
+  success: boolean;
+  packagePath?: string;
+  packageUrl?: string;
+  size?: number;
+  fileCount?: number;
+  error?: string;
+}
+
+/**
+ * Package artifacts for a version into a ZIP archive
+ */
+export async function packageArtifacts(
+  projectName: string,
+  version: string
+): Promise<ArchivePackage> {
+  const artifacts = listArtifacts(projectName, version);
+  if (artifacts.length === 0) {
+    return { success: false, error: 'No artifacts found for this version' };
+  }
+
+  try {
+    // Dynamic import archiver to avoid adding it as a hard dependency for simple use cases
+    const archiver = (await import('archiver')).default;
+
+    const artifactsDir = getProjectArtifactsDir(projectName, version);
+    const zipDir = join(getArtifactsRoot(), projectName);
+    if (!existsSync(zipDir)) {
+      mkdirSync(zipDir, { recursive: true });
+    }
+
+    const zipPath = join(zipDir, `${version}.zip`);
+
+    const output = createWriteStream(zipPath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    let archiveComplete = false;
+    let resolvePromise: (v: ArchivePackage) => void;
+    let rejectPromise: (e: Error) => void;
+
+    const completePromise = new Promise<ArchivePackage>((resolve, reject) => {
+      resolvePromise = resolve;
+      rejectPromise = reject;
+    });
+
+    output.on('close', () => {
+      archiveComplete = true;
+      const size = archive.pointer();
+      resolvePromise!({
+        success: true,
+        packagePath: zipPath,
+        packageUrl: `/artifacts/${projectName}/${version}.zip`,
+        size,
+        fileCount: artifacts.length,
+      });
+    });
+
+    archive.on('error', (err: Error) => {
+      if (!archiveComplete) {
+        rejectPromise(err);
+      }
+    });
+
+    archive.pipe(output);
+
+    // Add each artifact file to the archive
+    for (const artifact of artifacts) {
+      const artifactFullPath = join(artifactsDir, artifact.path);
+      if (existsSync(artifactFullPath)) {
+        archive.file(artifactFullPath, { name: artifact.path });
+      }
+    }
+
+    await archive.finalize();
+
+    return completePromise;
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/**
+ * Get package info for a version
+ */
+export function getArtifactPackageInfo(
+  projectName: string,
+  version: string
+): { exists: boolean; path?: string; url?: string; size?: number; fileCount?: number } {
+  const zipPath = join(getArtifactsRoot(), projectName, `${version}.zip`);
+  if (!existsSync(zipPath)) {
+    return { exists: false };
+  }
+
+  const stats = statSync(zipPath);
+  const artifacts = listArtifacts(projectName, version);
+
+  return {
+    exists: true,
+    path: zipPath,
+    url: `/artifacts/${projectName}/${version}.zip`,
+    size: stats.size,
+    fileCount: artifacts.length,
+  };
+}
+
+/**
+ * Delete artifact package
+ */
+export function deleteArtifactPackage(projectName: string, version: string): boolean {
+  const zipPath = join(getArtifactsRoot(), projectName, `${version}.zip`);
+  if (!existsSync(zipPath)) return true;
+  try {
+    rmSync(zipPath);
+    return true;
+  } catch {
+    return false;
+  }
 }

@@ -9,6 +9,7 @@
 import { Router } from 'express';
 import { searchService } from '../services/searchService.js';
 import { taskMemory, TaskSearchResult } from '../services/taskMemory.js';
+import { searchVersionMemory } from '../services/versionMemory.js';
 import {
   semanticDocSearch,
   applyFilters,
@@ -27,13 +28,29 @@ const router = Router();
 // 增强文档搜索 GET /api/v1/search/docs?q=xxx&mode=semantic&type=md&dateFrom=2026-01-01&page=1&pageSize=10
 router.get('/docs', async (req, res) => {
   const {
-    q, mode = 'keyword', type, dateFrom, dateTo, projectId, sizeMin, sizeMax,
-    page = '1', pageSize = '10', userId = 'default'
+    q,
+    mode = 'keyword',
+    type,
+    dateFrom,
+    dateTo,
+    projectId,
+    sizeMin,
+    sizeMax,
+    page = '1',
+    pageSize = '10',
+    userId = 'default',
   } = req.query;
 
   const pageNum = parseInt(page as string);
   const size = parseInt(pageSize as string);
-  const filter: SearchFilter = { type: type as string, dateFrom: dateFrom as string, dateTo: dateTo as string, projectId: projectId as string, sizeMin: sizeMin ? parseInt(sizeMin as string) : undefined, sizeMax: sizeMax ? parseInt(sizeMax as string) : undefined };
+  const filter: SearchFilter = {
+    type: type as string,
+    dateFrom: dateFrom as string,
+    dateTo: dateTo as string,
+    projectId: projectId as string,
+    sizeMin: sizeMin ? parseInt(sizeMin as string) : undefined,
+    sizeMax: sizeMax ? parseInt(sizeMax as string) : undefined,
+  };
 
   // Semantic search via ChromaDB
   if (mode === 'semantic' && q && typeof q === 'string') {
@@ -44,20 +61,22 @@ router.get('/docs', async (req, res) => {
     const total = docs.length;
     const paged = docs.slice((pageNum - 1) * size, pageNum * size);
     saveSearchHistory(userId as string, q as string, 'semantic', filter, total);
-    return res.json(success({
-      list: paged.map(d => ({
-        type: 'doc',
-        id: d.id,
-        title: d.name,
-        snippet: `类型: ${d.type} | 大小: ${d.size} | 上传: ${d.uploadedAt}`,
-        url: `/docs/${d.id}`,
-        score: semanticResults.find(r => r.id === d.id)?.score ?? 0,
-      })),
-      total,
-      page: pageNum,
-      pageSize: size,
-      mode: 'semantic',
-    }));
+    return res.json(
+      success({
+        list: paged.map(d => ({
+          type: 'doc',
+          id: d.id,
+          title: d.name,
+          snippet: `类型: ${d.type} | 大小: ${d.size} | 上传: ${d.uploadedAt}`,
+          url: `/docs/${d.id}`,
+          score: semanticResults.find(r => r.id === d.id)?.score ?? 0,
+        })),
+        total,
+        page: pageNum,
+        pageSize: size,
+        mode: 'semantic',
+      })
+    );
   }
 
   // Keyword search with filters
@@ -66,20 +85,22 @@ router.get('/docs', async (req, res) => {
   const total = docs.length;
   const paged = docs.slice((pageNum - 1) * size, pageNum * size);
   if (q && typeof q === 'string') saveSearchHistory(userId as string, q, 'keyword', filter, total);
-  res.json(success({
-    list: paged.map(d => ({
-      type: 'doc',
-      id: d.id,
-      title: d.name,
-      snippet: `类型: ${d.type} | 大小: ${d.size} | 上传: ${d.uploadedAt}`,
-      url: `/docs/${d.id}`,
-      score: 1,
-    })),
-    total,
-    page: pageNum,
-    pageSize: size,
-    mode: 'keyword',
-  }));
+  res.json(
+    success({
+      list: paged.map(d => ({
+        type: 'doc',
+        id: d.id,
+        title: d.name,
+        snippet: `类型: ${d.type} | 大小: ${d.size} | 上传: ${d.uploadedAt}`,
+        url: `/docs/${d.id}`,
+        score: 1,
+      })),
+      total,
+      page: pageNum,
+      pageSize: size,
+      mode: 'keyword',
+    })
+  );
 });
 
 // 任务搜索 GET /api/v1/search/tasks?q=xxx&mode=semantic&topK=5
@@ -101,19 +122,21 @@ router.get('/tasks', async (req, res) => {
       const total = results.length;
       const paged = results.slice((pageNum - 1) * size, pageNum * size);
       saveSearchHistory('default', q, 'semantic', {}, total);
-      return res.json(success({
-        list: paged.map((r: TaskSearchResult) => ({
-          taskId: r.taskId,
-          title: r.title,
-          summary: r.summary,
-          similarity: r.similarity,
-          completedAt: r.completedAt,
-        })),
-        total,
-        page: pageNum,
-        pageSize: size,
-        mode: 'semantic',
-      }));
+      return res.json(
+        success({
+          list: paged.map((r: TaskSearchResult) => ({
+            taskId: r.taskId,
+            title: r.title,
+            summary: r.summary,
+            similarity: r.similarity,
+            completedAt: r.completedAt,
+          })),
+          total,
+          page: pageNum,
+          pageSize: size,
+          mode: 'semantic',
+        })
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[search] Semantic task search failed:', msg);
@@ -136,10 +159,12 @@ router.get('/', async (req, res) => {
   const size = parseInt(pageSize as string);
   const docResults = searchService.searchDocs(q, pageNum, size);
   const taskResults = await searchService.searchTasks(q, pageNum, size);
-  res.json(success({
-    docs: docResults,
-    tasks: taskResults,
-  }));
+  res.json(
+    success({
+      docs: docResults,
+      tasks: taskResults,
+    })
+  );
 });
 
 // 搜索建议 GET /api/v1/search/suggestions?q=xxx&limit=5
@@ -164,6 +189,32 @@ router.delete('/history', (req, res) => {
   const { userId = 'default' } = req.query;
   clearSearchHistory(userId as string);
   res.json(success({ message: '搜索历史已清除' }));
+});
+
+// 版本语义搜索 GET /api/v1/search/versions?q=xxx&topK=5
+router.get('/versions', async (req, res) => {
+  const { q, topK = '5', minSimilarity = '0.3' } = req.query;
+
+  if (!q || typeof q !== 'string') {
+    return res.status(400).json(error(400, '需要 q 参数', 'INVALID_PARAMS'));
+  }
+
+  try {
+    const results = await searchVersionMemory(q, {
+      topK: parseInt(topK as string),
+      minSimilarity: parseFloat(minSimilarity as string),
+    });
+    res.json(
+      success({
+        list: results,
+        total: results.length,
+        query: q,
+      })
+    );
+  } catch (err) {
+    console.warn('[search] Version memory search failed:', err);
+    res.json(success({ list: [], total: 0, query: q, error: 'Search failed' }));
+  }
 });
 
 // 索引文档 POST /api/v1/search/index (body: { docId })

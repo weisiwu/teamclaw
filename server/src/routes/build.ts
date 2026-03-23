@@ -2,7 +2,8 @@
  * Build Routes — Build history, details, and rebuild triggers
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
+import fs from 'fs';
 import { z } from 'zod';
 import { success, error } from '../utils/response.js';
 import {
@@ -13,9 +14,8 @@ import {
   updateBuildRecord,
   cancelBuildRecord,
   getBuildRecordStats,
-  BuildRecord,
 } from '../models/buildRecord.js';
-import { runBuild } from '../services/buildService.js';
+import { runBuild, streamingBuildService } from '../services/buildService.js';
 import { rollbackToCommit, rollbackToTag } from '../services/rollbackService.js';
 import {
   createPackage,
@@ -23,7 +23,6 @@ import {
   deletePackage,
   listPackages,
   getPackageFilePath,
-  type PackageFormat,
 } from '../services/packageService.js';
 import { getCurrentBranch } from '../services/gitService.js';
 import path from 'path';
@@ -32,16 +31,15 @@ import os from 'os';
 const router = Router();
 
 // ========== Input Validation Schemas (Zod) ==========
-const buildIdSchema = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/, 'build id contains invalid characters');
-const versionIdQuerySchema = z.string().min(1).max(100).optional();
-const paginationSchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-  offset: z.coerce.number().int().min(0).default(0),
-});
+const buildIdSchema = z
+  .string()
+  .min(1)
+  .max(100)
+  .regex(/^[a-zA-Z0-9_-]+$/, 'build id contains invalid characters');
 
 // Validation middleware
 function validateIdParam(paramName: string = 'id') {
-  return (req: Request, res: Response, next: Function) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     const result = buildIdSchema.safeParse(req.params[paramName]);
     if (!result.success) {
       res.status(400).json(error(400, `Invalid ${paramName}: ${result.error.errors[0].message}`));
@@ -51,31 +49,24 @@ function validateIdParam(paramName: string = 'id') {
   };
 }
 
-function validateQuery(schema: z.ZodSchema) {
-  return (req: Request, res: Response, next: Function) => {
-    const result = schema.safeParse(req.query);
-    if (!result.success) {
-      res.status(400).json(error(400, `Query validation error: ${result.error.errors[0].message}`));
-      return;
-    }
-    // Merge validated data back to req.query
-    Object.assign(req.query, result.data);
-    next();
-  };
-}
-
 // ========== Helpers ==========
 
 function getVersionProjectPath(versionId: string, explicitPath?: string): string {
-  return explicitPath ||
-    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', versionId);
+  return (
+    explicitPath ||
+    path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', versionId)
+  );
 }
 
 // ========== Routes ==========
 
 // GET /api/v1/builds — List all builds (admin)
 router.get('/', (req: Request, res: Response) => {
-  const { versionId, limit = '20', offset = '0' } = req.query as {
+  const {
+    versionId,
+    limit = '20',
+    offset = '0',
+  } = req.query as {
     versionId?: string;
     limit?: string;
     offset?: string;
@@ -91,12 +82,14 @@ router.get('/', (req: Request, res: Response) => {
   const records = getBuildRecordsByVersion(versionId, limitNum + offsetNum);
   const paginated = records.slice(offsetNum, offsetNum + limitNum);
 
-  res.json(success({
-    builds: paginated,
-    total: records.length,
-    limit: limitNum,
-    offset: offsetNum,
-  }));
+  res.json(
+    success({
+      builds: paginated,
+      total: records.length,
+      limit: limitNum,
+      offset: offsetNum,
+    })
+  );
 });
 
 // GET /api/v1/builds/latest/:versionId — Get latest build for a version
@@ -119,7 +112,15 @@ router.get('/:id', validateIdParam(), (req: Request, res: Response) => {
 
 // POST /api/v1/builds — Trigger a new build for a version
 router.post('/', async (req: Request, res: Response) => {
-  const { versionId, versionName, versionNumber, buildCommand, projectPath, triggeredBy = 'system', triggerType = 'manual' } = req.body as {
+  const {
+    versionId,
+    versionName,
+    versionNumber,
+    buildCommand,
+    projectPath,
+    triggeredBy = 'system',
+    triggerType = 'manual',
+  } = req.body as {
     versionId: string;
     versionName: string;
     versionNumber: string;
@@ -165,7 +166,8 @@ router.post('/', async (req: Request, res: Response) => {
       errorOutput: result.errorOutput.slice(-50000),
       artifactCount: result.artifacts.length,
       artifactPaths: result.artifacts.map(a => a.path),
-      artifactUrl: result.artifacts.length > 0 ? `/artifacts/${versionId}/${versionNumber}` : undefined,
+      artifactUrl:
+        result.artifacts.length > 0 ? `/artifacts/${versionId}/${versionNumber}` : undefined,
     });
   } catch (err: unknown) {
     updateBuildRecord(record.id, {
@@ -235,7 +237,10 @@ router.post('/:id/rebuild', validateIdParam(), async (req: Request, res: Respons
       errorOutput: result.errorOutput.slice(-50000),
       artifactCount: result.artifacts.length,
       artifactPaths: result.artifacts.map(a => a.path),
-      artifactUrl: result.artifacts.length > 0 ? `/artifacts/${original.versionId}/${original.versionNumber}` : undefined,
+      artifactUrl:
+        result.artifacts.length > 0
+          ? `/artifacts/${original.versionId}/${original.versionNumber}`
+          : undefined,
     });
   } catch (err: unknown) {
     updateBuildRecord(rebuild.id, {
@@ -252,12 +257,14 @@ router.get('/:id/output', validateIdParam(), (req: Request, res: Response) => {
   if (!record) {
     return res.status(404).json(error(404, 'Build record not found'));
   }
-  res.json(success({
-    output: record.output || '',
-    errorOutput: record.errorOutput || '',
-    exitCode: record.exitCode,
-    duration: record.duration,
-  }));
+  res.json(
+    success({
+      output: record.output || '',
+      errorOutput: record.errorOutput || '',
+      exitCode: record.exitCode,
+      duration: record.duration,
+    })
+  );
 });
 
 // GET /api/v1/builds/stats/:versionId — Build statistics for a version
@@ -273,7 +280,11 @@ router.post('/:id/rollback', validateIdParam(), (req: Request, res: Response) =>
     return res.status(404).json(error(404, 'Build record not found'));
   }
 
-  const { target, targetType = 'commit', createBranch = false } = req.body as {
+  const {
+    target,
+    targetType = 'commit',
+    createBranch = false,
+  } = req.body as {
     target?: string;
     targetType?: 'tag' | 'branch' | 'commit';
     createBranch?: boolean;
@@ -315,12 +326,14 @@ router.post('/:id/rollback', validateIdParam(), (req: Request, res: Response) =>
     rollbackFromCommit: previousRef,
   });
 
-  res.json(success({
-    ...result,
-    buildId: record.id,
-    buildNumber: record.buildNumber,
-    rollbackCount: (record.rollbackCount || 0) + 1,
-  }));
+  res.json(
+    success({
+      ...result,
+      buildId: record.id,
+      buildNumber: record.buildNumber,
+      rollbackCount: (record.rollbackCount || 0) + 1,
+    })
+  );
 });
 
 // GET /api/v1/builds/:id/package — Get package info for a build
@@ -331,7 +344,9 @@ router.get('/:id/package', validateIdParam(), (req: Request, res: Response) => {
   }
 
   const { format = 'zip' } = req.query as { format?: string };
-  const safeFormat = ['zip', 'tar.gz', 'tar'].includes(format) ? format as 'zip' | 'tar.gz' | 'tar' : 'zip';
+  const safeFormat = ['zip', 'tar.gz', 'tar'].includes(format)
+    ? (format as 'zip' | 'tar.gz' | 'tar')
+    : 'zip';
 
   const info = getPackageInfo(record.versionId, record.buildNumber, safeFormat);
   res.json(success(info));
@@ -353,7 +368,9 @@ router.post('/:id/package', validateIdParam(), async (req: Request, res: Respons
   }
 
   const { format = 'zip' } = req.body as { format?: string };
-  const safeFormat = ['zip', 'tar.gz', 'tar'].includes(format) ? format as 'zip' | 'tar.gz' | 'tar' : 'zip';
+  const safeFormat = ['zip', 'tar.gz', 'tar'].includes(format)
+    ? (format as 'zip' | 'tar.gz' | 'tar')
+    : 'zip';
 
   const projectPath = getVersionProjectPath(record.versionId, record.projectPath);
 
@@ -384,11 +401,13 @@ router.post('/:id/package', validateIdParam(), async (req: Request, res: Respons
     packageCreatedAt: new Date().toISOString(),
   });
 
-  res.json(success({
-    ...result,
-    cached: false,
-    packageUrl: result.packageUrl,
-  }));
+  res.json(
+    success({
+      ...result,
+      cached: false,
+      packageUrl: result.packageUrl,
+    })
+  );
 });
 
 // GET /api/v1/builds/:id/package/download — Download the package file
@@ -399,20 +418,26 @@ router.get('/:id/package/download', validateIdParam(), (req: Request, res: Respo
   }
 
   const { format = 'zip' } = req.query as { format?: string };
-  const safeFormat = ['zip', 'tar.gz', 'tar'].includes(format) ? format as 'zip' | 'tar.gz' | 'tar' : 'zip';
+  const safeFormat = ['zip', 'tar.gz', 'tar'].includes(format)
+    ? (format as 'zip' | 'tar.gz' | 'tar')
+    : 'zip';
 
   const packagePath = getPackageFilePath(record.versionId, record.buildNumber, safeFormat);
-  const fs = require('fs');
 
   if (!fs.existsSync(packagePath)) {
-    return res.status(404).json(error(404, 'Package not found. Please create it first via POST /builds/:id/package'));
+    return res
+      .status(404)
+      .json(error(404, 'Package not found. Please create it first via POST /builds/:id/package'));
   }
 
   const stats = fs.statSync(packagePath);
   const fileName = `build-${record.buildNumber}.${safeFormat === 'tar.gz' ? 'tar.gz' : safeFormat}`;
-  const mimeType = safeFormat === 'zip' ? 'application/zip'
-    : safeFormat === 'tar.gz' ? 'application/gzip'
-    : 'application/x-tar';
+  const mimeType =
+    safeFormat === 'zip'
+      ? 'application/zip'
+      : safeFormat === 'tar.gz'
+        ? 'application/gzip'
+        : 'application/x-tar';
 
   res.setHeader('Content-Type', mimeType);
   res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
@@ -430,10 +455,94 @@ router.delete('/:id/package', validateIdParam(), (req: Request, res: Response) =
   }
 
   const { format = 'zip' } = req.query as { format?: string };
-  const safeFormat = ['zip', 'tar.gz', 'tar'].includes(format) ? format as 'zip' | 'tar.gz' | 'tar' : 'zip';
+  const safeFormat = ['zip', 'tar.gz', 'tar'].includes(format)
+    ? (format as 'zip' | 'tar.gz' | 'tar')
+    : 'zip';
 
   const deleted = deletePackage(record.versionId, record.buildNumber, safeFormat);
   res.json(success({ deleted }));
+});
+
+// GET /api/v1/builds/:id/logs/stream — SSE real-time build log streaming
+router.get('/:id/logs/stream', validateIdParam(), (req: Request, res: Response) => {
+  const record = getBuildRecord(req.params.id);
+  if (!record) {
+    res.status(404).json(error(404, 'Build record not found'));
+    return;
+  }
+
+  // If build is already complete, stream existing logs
+  if (record.status === 'success' || record.status === 'failed') {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+
+    // Send existing output as SSE events
+    const sendLog = (type: string, content: string) => {
+      res.write(
+        `data: ${JSON.stringify({ type, content, timestamp: new Date().toISOString() })}\n\n`
+      );
+    };
+
+    if (record.output) {
+      record.output.split('\n').forEach(line => {
+        if (line.trim()) sendLog('stdout', line);
+      });
+    }
+    if (record.errorOutput) {
+      record.errorOutput.split('\n').forEach(line => {
+        if (line.trim()) sendLog('stderr', line);
+      });
+    }
+
+    res.write(
+      `data: ${JSON.stringify({ type: 'complete', content: `Build ${record.status}`, exitCode: record.exitCode })}\n\n`
+    );
+    res.end();
+    return;
+  }
+
+  // For ongoing builds, use the streaming service
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  const buildId = req.params.id;
+  const projectPath = getVersionProjectPath(record.versionId, record.projectPath);
+
+  // Set up event handlers
+  const onLog = (log: { type: string; content: string; timestamp: string }) => {
+    res.write(`data: ${JSON.stringify(log)}\n\n`);
+  };
+
+  const onComplete = (result: { success: boolean; exitCode: number }) => {
+    res.write(`data: ${JSON.stringify({ type: 'complete', ...result })}\n\n`);
+    res.end();
+    streamingBuildService.off('log', onLog);
+    streamingBuildService.off('complete', onComplete);
+  };
+
+  streamingBuildService.on('log', onLog);
+  streamingBuildService.on('complete', onComplete);
+
+  req.on('close', () => {
+    streamingBuildService.cancelBuild(buildId);
+    streamingBuildService.off('log', onLog);
+    streamingBuildService.off('complete', onComplete);
+  });
+
+  // Start streaming build if not already running
+  if (!streamingBuildService.getActiveBuilds().includes(buildId)) {
+    streamingBuildService.buildWithStream(buildId, projectPath, {
+      buildCommand: record.buildCommand || undefined,
+    });
+  }
 });
 
 // GET /api/v1/builds/:id/logs — Get build logs (iter-21)
@@ -448,13 +557,15 @@ router.get('/:id/logs', validateIdParam(), (req: Request, res: Response) => {
 
   // Parse output into log entries
   const logs: Array<{ timestamp: string; level: 'info' | 'warn' | 'error'; message: string }> = [];
-  
+
   if (record.output) {
     const lines = record.output.split('\n');
-    lines.forEach((line, index) => {
+    lines.forEach(line => {
       if (!line.trim()) return;
       // Try to parse timestamp and level from common log formats
-      const match = line.match(/^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})\s*(\w+)?\s*[:\-]?\s*(.+)$/);
+      const match = line.match(
+        /^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})\s*(\w+)?\s*[:\-]?\s*(.+)$/
+      );
       if (match) {
         const level = (match[2] || 'info').toLowerCase() as 'info' | 'warn' | 'error';
         logs.push({
@@ -465,8 +576,11 @@ router.get('/:id/logs', validateIdParam(), (req: Request, res: Response) => {
       } else {
         logs.push({
           timestamp: record.startedAt || new Date().toISOString(),
-          level: line.toLowerCase().includes('error') ? 'error' : 
-                 line.toLowerCase().includes('warn') ? 'warn' : 'info',
+          level: line.toLowerCase().includes('error')
+            ? 'error'
+            : line.toLowerCase().includes('warn')
+              ? 'warn'
+              : 'info',
           message: line,
         });
       }
@@ -476,7 +590,7 @@ router.get('/:id/logs', validateIdParam(), (req: Request, res: Response) => {
   // Add error output as error level logs
   if (record.errorOutput) {
     const errorLines = record.errorOutput.split('\n');
-    errorLines.forEach((line) => {
+    errorLines.forEach(line => {
       if (!line.trim()) return;
       logs.push({
         timestamp: record.completedAt || new Date().toISOString(),
@@ -506,13 +620,15 @@ router.get('/:id/logs', validateIdParam(), (req: Request, res: Response) => {
     res.end();
   } else {
     // Normal JSON response
-    res.json(success({
-      buildId: record.id,
-      versionId: record.versionId,
-      status: record.status,
-      logs,
-      total: logs.length,
-    }));
+    res.json(
+      success({
+        buildId: record.id,
+        versionId: record.versionId,
+        status: record.status,
+        logs,
+        total: logs.length,
+      })
+    );
   }
 });
 
