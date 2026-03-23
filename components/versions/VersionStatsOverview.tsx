@@ -1,7 +1,7 @@
 "use client";
 
 import { GitTag } from "@/lib/api/types";
-import { CheckCircle, Archive, Shield, Layers, CheckCircle2, XCircle, Image as ImageIcon, FileText } from "lucide-react";
+import { CheckCircle, Archive, Shield, Layers, CheckCircle2, XCircle, Image as ImageIcon, FileText, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface VersionStatsOverviewProps {
@@ -129,6 +129,12 @@ export function VersionStatsOverview({
   const publishedCount = tags.filter((t) => t.status === "active" || t.status === "protected").length;
   const archivedCount = tags.filter((t) => t.status === "archived").length;
 
+  // Build success rate calculation
+  const successBuilds = tags.filter((t) => t.buildStatus === "success").length;
+  const failedBuilds = tags.filter((t) => t.buildStatus === "failed").length;
+  const totalBuilds = successBuilds + failedBuilds;
+  const successRate = totalBuilds > 0 ? Math.round((successBuilds / totalBuilds) * 100) : 0;
+
   return (
     <div className="flex items-center gap-2 flex-wrap">
       {filterOptions.map((opt) => {
@@ -153,6 +159,28 @@ export function VersionStatsOverview({
           />
         );
       })}
+
+      {/* Build success rate indicator */}
+      {totalBuilds > 0 && (
+        <>
+          {/* Divider */}
+          <div className="w-px h-6 bg-gray-200 mx-1" />
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-semibold ${
+              successRate >= 80
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : successRate >= 50
+                ? "bg-yellow-50 text-yellow-700 border-yellow-200"
+                : "bg-red-50 text-red-700 border-red-200"
+            }`}
+            title={`${successBuilds} 成功 / ${failedBuilds} 失败`}
+          >
+            <TrendingUp className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>成功率</span>
+            <span className="text-base leading-none">{successRate}%</span>
+          </div>
+        </>
+      )}
 
       {/* Divider */}
       <div className="w-px h-6 bg-gray-200 mx-1" />

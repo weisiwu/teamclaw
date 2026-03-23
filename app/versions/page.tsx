@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Plus, Search, Tag, Star, Loader2, ChevronLeft, ChevronRight, LayoutGrid, List, AlertTriangle, RefreshCw, Package } from "lucide-react";
+import { Plus, Search, Tag, Star, Loader2, ChevronLeft, ChevronRight, LayoutGrid, List, AlertTriangle, RefreshCw, Package, TrendingUp, GitCommit, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 
 export default function VersionsPage() {
@@ -60,6 +60,48 @@ export default function VersionsPage() {
           </Button>
         </Link>
       </div>
+
+      {/* Stats Summary Bar */}
+      {!isLoading && !error && total > 0 && (() => {
+        const successBuilds = versions.filter((v) => v.buildStatus === "success").length;
+        const failedBuilds = versions.filter((v) => v.buildStatus === "failed").length;
+        const totalBuilds = successBuilds + failedBuilds;
+        const successRate = totalBuilds > 0 ? Math.round((successBuilds / totalBuilds) * 100) : 0;
+        const avgCommits = versions.length > 0 ? Math.round(versions.reduce((sum, v) => sum + v.commitCount, 0) / versions.length) : 0;
+        return (
+          <div className="page-section mb-4 flex items-center gap-6 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Package className="w-4 h-4 text-blue-500" />
+              <span className="text-sm text-muted-foreground">版本总数</span>
+              <span className="text-sm font-semibold">{total}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-violet-500" />
+              <span className="text-sm text-muted-foreground">构建成功率</span>
+              <span className={`text-sm font-semibold ${successRate >= 80 ? "text-green-600" : successRate >= 50 ? "text-yellow-600" : "text-red-600"}`}>
+                {totalBuilds > 0 ? `${successRate}%` : "—"}
+              </span>
+              {totalBuilds > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  ({successBuilds}成功/{failedBuilds}失败)
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <GitCommit className="w-4 h-4 text-orange-500" />
+              <span className="text-sm text-muted-foreground">平均提交</span>
+              <span className="text-sm font-semibold">{avgCommits} 次</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-green-500" />
+              <span className="text-sm text-muted-foreground">已发布</span>
+              <span className="text-sm font-semibold">
+                {versions.filter((v) => v.status === "published").length}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Filters */}
       <div className="page-section mb-6 flex flex-wrap items-center gap-4">
