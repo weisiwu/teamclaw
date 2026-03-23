@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { GitCompare, GitBranch, X, Loader2, ArrowRight, FileDiff, Plus, Minus, RotateCcw } from "lucide-react";
+import { GitCompare, GitBranch, X, Loader2, ArrowRight, FileDiff, Plus, Minus, RotateCcw, AlertCircle } from "lucide-react";
 
 interface Branch {
   id: string;
@@ -30,16 +30,6 @@ interface DiffItem {
   newValue: string;
 }
 
-// 模拟分支对比数据
-const mockCompareData = (): DiffItem[] => {
-  return [
-    { type: "modified", field: "版本数", oldValue: "12", newValue: "15" },
-    { type: "added", field: "最新版本", oldValue: "-", newValue: "v2.1.0" },
-    { type: "modified", field: "最后更新", oldValue: "2026-03-10", newValue: "2026-03-18" },
-    { type: "removed", field: "废弃版本", oldValue: "v1.0.0", newValue: "-" },
-  ];
-};
-
 export function BranchCompareDialog({
   branches,
   isOpen,
@@ -49,24 +39,72 @@ export function BranchCompareDialog({
   const [targetBranch, setTargetBranch] = useState("");
   const [isComparing, setIsComparing] = useState(false);
   const [diffResult, setDiffResult] = useState<DiffItem[] | null>(null);
+  const [compareError, setCompareError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleCompare = () => {
+  const handleCompare = async () => {
     if (!sourceBranch || !targetBranch) return;
     setIsComparing(true);
-    
-    // 模拟API调用
-    setTimeout(() => {
-      setDiffResult(mockCompareData());
+    setCompareError(null);
+
+    try {
+      const params = new URLSearchParams({
+        source: sourceBranch,
+        target: targetBranch,
+      });
+      const res = await fetch(`/api/v1/branches/compare?${params}`);
+      const json = await res.json();
+
+      if (!res.ok || (json.code !== 200 && json.code !== 0)) {
+        throw new Error(json.message || '对比失败');
+      }
+
+      // Transform API response to DiffItem format
+      const data = json.data;
+      const items: DiffItem[] = [];
+
+      if (data.versionCount) {
+        items.push({
+          type: data.versionCount.source > data.versionCount.target ? 'removed' : data.versionCount.source < data.versionCount.target ? 'added' : 'modified',
+          field: '版本数',
+          oldValue: String(data.versionCount.source),
+          newValue: String(data.versionCount.target),
+        });
+      }
+      if (data.latestVersion) {
+        items.push({
+          type: 'added',
+          field: '最新版本',
+          oldValue: '-',
+          newValue: data.latestVersion.target || data.latestVersion.source || '-',
+        });
+      }
+      if (data.lastUpdated) {
+        items.push({
+          type: 'modified',
+          field: '最后更新',
+          oldValue: data.lastUpdated.source || '-',
+          newValue: data.lastUpdated.target || '-',
+        });
+      }
+
+      setDiffResult(items.length > 0 ? items : [
+        { type: 'modified', field: '对比结果', oldValue: '无差异', newValue: '无差异' }
+      ]);
+    } catch (err) {
+      console.error('[BranchCompareDialog] Compare failed:', err);
+      setCompareError(err instanceof Error ? err.message : '对比失败，请稍后重试');
+    } finally {
       setIsComparing(false);
-    }, 800);
+    }
   };
 
   const handleReset = () => {
     setSourceBranch("");
     setTargetBranch("");
     setDiffResult(null);
+    setCompareError(null);
   };
 
   return (
@@ -113,11 +151,11 @@ export function BranchCompareDialog({
                   ))}
                 </select>
               </div>
-              
+
               <div className="pt-6">
-                <ArrowRight className="w-5 h-5 text-gray-400 dark:text-gray-500 dark:text-gray-400" />
+                <ArrowRight className="w-5 h-5 text-gray-400 dark:text-gray-400" />
               </div>
-              
+
               <div className="flex-1">
                 <label className="text-sm font-medium mb-2 block">目标分支</label>
                 <select
@@ -134,6 +172,13 @@ export function BranchCompareDialog({
                 </select>
               </div>
             </div>
+
+            {compareError && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-red-50 dark:bg-red-900/20 rounded-lg text-sm text-red-600 dark:text-red-400 mb-4">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <span>{compareError}</span>
+              </div>
+            )}
 
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={handleReset}>
@@ -157,7 +202,7 @@ export function BranchCompareDialog({
                 )}
               </Button>
             </div>
-            
+
             {sourceBranch === targetBranch && sourceBranch && (
               <p className="text-sm text-red-500 mt-2 text-center">请选择不同的分支进行对比</p>
             )}
@@ -181,7 +226,7 @@ export function BranchCompareDialog({
                 <div key={index} className="border rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-medium">{item.field}</span>
-                    <Badge 
+                    <Badge
                       variant={item.type === "added" ? "success" : item.type === "removed" ? "error" : "warning"}
                       className="text-xs"
                     >
@@ -192,13 +237,13 @@ export function BranchCompareDialog({
                     </Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="bg-red-50 p-2 rounded">
+                    <div className="bg-red-50 dark:bg-red-900/20 p-2 rounded">
                       <div className="text-xs text-red-500 mb-1">源分支</div>
-                      <div className="text-red-700">{item.oldValue}</div>
+                      <div className="text-red-700 dark:text-red-400">{item.oldValue}</div>
                     </div>
-                    <div className="bg-green-50 p-2 rounded">
+                    <div className="bg-green-50 dark:bg-green-900/20 p-2 rounded">
                       <div className="text-xs text-green-500 mb-1">目标分支</div>
-                      <div className="text-green-700">{item.newValue}</div>
+                      <div className="text-green-700 dark:text-green-400">{item.newValue}</div>
                     </div>
                   </div>
                 </div>

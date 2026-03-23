@@ -84,7 +84,6 @@ export function BuildTriggerDialog({
     setCurrentBuild(buildJob);
     setStep("building");
 
-    // 调用 API 触发构建（目前是 mock）
     try {
       const res = await fetch("/api/v1/builds", {
         method: "POST",
@@ -102,7 +101,6 @@ export function BuildTriggerDialog({
       }
     } catch (e) {
       console.error("Build trigger API error:", e);
-      // 即使 API 失败，也继续模拟构建过程
     }
   };
 

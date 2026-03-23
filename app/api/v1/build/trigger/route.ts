@@ -18,7 +18,7 @@ export { optionsResponse as OPTIONS };
 
 /**
  * POST /api/v1/build/trigger
- * 触发构建任务 — 需要 admin 或 vice_admin 权限
+ * 触发构建任务 — 代理到 Express 后端
  */
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
@@ -56,23 +56,32 @@ export async function POST(request: NextRequest) {
     ? buildId
     : `build-${Date.now().toString(36)}`;
 
-  // Currently a mock implementation
-  console.log(`[Build Trigger][${requestId}][user:${authResult.id}] buildId=${generatedBuildId}, version=${versionName}, env=${env}`);
-
-  return jsonSuccess({
-    buildId: generatedBuildId,
-    versionId,
-    versionName,
-    env,
-    status: "building",
-    startedAt: new Date().toISOString(),
-    ciUrl: null,
-  }, requestId);
+  // Proxy to Express backend
+  const backendUrl = process.env.EXPRESS_BACKEND_URL || 'http://localhost:3001';
+  try {
+    const backendRes = await fetch(`${backendUrl}/api/v1/builds`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Request-ID': requestId,
+        'Cookie': request.headers.get('cookie') || '',
+      },
+      body: JSON.stringify({ versionId, versionName, env, buildId: generatedBuildId }),
+    });
+    const data = await backendRes.json();
+    if (backendRes.ok && (data.code === 200 || data.code === 0)) {
+      return jsonSuccess(data.data, requestId);
+    }
+    return jsonError(data.message || 'Backend build trigger failed', backendRes.status, requestId);
+  } catch (err) {
+    console.error('[POST /api/v1/build/trigger] Backend error:', err);
+    return jsonError('触发构建失败，请稍后重试', 500, requestId);
+  }
 }
 
 /**
  * GET /api/v1/build/trigger
- * 获取构建状态（预留）— requires auth
+ * 获取构建状态 — 代理到 Express 后端
  */
 export async function GET(request: NextRequest) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
@@ -92,11 +101,22 @@ export async function GET(request: NextRequest) {
     return jsonError("Invalid buildId format", 400, requestId);
   }
 
-  // mock: always return building
-  return jsonSuccess({
-    buildId,
-    status: "building",
-    progress: 50,
-    requestedAt: new Date().toISOString(),
-  }, requestId);
+  // Proxy to Express backend
+  const backendUrl = process.env.EXPRESS_BACKEND_URL || 'http://localhost:3001';
+  try {
+    const backendRes = await fetch(`${backendUrl}/api/v1/builds?buildId=${encodeURIComponent(buildId)}`, {
+      headers: {
+        'X-Request-ID': requestId,
+        'Cookie': request.headers.get('cookie') || '',
+      },
+    });
+    const data = await backendRes.json();
+    if (backendRes.ok && (data.code === 200 || data.code === 0)) {
+      return jsonSuccess(data.data, requestId);
+    }
+    return jsonError(data.message || 'Failed to get build status', backendRes.status, requestId);
+  } catch (err) {
+    console.error('[GET /api/v1/build/trigger] Backend error:', err);
+    return jsonError('获取构建状态失败', 500, requestId);
+  }
 }

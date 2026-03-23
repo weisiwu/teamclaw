@@ -21,52 +21,6 @@ export interface MessageItem {
   channelName?: string;
 }
 
-// Mock 消息数据（当飞书 API 未配置时使用）
-const mockMessages: MessageItem[] = [
-  {
-    id: "msg-001",
-    content: "完成了任务管理模块的开发，新增筛选、排序功能",
-    senderName: "张三",
-    timestamp: "2026-01-12T10:00:00Z",
-    channelName: "开发组",
-  },
-  {
-    id: "msg-002",
-    content: "修复了登录页面的样式问题，优化了响应式布局",
-    senderName: "李四",
-    timestamp: "2026-01-13T14:30:00Z",
-    channelName: "前端组",
-  },
-  {
-    id: "msg-003",
-    content: "新增 Cron 定时任务管理界面，支持配置多个定时任务",
-    senderName: "王五",
-    timestamp: "2026-02-15T09:00:00Z",
-    channelName: "后端组",
-  },
-  {
-    id: "msg-004",
-    content: "完成了 Token 统计功能的开发，新增趋势图表",
-    senderName: "赵六",
-    timestamp: "2026-02-28T11:00:00Z",
-    channelName: "数据组",
-  },
-  {
-    id: "msg-005",
-    content: "优化了页面加载性能，首屏加载时间减少 30%",
-    senderName: "钱七",
-    timestamp: "2026-03-05T16:00:00Z",
-    channelName: "性能组",
-  },
-  {
-    id: "msg-006",
-    content: "新增成员管理功能，支持角色权限配置",
-    senderName: "孙八",
-    timestamp: "2026-03-10T10:30:00Z",
-    channelName: "权限组",
-  },
-];
-
 interface ChatInfo {
   chatId: string;
   name: string;
@@ -93,7 +47,7 @@ export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }:
   const [hasMore, setHasMore] = useState(false);
   const [pageToken, setPageToken] = useState<string | undefined>(undefined);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [isUsingMock, setIsUsingMock] = useState(false);
+  const [notConfigured, setNotConfigured] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
   // Load chat list when dialog opens
@@ -108,17 +62,18 @@ export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }:
 
         if (data.code === 0 && data.data?.configured) {
           setChats(data.data.chats || []);
+          setNotConfigured(false);
           if (data.data.chats?.length > 0 && !selectedChatId) {
             setSelectedChatId(data.data.chats[0].chatId);
           }
         } else {
-          // API not configured, use mock
+          // API not configured
           setChats([]);
-          setIsUsingMock(true);
+          setNotConfigured(true);
         }
       } catch (err) {
         console.error('[MessageSelector] Failed to load chats:', err);
-        setIsUsingMock(true);
+        setNotConfigured(true);
       } finally {
         setLoadingChats(false);
       }
@@ -129,13 +84,7 @@ export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }:
 
   // Load messages when chat is selected or dialog opens
   const loadMessages = useCallback(async (chatId: string, token?: string, append = false) => {
-    if (!chatId && !isUsingMock) return;
-
-    if (isUsingMock) {
-      setMessages(mockMessages);
-      setHasMore(false);
-      return;
-    }
+    if (!chatId || notConfigured) return;
 
     if (token) {
       setLoadingMore(true);
@@ -161,10 +110,8 @@ export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }:
       }
 
       if (!data.data?.configured) {
-        // API not configured, fall back to mock
-        setIsUsingMock(true);
-        setMessages(mockMessages);
-        setHasMore(false);
+        // API not configured
+        setNotConfigured(true);
         return;
       }
 
@@ -192,29 +139,24 @@ export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }:
     } catch (err) {
       console.error('[MessageSelector] Failed to load messages:', err);
       setError(err instanceof Error ? err.message : '获取消息失败');
-      // Fall back to mock on error
-      setIsUsingMock(true);
-      setMessages(mockMessages);
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [isUsingMock]);
+  }, [notConfigured]);
 
   // Load messages when chat changes
   useEffect(() => {
-    if (selectedChatId && open) {
+    if (selectedChatId && open && !notConfigured) {
       setMessages([]);
       setPageToken(undefined);
       setHasMore(false);
       loadMessages(selectedChatId);
-    } else if (isUsingMock) {
-      setMessages(mockMessages);
     }
-  }, [selectedChatId, open, loadMessages, isUsingMock]);
+  }, [selectedChatId, open, loadMessages, notConfigured]);
 
   const handleLoadMore = () => {
-    if (pageToken && selectedChatId && !isUsingMock) {
+    if (pageToken && selectedChatId && !notConfigured) {
       loadMessages(selectedChatId, pageToken, true);
     }
   };
@@ -258,7 +200,7 @@ export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }:
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent title="选择消息" className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
         {/* Chat selector */}
-        {!isUsingMock && (
+        {!notConfigured && (
           <div className="flex items-center gap-2 pb-3 border-b">
             <span className="text-sm text-muted-foreground whitespace-nowrap">群聊:</span>
             {loadingChats ? (
@@ -286,23 +228,26 @@ export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }:
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder={isUsingMock ? "搜索消息内容、发送者..." : "搜索消息内容或发送者..."}
+            placeholder={notConfigured ? "搜索消息内容、发送者..." : "搜索消息内容或发送者..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
           />
         </div>
 
-        {/* Mock mode notice */}
-        {isUsingMock && (
-          <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg text-xs text-muted-foreground">
-            <AlertCircle className="h-3 w-3 flex-shrink-0" />
-            <span>使用模拟数据。配置 FEISHU_APP_ID 和 FEISHU_APP_SECRET 环境变量以启用飞书消息。</span>
+        {/* Not configured notice */}
+        {notConfigured && (
+          <div className="flex items-center gap-2 px-3 py-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-sm text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <div>
+              <span className="font-medium">飞书未配置</span>
+              <p className="text-xs mt-0.5 opacity-80">请在 .env 中设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET 环境变量，然后重启服务。</p>
+            </div>
           </div>
         )}
 
         {/* Error state */}
-        {error && !isUsingMock && (
+        {error && !notConfigured && (
           <div className="flex items-center gap-2 px-3 py-2 bg-destructive/10 rounded-lg text-xs text-destructive">
             <AlertCircle className="h-3 w-3 flex-shrink-0" />
             <span>{error}</span>
@@ -323,6 +268,11 @@ export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }:
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : notConfigured ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <MessageSquare className="mx-auto h-8 w-8 mb-2 opacity-50" />
+              <p>飞书 API 未配置，无法获取消息</p>
             </div>
           ) : filteredMessages.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -425,7 +375,7 @@ export function MessageSelector({ open, onOpenChange, onSelect, defaultChatId }:
           <Button variant="outline" onClick={handleClose}>
             取消
           </Button>
-          <Button onClick={handleSelect} disabled={selectedMessages.length === 0}>
+          <Button onClick={handleSelect} disabled={selectedMessages.length === 0 || notConfigured}>
             {selectedMessages.length > 0 ? `批量关联（${selectedMessages.length}条）` : '确认选择'}
           </Button>
         </DialogFooter>

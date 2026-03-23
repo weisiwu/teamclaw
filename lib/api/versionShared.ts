@@ -13,7 +13,7 @@ export async function apiFetch<T>(url: string, options?: RequestInit): Promise<T
   throw new Error(json.message || `API error: ${res.status}`);
 }
 
-// 模拟延迟
+// 模拟延迟（仅用于本地开发，真实 API 不使用）
 export const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // 自动递增版本号（纯函数，无状态依赖）

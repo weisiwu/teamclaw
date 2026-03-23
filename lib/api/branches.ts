@@ -9,40 +9,20 @@ import type {
 
 const API_BASE = '/api/v1';
 
-// ========== 延迟模拟 ==========
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// ========== Mock 数据（备用） ==========
-const mockBranches: GitBranch[] = [
-  {
-    id: 'branch_1',
-    name: 'main',
-    isMain: true,
-    isRemote: false,
-    isProtected: true,
-    createdAt: '2026-01-01T08:00:00Z',
-    lastCommitAt: '2026-03-15T14:30:00Z',
-    commitMessage: 'feat: add version management',
-    author: 'system',
-    versionId: 'v1',
-  },
-];
-
 // ========== API Functions ==========
 
 // 获取所有分支
 export async function getBranchesAPI(): Promise<BranchListResponse> {
-  try {
-    const res = await fetch(`${API_BASE}/branches`);
-    const json = await res.json();
-    if (json.code === 200 || json.code === 0) {
-      return json.data;
-    }
-  } catch {
-    // Fall through to mock
+  const res = await fetch(`${API_BASE}/branches`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `获取分支列表失败 (${res.status})`);
   }
-  await delay(50);
-  return { data: [...mockBranches], total: mockBranches.length };
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) {
+    return json.data;
+  }
+  throw new Error(json.message || '获取分支列表失败');
 }
 
 // 获取分支统计
@@ -52,47 +32,44 @@ export async function getBranchStatsAPI(): Promise<{
   protected: number;
   remote: number;
 }> {
-  try {
-    const res = await fetch(`${API_BASE}/branches/stats`);
-    const json = await res.json();
-    if (json.code === 200 || json.code === 0) {
-      return json.data;
-    }
-  } catch {
-    // Fall through
+  const res = await fetch(`${API_BASE}/branches/stats`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `获取分支统计失败 (${res.status})`);
   }
-  await delay(100);
-  return { total: mockBranches.length, main: 1, protected: 1, remote: 0 };
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) {
+    return json.data;
+  }
+  throw new Error(json.message || '获取分支统计失败');
 }
 
 // 获取主分支
 export async function getMainBranchAPI(): Promise<GitBranch | null> {
-  try {
-    const res = await fetch(`${API_BASE}/branches/main`);
-    const json = await res.json();
-    if ((json.code === 200 || json.code === 0) && json.data) {
-      return json.data;
-    }
-  } catch {
-    // Fall through
+  const res = await fetch(`${API_BASE}/branches/main`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `获取主分支失败 (${res.status})`);
   }
-  await delay(100);
-  return mockBranches.find(b => b.isMain) || null;
+  const json = await res.json();
+  if ((json.code === 200 || json.code === 0) && json.data) {
+    return json.data;
+  }
+  return null;
 }
 
 // 获取单个分支
 export async function getBranchAPI(id: string): Promise<GitBranch | null> {
-  try {
-    const res = await fetch(`${API_BASE}/branches/${encodeURIComponent(id)}`);
-    const json = await res.json();
-    if ((json.code === 200 || json.code === 0) && json.data) {
-      return json.data;
-    }
-  } catch {
-    // Fall through
+  const res = await fetch(`${API_BASE}/branches/${encodeURIComponent(id)}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `获取分支详情失败 (${res.status})`);
   }
-  await delay(100);
-  return mockBranches.find(b => b.id === id || b.name === id) || null;
+  const json = await res.json();
+  if ((json.code === 200 || json.code === 0) && json.data) {
+    return json.data;
+  }
+  return null;
 }
 
 // 创建分支
@@ -104,7 +81,7 @@ export async function createBranchAPI(request: CreateBranchRequest): Promise<Git
   });
   const json = await res.json();
   if (!res.ok || (json.code !== 200 && json.code !== 0 && json.code !== 201)) {
-    throw new Error(json.message || 'Failed to create branch');
+    throw new Error(json.message || '创建分支失败');
   }
   return json.data;
 }
@@ -116,7 +93,7 @@ export async function deleteBranchAPI(id: string): Promise<boolean> {
   });
   const json = await res.json();
   if (!res.ok || (json.code !== 200 && json.code !== 0)) {
-    throw new Error(json.message || 'Failed to delete branch');
+    throw new Error(json.message || '删除分支失败');
   }
   return true;
 }
@@ -128,7 +105,7 @@ export async function setMainBranchAPI(id: string): Promise<GitBranch> {
   });
   const json = await res.json();
   if (!res.ok || (json.code !== 200 && json.code !== 0)) {
-    throw new Error(json.message || 'Failed to set main branch');
+    throw new Error(json.message || '设置主分支失败');
   }
   return json.data;
 }
@@ -142,7 +119,7 @@ export async function renameBranchAPI(request: RenameBranchRequest): Promise<Git
   });
   const json = await res.json();
   if (!res.ok || (json.code !== 200 && json.code !== 0)) {
-    throw new Error(json.message || 'Failed to rename branch');
+    throw new Error(json.message || '重命名分支失败');
   }
   return json.data;
 }
@@ -156,7 +133,7 @@ export async function setBranchProtectionAPI(request: BranchProtectionRequest): 
   });
   const json = await res.json();
   if (!res.ok || (json.code !== 200 && json.code !== 0)) {
-    throw new Error(json.message || 'Failed to set branch protection');
+    throw new Error(json.message || '设置分支保护失败');
   }
   return json.data;
 }
@@ -168,7 +145,7 @@ export async function checkoutBranchAPI(id: string): Promise<GitBranch> {
   });
   const json = await res.json();
   if (!res.ok || (json.code !== 200 && json.code !== 0)) {
-    throw new Error(json.message || 'Failed to checkout branch');
+    throw new Error(json.message || '检出分支失败');
   }
   return json.data;
 }

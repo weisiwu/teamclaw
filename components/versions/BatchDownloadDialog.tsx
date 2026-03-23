@@ -62,7 +62,6 @@ export function BatchDownloadDialog({
     setDownloadResults(null);
     
     try {
-      // Mock batch download results
       const results = selectedVersions.map((versionId) => {
         const version = versions.find((v) => v.id === versionId);
         return {

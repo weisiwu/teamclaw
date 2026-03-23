@@ -23,40 +23,9 @@ const LAYER_COSTS: Record<TokenLayer, number> = {
 // In-memory storage
 const tokenUsage: TokenUsageRecord[] = [];
 
-// Generate fake historical data on first load
-function initFakeData() {
-  if (tokenUsage.length > 0) return;
-  const now = new Date();
-  for (let i = 30; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
-    const dateStr = date.toISOString().split('T')[0];
-
-    const layers: TokenLayer[] = ['light', 'medium', 'strong'];
-
-    layers.forEach((layer) => {
-      const baseTokens = layer === 'light' ? 8000 : layer === 'medium' ? 15000 : 6000;
-      const variance = Math.random() * 0.4 + 0.8;
-      const tokens = Math.floor(baseTokens * variance);
-      const cost = (tokens / 1_000_000) * LAYER_COSTS[layer];
-
-      tokenUsage.push({
-        id: `tu_${dateStr}_${layer}_${Math.random().toString(36).slice(2, 6)}`,
-        layer,
-        inputTokens: Math.floor(tokens * 0.4),
-        outputTokens: Math.floor(tokens * 0.6),
-        totalTokens: tokens,
-        cost: parseFloat(cost.toFixed(6)),
-        timestamp: date.toISOString(),
-        model: layer === 'light' ? 'deepseek-chat' : layer === 'medium' ? 'gpt-4o-mini' : 'claude-sonnet',
-      });
-    });
-  }
-}
-
 export class TokenStatsService {
   constructor() {
-    initFakeData();
+    // Token stats are now recorded from real LLM calls only
   }
 
   /**

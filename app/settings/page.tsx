@@ -4,18 +4,26 @@ import { useTheme } from 'next-themes';
 import { Monitor, Moon, Sun, Users, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { TeamSettings } from '@/components/team/TeamSettings';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { Role } from '@/lib/auth/roles';
 
 export default function Settings() {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // 当前用户角色（mock，真实场景从 auth context 获取）
-  const [currentUserRole] = useState<Role>('admin');
+  // Map auth role to TeamSettings Role type (auth uses 'admin'|'vice_admin'|'member')
+  const roleMap: Record<string, Role> = {
+    admin: 'admin',
+    vice_admin: 'owner',
+    member: 'developer',
+    viewer: 'viewer',
+  };
+  const currentUserRole = roleMap[user?.role as string] ?? 'viewer';
   const [activeSection, setActiveSection] = useState<'appearance' | 'team'>('appearance');
 
   if (!mounted) {
