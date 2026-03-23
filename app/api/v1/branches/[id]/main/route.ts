@@ -1,27 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
-import { generateRequestId, jsonSuccess, jsonError, optionsResponse, requireAuth } from "@/lib/api-shared";
-import { getBranch, getAllBranchesRaw } from "@/lib/branch-store";
+import { NextRequest } from "next/server";
+import { proxyNextToBackend } from "@/lib/api-proxy";
+import { optionsResponse } from "@/lib/api-shared";
 
-// PUT /api/v1/branches/[id]/main — requires auth
+type RouteParams = { params: Promise<{ id: string }> };
+
+/**
+ * PUT /api/v1/branches/[id]/main
+ * Proxy to Express backend: PUT /api/v1/branches/:id/main
+ */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: RouteParams
 ) {
-  const requestId = generateRequestId();
-  const authUser = requireAuth(request, requestId);
-  if (authUser instanceof NextResponse) return authUser;
-
-  try {
-    const { id } = await params;
-    const branch = getBranch(id);
-    if (!branch) return jsonError("分支不存在", 404, requestId);
-    const all = getAllBranchesRaw();
-    for (const b of all) { b.isMain = false; }
-    branch.isMain = true;
-    return jsonSuccess(branch, requestId);
-  } catch (err) {
-    return jsonError(`设置主分支失败: ${err instanceof Error ? err.message : String(err)}`, 500, requestId);
-  }
+  const { id } = await params;
+  return proxyNextToBackend(request, `/api/v1/branches/${id}/main`, { method: "PUT" });
 }
 
 export { optionsResponse as OPTIONS };

@@ -1,23 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
-import { generateRequestId, jsonSuccess, optionsResponse, requireAuth } from "@/lib/api-shared";
-import { getAllBranches } from "@/lib/branch-store";
+import { NextRequest } from "next/server";
+import { proxyNextToBackend } from "@/lib/api-proxy";
+import { optionsResponse } from "@/lib/api-shared";
 
-// GET /api/v1/branches/stats — 获取分支统计（需要身份认证）
+/**
+ * GET /api/v1/branches/stats
+ * Proxy to Express backend: GET /api/v1/branches/stats
+ */
 export async function GET(request: NextRequest) {
-  const requestId = generateRequestId();
-
-  // Auth: require authentication
-  const authResult = requireAuth(request, requestId);
-  if (authResult instanceof NextResponse) return authResult;
-
-  const all = getAllBranches();
-  const stats = {
-    total: all.length,
-    main: all.filter(b => b.isMain).length,
-    protected: all.filter(b => b.isProtected).length,
-    remote: all.filter(b => b.isRemote).length,
-  };
-  return jsonSuccess(stats, requestId);
+  return proxyNextToBackend(request, "/api/v1/branches/stats");
 }
 
 export { optionsResponse as OPTIONS };

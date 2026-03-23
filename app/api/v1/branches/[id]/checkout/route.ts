@@ -1,22 +1,19 @@
 import { NextRequest } from "next/server";
-import { generateRequestId, jsonSuccess, jsonError, optionsResponse } from "@/lib/api-shared";
-import { getBranch, updateBranch } from "@/lib/branch-store";
+import { proxyNextToBackend } from "@/lib/api-proxy";
+import { optionsResponse } from "@/lib/api-shared";
 
-// PUT /api/v1/branches/[id]/checkout — 检出（切换到）分支
+type RouteParams = { params: Promise<{ id: string }> };
+
+/**
+ * PUT /api/v1/branches/[id]/checkout
+ * Proxy to Express backend: PUT /api/v1/branches/:id/checkout
+ */
 export async function PUT(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  request: NextRequest,
+  { params }: RouteParams
 ) {
-  const requestId = generateRequestId();
-  try {
-    const { id } = await params;
-    const branch = getBranch(id);
-    if (!branch) return jsonError("分支不存在", 404, requestId);
-    updateBranch(id, { lastCommitAt: new Date().toISOString() });
-    return jsonSuccess({ ...branch, lastCommitAt: new Date().toISOString() }, requestId);
-  } catch (err) {
-    return jsonError(`检出分支失败: ${err instanceof Error ? err.message : String(err)}`, 500, requestId);
-  }
+  const { id } = await params;
+  return proxyNextToBackend(request, `/api/v1/branches/${id}/checkout`, { method: "PUT" });
 }
 
 export { optionsResponse as OPTIONS };

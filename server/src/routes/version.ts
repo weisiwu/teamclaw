@@ -25,6 +25,7 @@ import versionScreenshotRouter from './versionScreenshot.js';
 import versionSummaryRouter from './versionSummary.js';
 import versionBumpRouter from './versionBump.js';
 import versionSettingsRouter from './versionSettings.js';
+import versionChangeStatsRouter from './versionChangeStats.js';
 
 const router = Router();
 
@@ -306,5 +307,6 @@ router.use('/', versionScreenshotRouter);
 router.use('/', versionSummaryRouter);
 router.use('/', versionBumpRouter);
 router.use('/', versionSettingsRouter);
+router.use('/change-stats', versionChangeStatsRouter);
 
 export default router;
