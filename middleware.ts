@@ -31,7 +31,7 @@ const SECURITY_HEADERS = {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https:",
     "font-src 'self'",
-    "connect-src 'self'",
+    "connect-src 'self' http://localhost:9700",
     "frame-ancestors 'self'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -55,9 +55,37 @@ const SECURITY_HEADERS = {
   ].join(", "),
 } as const;
 
+// Routes that don't require authentication
+const PUBLIC_ROUTES = [
+  '/login',
+  '/api',
+  '/_next',
+  '/favicon.ico',
+  '/public',
+];
+
+function isPublicRoute(pathname: string): boolean {
+  return PUBLIC_ROUTES.some((route) => pathname.startsWith(route));
+}
+
 export function middleware(request: NextRequest): NextResponse {
-  // Only apply headers to response; pass through without modification
-  const response = NextResponse.next();
+  const { pathname } = request.nextUrl;
+
+  // Redirect to /login if accessing a protected route without a valid token
+  if (!isPublicRoute(pathname)) {
+    const authHeader = request.headers.get("authorization");
+    const hasToken = authHeader?.startsWith('Bearer ');
+    if (!hasToken) {
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('redirect', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+  }
+
+  // Apply security headers
+  const response = isPublicRoute(pathname)
+    ? NextResponse.next()
+    : NextResponse.next();
 
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
     response.headers.set(key, value);

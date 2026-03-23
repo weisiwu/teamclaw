@@ -29,6 +29,7 @@ import branchRouter from './routes/branch.js';
 import llmRouter from './routes/llm.js';
 import downloadRouter from './routes/download.js';
 import feishuRouter from './routes/feishu.js';
+import authRouter from './routes/auth.js';
 import { getArtifactsRootDir } from './services/artifactStore.js';
 import './services/taskInit.js'; // 初始化任务机制钩子
 import { registerAutoBumpHook } from './hooks/autoBumpOnTaskDone.js';
@@ -149,7 +150,8 @@ app.use('/packages', express.static(ARCHIVE_ROOT, {
 app.use('/api/v1', healthRouter);
 app.use('/api/v1/projects', projectRouter);
 app.use('/api/v1/users', userRouter);
-app.use('/api/v1/auth', userRouter); // 权限校验也用 user router (共享 /check 端点)
+app.use('/api/v1/auth', authRouter); // login, refresh 端点
+app.use('/api/v1/auth', userRouter); // /check 端点
 app.use('/api/v1/versions', versionRouter);
 app.use('/api/v1/agents', agentRouter);
 app.use('/api/v1/messages', messageRouter);

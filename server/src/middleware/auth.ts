@@ -1,11 +1,12 @@
 /**
  * 权限检查中间件
- * 从请求中提取用户身份并验证权限
+ * 从 JWT Token 中提取用户身份并验证权限
  */
 
 import { Request, Response, NextFunction } from "express";
 import { checkPermission, PermissionCheckResult } from "../services/permissionService";
 import { AgentName, Role } from "../constants/roles";
+import { verifyToken, JwtPayload } from "../utils/jwt.js";
 
 // 扩展 Express Request
 export interface AuthRequest extends Request {
@@ -19,15 +20,45 @@ export interface AuthRequest extends Request {
 type AuthRequestHandler = (req: AuthRequest, res: Response, next: NextFunction) => void;
 
 /**
- * 从 header 中提取用户身份
- * Header 格式: X-User-Id: user_001
- *             X-User-Role: admin
+ * 从 Authorization header 中提取并验证 JWT Token
+ * Header 格式: Authorization: Bearer <token>
+ */
+function extractUserFromToken(req: AuthRequest): JwtPayload | null {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return null;
+
+  try {
+    const token = authHeader.slice(7);
+    return verifyToken(token);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 兼容旧方式（仅开发环境）
+ * Header 格式: X-User-Id: user_001, X-User-Role: admin
  */
 function extractUserFromHeaders(req: AuthRequest): { id?: string; role?: Role } {
   const userId = req.headers["x-user-id"] as string | undefined;
   const role = req.headers["x-user-role"] as Role | undefined;
-
   return { id: userId, role };
+}
+
+/**
+ * 提取用户身份：优先从 Token，兼容旧 header（仅开发环境）
+ */
+function extractUser(req: AuthRequest): { id: string; role: Role } | null {
+  // 优先从 Token 解析
+  const fromToken = extractUserFromToken(req);
+  if (fromToken) return { id: fromToken.userId, role: fromToken.role as Role };
+
+  // 兼容旧方式（开发环境限定）
+  if (process.env.NODE_ENV !== 'development') return null;
+  const { id, role } = extractUserFromHeaders(req);
+  if (id && role) return { id, role };
+
+  return null;
 }
 
 /**
@@ -36,21 +67,21 @@ function extractUserFromHeaders(req: AuthRequest): { id?: string; role?: Role } 
  */
 export function requirePermission(agent: AgentName): AuthRequestHandler {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
-    const { id, role } = extractUserFromHeaders(req);
+    const user = extractUser(req);
 
-    // 未携带身份信息
-    if (!id || !role) {
+    // 未携带有效身份信息
+    if (!user) {
       res.status(401).json({
         code: 401,
         data: null,
-        message: "未提供身份信息，请检查 X-User-Id 和 X-User-Role 请求头",
+        message: "未提供有效身份信息，请通过登录获取 Token",
       });
       return;
     }
 
     // 权限检查
-    const result = checkPermission(role, agent);
-    req.user = { id, role };
+    const result = checkPermission(user.role, agent);
+    req.user = { id: user.id, role: user.role };
     req.permission = result;
 
     if (!result.allowed) {
@@ -71,33 +102,32 @@ export function requirePermission(agent: AgentName): AuthRequestHandler {
  * 不强制要求身份信息，但如果有则附加到 req.user
  */
 export function optionalAuth(req: AuthRequest, _res: Response, next: NextFunction): void {
-  const { id, role } = extractUserFromHeaders(req);
-  if (id && role) {
-    req.user = { id, role };
-    req.permission = checkPermission(role, "pm"); // 默认检查 pm 权限
+  const user = extractUser(req);
+  if (user) {
+    req.user = { id: user.id, role: user.role };
+    req.permission = checkPermission(user.role, "pm"); // 默认检查 pm 权限
   }
   next();
 }
 
 /**
  * 身份认证中间件
- * 要求请求必须携带有效的用户身份信息（X-User-Id + X-User-Role）
+ * 要求请求必须携带有效的用户身份信息
  * 不检查特定 Agent 权限，只验证身份有效
  */
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void {
-  const userId = req.headers["x-user-id"] as string | undefined;
-  const role = req.headers["x-user-role"] as string | undefined;
+  const user = extractUser(req);
 
-  if (!userId || !role) {
+  if (!user) {
     res.status(401).json({
       code: 401,
       data: null,
-      message: "未提供身份信息，请检查 X-User-Id 和 X-User-Role 请求头",
+      message: "未提供有效身份信息，请通过登录获取 Token",
     });
     return;
   }
 
-  req.user = { id: userId, role: role as Role };
+  req.user = { id: user.id, role: user.role };
   next();
 }
 
@@ -105,18 +135,18 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
  * 检查管理员权限
  */
 export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction): void {
-  const { role } = extractUserFromHeaders(req);
+  const user = extractUser(req);
 
-  if (!role) {
+  if (!user) {
     res.status(401).json({
       code: 401,
       data: null,
-      message: "未提供身份信息",
+      message: "未提供有效身份信息",
     });
     return;
   }
 
-  if (role !== "admin" && role !== "vice_admin") {
+  if (user.role !== "admin" && user.role !== "vice_admin") {
     res.status(403).json({
       code: 403,
       data: null,
@@ -125,6 +155,6 @@ export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction
     return;
   }
 
-  req.user = { id: req.headers["x-user-id"] as string, role };
+  req.user = { id: user.id, role: user.role };
   next();
 }

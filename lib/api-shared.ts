@@ -117,8 +117,18 @@ export function rateLimitResponse(
  * Prefers authenticated user ID; falls back to IP address.
  */
 export function getRateLimitIdentifier(request: NextRequest): string {
-  const userId = request.headers.get("x-user-id");
-  if (userId) return `user:${userId}`;
+  // Try to extract userId from Bearer token
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    try {
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        if (payload.userId) return `user:${payload.userId}`;
+      }
+    } catch { /* fall through */ }
+  }
 
   // Vercel provides real IP in these headers
   const forwarded = request.headers.get("x-forwarded-for");
@@ -135,15 +145,59 @@ export interface AuthUser {
 }
 
 /**
- * Extract auth user from request headers.
- * Header format: X-User-Id: user_001, X-User-Role: admin
+ * Extract auth user from Authorization Bearer token (server-side decoding).
+ * For Next.js API routes — decodes JWT payload from the Authorization header.
+ * Full signature verification is done by the backend server; this decodes
+ * the payload for user context in frontend API routes.
  */
 export function extractAuthUser(request: NextRequest): AuthUser | null {
-  const userId = request.headers.get("x-user-id");
-  const role = request.headers.get("x-user-role") as Role | null;
-  if (!userId || !role) return null;
+  const authHeader = request.headers.get("authorization");
+  if (!authHeader?.startsWith('Bearer ')) return null;
+
+  const token = authHeader.slice(7);
+  // Decode JWT payload (base64) — full signature verification done by backend
+  let payload: { userId: string; role: string } | null = null;
+  try {
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      const p = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (p.userId && p.role) payload = p;
+    }
+  } catch { /* invalid token */ }
+
+  if (!payload) return null;
+  const { role } = payload;
   if (role !== "admin" && role !== "vice_admin" && role !== "member") return null;
-  return { id: userId, role };
+  return { id: payload.userId, role };
+}
+
+/**
+ * Get auth headers for server-side API calls (using Bearer token from localStorage).
+ */
+export function getAuthHeaders(): Record<string, string> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('teamclaw_token') : null;
+  if (token) {
+    return { 'Authorization': `Bearer ${token}` };
+  }
+  return {};
+}
+
+/**
+ * apiFetch wraps fetch to automatically include Bearer token and handle 401.
+ */
+export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const headers = { ...getAuthHeaders(), ...options.headers };
+  const res = await fetch(url, { ...options, headers });
+
+  // 401 时自动跳转登录
+  if (res.status === 401 && typeof window !== 'undefined') {
+    localStorage.removeItem('teamclaw_token');
+    localStorage.removeItem('teamclaw_user_id');
+    localStorage.removeItem('teamclaw_user_role');
+    window.location.href = '/login';
+  }
+
+  return res;
 }
 
 /**
@@ -154,7 +208,7 @@ export function requireAuth(request: NextRequest, requestId?: string): AuthUser 
   const user = extractAuthUser(request);
   if (!user) {
     return jsonAppError(
-      "未提供身份信息，请检查 X-User-Id 和 X-User-Role 请求头",
+      "未提供有效身份信息，请通过登录获取 Token",
       AppErrorCode.ERR_UNAUTHORIZED,
       401,
       requestId
