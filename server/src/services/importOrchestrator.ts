@@ -22,6 +22,7 @@ import { CodeArchitecture } from './codeAnalyzer.js';
 import { ParsedDocument } from './docParser.js';
 import { ConvertedDoc } from './docConverter.js';
 import { BuildMechanism } from './buildDetector.js';
+import { ContextCompressor, TextChunk } from './contextCompressor.js';
 
 export type ImportStepName =
   | 'clone'
@@ -30,6 +31,7 @@ export type ImportStepName =
   | 'parseDocs'
   | 'analyzeCode'
   | 'detectBuild'
+  | 'compress'
   | 'buildSummary'
   | 'generateFeatureMap'
   | 'generateSkills'
@@ -45,6 +47,7 @@ export const ALL_STEPS: ImportStepName[] = [
   'parseDocs',
   'analyzeCode',
   'detectBuild',
+  'compress',
   'buildSummary',
   'generateFeatureMap',
   'generateSkills',
@@ -61,6 +64,7 @@ const STEP_NAMES: Record<ImportStepName, string> = {
   parseDocs: '解析文档',
   analyzeCode: '分析代码结构',
   detectBuild: '检测打包机制',
+  compress: '上下文压缩',
   buildSummary: '生成项目摘要',
   generateFeatureMap: '生成功能定位',
   generateSkills: '生成 Skills',
@@ -87,6 +91,7 @@ export interface ImportContext {
   skills?: import('./skillGenerator.js').GeneratedSkill[];
   convertedDocs?: ConvertedDoc[];
   vectorCollectionName?: string;
+  chunks?: TextChunk[];
 }
 
 type StepExecutor = (ctx: ImportContext) => Promise<void>;
@@ -107,7 +112,7 @@ async function loadFromDb(): Promise<void> {
         status: row.status as ImportTask['status'],
         currentStep: row.current_step,
         totalSteps: row.total_steps ?? ALL_STEPS.length,
-        steps: row.steps as ImportStep[] ?? [],
+        steps: (row.steps as ImportStep[]) ?? [],
         startedAt: new Date(row.started_at).toISOString(),
         completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : undefined,
       };
@@ -126,73 +131,98 @@ loadFromDb().catch(err => console.warn('[importOrchestrator] Startup load error:
  * Step executors — each binds a real service call
  */
 const STEP_EXECUTORS: Record<ImportStepName, StepExecutor> = {
-  clone: async (ctx) => {
+  clone: async ctx => {
     const projectPath = await cloneOrCopyProject(ctx.source, ctx.url, ctx.localPath);
     ctx.projectPath = projectPath;
     ctx.projectName = ctx.projectName || projectPath.split('/').pop() || 'unknown';
   },
 
-  scan: async (ctx) => {
+  scan: async ctx => {
     if (!ctx.projectPath) throw new Error('projectPath not set');
     ctx.tree = await scanDirectory(ctx.projectPath);
   },
 
-  detectTech: async (ctx) => {
+  detectTech: async ctx => {
     if (!ctx.projectPath) throw new Error('projectPath not set');
     ctx.techStack = await detectTechStack(ctx.projectPath);
   },
 
-  parseDocs: async (ctx) => {
+  parseDocs: async ctx => {
     if (!ctx.projectPath) throw new Error('projectPath not set');
     ctx.documents = await parseDirectory(ctx.projectPath);
   },
 
-  analyzeCode: async (ctx) => {
+  analyzeCode: async ctx => {
     if (!ctx.projectPath) throw new Error('projectPath not set');
     ctx.architecture = await analyzeCodeArchitecture(ctx.projectPath);
   },
 
-  detectBuild: async (ctx) => {
+  detectBuild: async ctx => {
     if (!ctx.projectPath) throw new Error('projectPath not set');
     ctx.buildMechanisms = await detectBuildMechanism(ctx.projectPath);
   },
 
-  buildSummary: async (ctx) => {
+  compress: async ctx => {
+    if (!ctx.projectPath || !ctx.documents) throw new Error('projectPath or documents not set');
+    const compressor = new ContextCompressor(512, 50);
+    const docPaths = (ctx.documents ?? []).map(d => d.source);
+    ctx.chunks = await compressor.chunkProject(ctx.projectPath, docPaths);
+    console.log(
+      `[importOrchestrator] Compressed ${docPaths.length} docs into ${ctx.chunks.length} chunks`
+    );
+  },
+
+  buildSummary: async ctx => {
     if (!ctx.projectPath || !ctx.techStack) throw new Error('projectPath or techStack not set');
     ctx.summary = await generateSummary(ctx.projectPath, ctx.techStack);
   },
 
-  generateFeatureMap: async (ctx) => {
+  generateFeatureMap: async ctx => {
     if (!ctx.projectPath || !ctx.projectId || !ctx.projectName) {
       throw new Error('projectPath/projectId/projectName not set');
     }
     ctx.featureMap = await generateFeatureMap(ctx.projectPath, ctx.projectId, ctx.projectName);
   },
 
-  generateSkills: async (ctx) => {
+  generateSkills: async ctx => {
     if (!ctx.projectName || !ctx.projectPath || !ctx.architecture) {
       throw new Error('projectName/projectPath/architecture not set');
     }
     ctx.skills = await generateSkills(ctx.projectName, ctx.projectPath, ctx.architecture);
   },
 
-  convertDocs: async (ctx) => {
+  convertDocs: async ctx => {
     if (!ctx.projectPath || !ctx.projectId) throw new Error('projectPath or projectId not set');
     ctx.convertedDocs = await convertDocuments(ctx.projectPath, ctx.projectId);
   },
 
-  vectorize: async (ctx) => {
-    if (!ctx.projectId || !ctx.documents) throw new Error('projectId or documents not set');
+  vectorize: async ctx => {
+    if (!ctx.projectId) throw new Error('projectId not set');
     const collectionName = `proj_${ctx.projectId}`;
     ctx.vectorCollectionName = collectionName;
-    const texts = (ctx.documents ?? []).map(d => d.content);
-    const ids = (ctx.documents ?? []).map((_, i) => `doc_${i}`);
-    if (texts.length > 0) {
+
+    // Use compressed chunks if available, otherwise fall back to raw documents
+    if (ctx.chunks && ctx.chunks.length > 0) {
+      const texts = ctx.chunks.map(c => c.content);
+      const ids = ctx.chunks.map(c => c.id);
+      const metas = ctx.chunks.map(c => ({
+        source: c.source,
+        startLine: c.startLine,
+        endLine: c.endLine,
+        tokenCount: c.tokenCount,
+      }));
+      await addDocuments(collectionName, texts, ids, metas);
+      console.log(
+        `[importOrchestrator] Vectorized ${ctx.chunks.length} chunks into ${collectionName}`
+      );
+    } else if (ctx.documents && ctx.documents.length > 0) {
+      const texts = ctx.documents.map(d => d.content);
+      const ids = ctx.documents.map((_, i) => `doc_${i}`);
       await addDocuments(collectionName, texts, ids);
     }
   },
 
-  gitHistory: async (ctx) => {
+  gitHistory: async ctx => {
     if (!ctx.projectPath) throw new Error('projectPath not set');
     // Just run analysis; result is not stored in context but side-effects to DB
     analyzeGitHistory(ctx.projectPath);
@@ -234,15 +264,17 @@ export function createImportTask(projectId: string): ImportTask {
   };
 
   tasks.set(taskId, task);
-  importRepo.upsert({
-    taskId: task.taskId,
-    projectId: task.projectId,
-    status: task.status,
-    currentStep: task.currentStep,
-    totalSteps: task.totalSteps,
-    steps: task.steps,
-    startedAt: task.startedAt,
-  }).catch(err => console.error('[importOrchestrator] Failed to persist createImportTask:', err));
+  importRepo
+    .upsert({
+      taskId: task.taskId,
+      projectId: task.projectId,
+      status: task.status,
+      currentStep: task.currentStep,
+      totalSteps: task.totalSteps,
+      steps: task.steps,
+      startedAt: task.startedAt,
+    })
+    .catch(err => console.error('[importOrchestrator] Failed to persist createImportTask:', err));
 
   return task;
 }
@@ -263,13 +295,15 @@ export function executeStep(taskId: string, stepIndex: number): ImportTask {
   });
 
   tasks.set(taskId, task);
-  importRepo.upsert({
-    taskId: task.taskId,
-    projectId: task.projectId,
-    status: task.status,
-    currentStep: task.currentStep,
-    steps: task.steps,
-  }).catch(err => console.error('[importOrchestrator] Failed to persist executeStep:', err));
+  importRepo
+    .upsert({
+      taskId: task.taskId,
+      projectId: task.projectId,
+      status: task.status,
+      currentStep: task.currentStep,
+      steps: task.steps,
+    })
+    .catch(err => console.error('[importOrchestrator] Failed to persist executeStep:', err));
 
   return task;
 }
@@ -277,7 +311,12 @@ export function executeStep(taskId: string, stepIndex: number): ImportTask {
 /**
  * Mark a step as complete (or error)
  */
-export function completeStep(taskId: string, stepIndex: number, errorMsg?: string, isWarning = false): ImportTask {
+export function completeStep(
+  taskId: string,
+  stepIndex: number,
+  errorMsg?: string,
+  isWarning = false
+): ImportTask {
   const task = tasks.get(taskId);
   if (!task) throw new Error(`Task ${taskId} not found`);
 
@@ -302,15 +341,17 @@ export function completeStep(taskId: string, stepIndex: number, errorMsg?: strin
   }
 
   tasks.set(taskId, task);
-  importRepo.upsert({
-    taskId: task.taskId,
-    projectId: task.projectId,
-    status: task.status,
-    currentStep: task.currentStep,
-    steps: task.steps,
-    completedAt: task.completedAt,
-    errorMessage: errorMsg && !isWarning ? errorMsg : undefined,
-  }).catch(err => console.error('[importOrchestrator] Failed to persist completeStep:', err));
+  importRepo
+    .upsert({
+      taskId: task.taskId,
+      projectId: task.projectId,
+      status: task.status,
+      currentStep: task.currentStep,
+      steps: task.steps,
+      completedAt: task.completedAt,
+      errorMessage: errorMsg && !isWarning ? errorMsg : undefined,
+    })
+    .catch(err => console.error('[importOrchestrator] Failed to persist completeStep:', err));
 
   return task;
 }
@@ -333,7 +374,10 @@ export async function runAllSteps(taskId: string, ctx: ImportContext): Promise<v
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const isNonCritical = NON_CRITICAL_STEPS.has(stepName);
-      console.error(`[importOrchestrator] Step ${stepName} failed: ${message}`, isNonCritical ? '(non-critical, continuing)' : '(critical, stopping)');
+      console.error(
+        `[importOrchestrator] Step ${stepName} failed: ${message}`,
+        isNonCritical ? '(non-critical, continuing)' : '(critical, stopping)'
+      );
       completeStep(taskId, i, message, isNonCritical);
       if (!isNonCritical) {
         break;

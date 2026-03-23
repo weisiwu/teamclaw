@@ -26,7 +26,9 @@ export default function ImportPage() {
   const router = useRouter();
 
   // 轮询导入状态
-  const [taskData, setTaskData] = useState<Awaited<ReturnType<typeof fetchImportStatus>>['task'] | null>(null);
+  const [taskData, setTaskData] = useState<
+    Awaited<ReturnType<typeof fetchImportStatus>>['task'] | null
+  >(null);
   // 轮询 interval ref，避免内存泄漏
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -97,7 +99,7 @@ export default function ImportPage() {
     }
     // 开始轮询
     pollIntervalRef.current = setInterval(() => {
-      pollStatus(taskId).then((data) => {
+      pollStatus(taskId).then(data => {
         if (data?.task.status === 'done' || data?.task.status === 'error') {
           if (pollIntervalRef.current) {
             clearInterval(pollIntervalRef.current);
@@ -135,8 +137,8 @@ export default function ImportPage() {
                 currentStep > i + 1
                   ? 'bg-green-500 text-white'
                   : currentStep === i + 1
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-500'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 text-gray-500'
               }`}
             >
               {currentStep > i + 1 ? '✓' : i + 1}
@@ -145,9 +147,7 @@ export default function ImportPage() {
           </div>
           {i < 3 && (
             <div
-              className={`w-12 h-0.5 mx-1 ${
-                currentStep > i + 1 ? 'bg-green-400' : 'bg-gray-200'
-              }`}
+              className={`w-12 h-0.5 mx-1 ${currentStep > i + 1 ? 'bg-green-400' : 'bg-gray-200'}`}
             />
           )}
         </div>
@@ -187,30 +187,24 @@ export default function ImportPage() {
         {source === 'url' ? (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Git 仓库地址
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Git 仓库地址</label>
               <input
                 type="url"
                 value={url}
-                onChange={(e) => setUrl(e.target.value)}
+                onChange={e => setUrl(e.target.value)}
                 placeholder="https://github.com/weisiwu/teamclaw"
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               />
-              <p className="mt-2 text-xs text-gray-500">
-                支持 GitHub、GitLab 等任意 Git 仓库
-              </p>
+              <p className="mt-2 text-xs text-gray-500">支持 GitHub、GitLab 等任意 Git 仓库</p>
             </div>
           </div>
         ) : (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              本地项目路径
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">本地项目路径</label>
             <input
               type="text"
               value={localPath}
-              onChange={(e) => setLocalPath(e.target.value)}
+              onChange={e => setLocalPath(e.target.value)}
               placeholder="/Users/xxx/Desktop/my-project"
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
             />
@@ -218,13 +212,11 @@ export default function ImportPage() {
         )}
 
         <div className="mt-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            项目名称（可选）
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">项目名称（可选）</label>
           <input
             type="text"
             value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
+            onChange={e => setProjectName(e.target.value)}
             placeholder="留空则自动从仓库名提取"
             className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
           />
@@ -260,7 +252,9 @@ export default function ImportPage() {
             <input
               type="text"
               value={projectInfo?.name || ''}
-              onChange={(e) => setProjectInfo(prev => prev ? { ...prev, name: e.target.value } : null)}
+              onChange={e =>
+                setProjectInfo(prev => (prev ? { ...prev, name: e.target.value } : null))
+              }
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
             />
           </div>
@@ -269,7 +263,10 @@ export default function ImportPage() {
             <div className="flex flex-wrap gap-2 px-4 py-2 border border-gray-200 rounded-lg bg-gray-50 min-h-[42px]">
               {projectInfo?.techStack && projectInfo.techStack.length > 0 ? (
                 projectInfo.techStack.map(s => (
-                  <span key={s} className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                  <span
+                    key={s}
+                    className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full"
+                  >
                     {s}
                   </span>
                 ))
@@ -314,20 +311,25 @@ export default function ImportPage() {
   // 步骤3: 解析进度
   const renderStep3 = () => {
     // 从 taskData 获取后端返回的步骤列表（taskData 初始化时 steps 为空则显示加载占位）
-    const steps = taskData?.steps ?? (taskData ? [] : [
-      { step: 1, name: 'clone', status: 'pending' },
-      { step: 2, name: 'scan', status: 'pending' },
-      { step: 3, name: 'detectTech', status: 'pending' },
-      { step: 4, name: 'parseDocs', status: 'pending' },
-      { step: 5, name: 'analyzeCode', status: 'pending' },
-      { step: 6, name: 'detectBuild', status: 'pending' },
-      { step: 7, name: 'buildSummary', status: 'pending' },
-      { step: 8, name: 'generateFeatureMap', status: 'pending' },
-      { step: 9, name: 'generateSkills', status: 'pending' },
-      { step: 10, name: 'convertDocs', status: 'pending' },
-      { step: 11, name: 'vectorize', status: 'pending' },
-      { step: 12, name: 'gitHistory', status: 'pending' },
-    ]);
+    const steps =
+      taskData?.steps ??
+      (taskData
+        ? []
+        : [
+            { step: 1, name: 'clone', status: 'pending' },
+            { step: 2, name: 'scan', status: 'pending' },
+            { step: 3, name: 'detectTech', status: 'pending' },
+            { step: 4, name: 'parseDocs', status: 'pending' },
+            { step: 5, name: 'analyzeCode', status: 'pending' },
+            { step: 6, name: 'detectBuild', status: 'pending' },
+            { step: 7, name: 'compress', status: 'pending' },
+            { step: 8, name: 'buildSummary', status: 'pending' },
+            { step: 9, name: 'generateFeatureMap', status: 'pending' },
+            { step: 10, name: 'generateSkills', status: 'pending' },
+            { step: 11, name: 'convertDocs', status: 'pending' },
+            { step: 12, name: 'vectorize', status: 'pending' },
+            { step: 13, name: 'gitHistory', status: 'pending' },
+          ]);
 
     const STEP_LABELS: Record<string, string> = {
       clone: '📥 定位/克隆项目',
@@ -336,6 +338,7 @@ export default function ImportPage() {
       parseDocs: '📄 解析文档',
       analyzeCode: '🏗️ 分析代码架构',
       detectBuild: '⚙️ 检测打包机制',
+      compress: '🗜️ 上下文压缩',
       buildSummary: '📝 生成项目摘要',
       generateFeatureMap: '🗺️ 生成功能定位',
       generateSkills: '🛠️ 生成 Skills',
@@ -353,33 +356,46 @@ export default function ImportPage() {
             {taskData?.status === 'processing' ? '解析中，请稍候...' : '准备中...'}
           </div>
           <div className="space-y-3">
-            {steps.filter(s => s.name !== 'done').map((step) => (
-              <div key={step.step}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className={`text-sm font-medium ${
-                    step.status === 'done' ? 'text-green-600' :
-                    step.status === 'running' ? 'text-blue-600' : 'text-gray-400'
-                  }`}>
-                    {step.status === 'done' && '✅ '}
-                    {step.status === 'running' && '⏳ '}
-                    {step.status === 'pending' && '⬜ '}
-                    {STEP_LABELS[step.name] || step.name}
-                  </span>
-                  <span className="text-xs text-gray-400">
-                    {step.status === 'done' ? '完成' : step.status === 'running' ? '进行中' : '等待'}
-                  </span>
+            {steps
+              .filter(s => s.name !== 'done')
+              .map(step => (
+                <div key={step.step}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span
+                      className={`text-sm font-medium ${
+                        step.status === 'done'
+                          ? 'text-green-600'
+                          : step.status === 'running'
+                            ? 'text-blue-600'
+                            : 'text-gray-400'
+                      }`}
+                    >
+                      {step.status === 'done' && '✅ '}
+                      {step.status === 'running' && '⏳ '}
+                      {step.status === 'pending' && '⬜ '}
+                      {STEP_LABELS[step.name] || step.name}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {step.status === 'done'
+                        ? '完成'
+                        : step.status === 'running'
+                          ? '进行中'
+                          : '等待'}
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-500 ${
+                        step.status === 'done'
+                          ? 'bg-green-500 w-full'
+                          : step.status === 'running'
+                            ? 'bg-blue-500 w-2/3 animate-pulse'
+                            : 'bg-gray-300 w-0'
+                      }`}
+                    />
+                  </div>
                 </div>
-                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full transition-all duration-500 ${
-                      step.status === 'done' ? 'bg-green-500 w-full' :
-                      step.status === 'running' ? 'bg-blue-500 w-2/3 animate-pulse' :
-                      'bg-gray-300 w-0'
-                    }`}
-                  />
-                </div>
-              </div>
-            ))}
+              ))}
           </div>
         </div>
       </div>
@@ -395,9 +411,7 @@ export default function ImportPage() {
           <span className="text-3xl">✅</span>
         </div>
         <h3 className="text-xl font-semibold text-gray-900 mb-2">项目导入完成！</h3>
-        <p className="text-gray-600 text-sm mb-6">
-          已生成摘要和 Skills，您可以开始使用了
-        </p>
+        <p className="text-gray-600 text-sm mb-6">已生成摘要和 Skills，您可以开始使用了</p>
         <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left max-w-sm mx-auto">
           <h4 className="font-medium text-gray-700 mb-2 text-sm">项目信息</h4>
           <div className="text-sm text-gray-600 space-y-1">

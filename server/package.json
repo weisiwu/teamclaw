@@ -21,6 +21,8 @@
     "jsonwebtoken": "^9.0.3",
     "node-cron": "^3.0.3",
     "pdf-lib": "^1.17.1",
+    "mammoth": "^1.6.0",
+    "pdf-parse": "^1.1.1",
     "pg": "^8.20.0",
     "zod": "^4.3.6"
   },
