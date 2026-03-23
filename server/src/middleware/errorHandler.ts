@@ -20,7 +20,7 @@ export function unifiedErrorHandler(
 
   // 默认错误信息
   let statusCode = 500;
-  let errorCode = ErrorCodes.INTERNAL_ERROR;
+  let errorCode: string = ErrorCodes.INTERNAL_ERROR;
   let message = 'Internal server error';
 
   // 处理 ApiError
