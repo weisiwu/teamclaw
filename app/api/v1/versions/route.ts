@@ -35,7 +35,8 @@ export async function GET(request: NextRequest) {
         v.summary?.toLowerCase().includes(q) ||
         v.commitHash?.toLowerCase().includes(q) ||
         v.title?.toLowerCase().includes(q) ||
-        v.description?.toLowerCase().includes(q)
+        v.description?.toLowerCase().includes(q) ||
+        (v.tags || []).some(tag => tag.toLowerCase().includes(q))
       );
     }
     // Filter by hasScreenshot (iter69): ?hasScreenshot=true returns only versions with screenshots
