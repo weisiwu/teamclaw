@@ -92,6 +92,36 @@ export function resumeSuspendedTask(messageId: string): { success: boolean; erro
 }
 
 /**
+ * 抢占时联动暂停 Agent 执行
+ * 当 admin 消息触发抢占时，暂停当前正在执行的 Agent
+ */
+export async function pauseCurrentAgentOnPreempt(preemptedMessageId: string): Promise<void> {
+  try {
+    const { abortExecution } = await import('./agentExecution.js');
+    const currentProcessing = messageQueueService.getQueueStatus().currentProcessing;
+    if (!currentProcessing) return;
+
+    // 获取当前正在处理的消息对应的任务
+    const preemptedMsg = messageQueueService.getMessage(preemptedMessageId);
+    if (!preemptedMsg) return;
+
+    // 从 agentExecStates 获取当前运行的 agent
+    const { getAgentExecutionState } = await import('./agentExecution.js');
+    const agents = ['main', 'pm', 'coder1', 'coder2', 'reviewer'];
+    for (const agentName of agents) {
+      const state = getAgentExecutionState(agentName);
+      if (state && state.status === 'running') {
+        abortExecution(agentName, 'admin 抢占，任务被暂停');
+        console.log(`[preemptionService] Paused agent ${agentName} due to preemption`);
+      }
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[preemptionService] Failed to pause agent on preemption:', msg);
+  }
+}
+
+/**
  * 获取抢占通知内容
  */
 export function buildPreemptionNotification(

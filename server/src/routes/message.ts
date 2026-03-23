@@ -48,6 +48,7 @@ import { messageRateLimiterService } from '../services/messageRateLimiter.js';
 import { messageCircuitBreakerService } from '../services/messageCircuitBreaker.js';
 import { messageChannelAggregatorService } from '../services/messageChannelAggregator.js';
 import { messageRouterService } from '../services/messageRouter.js';
+import { processMessage } from '../services/messagePipeline.js';
 import {
   Message,
   ReceiveMessageRequest,
@@ -67,48 +68,22 @@ router.post('/', async (req, res) => {
       return res.status(400).json(error(400, '缺少必要字段: content, channel, userId'));
     }
 
-    const role = body.role || 'employee';
-    const { urgency, priority, roleWeight } = enrichMessagePriority(role, body.content);
-
-    const messageData = {
-      channel: body.channel,
-      userId: body.userId,
-      userName: body.userName || '未知用户',
-      role,
-      roleWeight,
-      content: body.content,
-      type: body.type || 'text',
-      urgency,
-      priority,
-      timestamp: body.timestamp || new Date().toISOString(),
-      fileInfo: body.fileInfo,
-    };
-
-    const result = messageQueueService.enqueue(messageData);
+    // 使用 messagePipeline 处理完整流程：入队→@检测→权限→任务→Agent→回复
+    const pipelineResult = await processMessage(body);
 
     // 统计
-    messageStatsService.onEnqueued(result.message);
-    if (result.preempted) messageStatsService.onPreempted();
-    if (result.message.mergedFrom?.length) messageStatsService.onMerged();
-
-    let notification: string | null = null;
-    if (result.preempted && result.preemptedMessageId) {
-      const preemptedMsg = messageQueueService.getMessage(result.preemptedMessageId);
-      if (preemptedMsg) {
-        notification = buildPreemptionNotification(
-          preemptedMsg.userName, preemptedMsg.content.slice(0, 20),
-          result.message.userName, result.message.content.slice(0, 20)
-        );
-      }
+    const msg = messageQueueService.getMessage(pipelineResult.messageId);
+    if (msg) {
+      messageStatsService.onEnqueued(msg);
     }
 
     res.status(201).json(success({
-      messageId: result.message.messageId,
-      priority: result.message.priority,
-      status: result.message.status,
-      preempted: result.preempted,
-      notification,
-      merged: !!result.message.mergedFrom?.length,
+      messageId: pipelineResult.messageId,
+      taskId: pipelineResult.taskId,
+      executionId: pipelineResult.executionId,
+      acknowledged: pipelineResult.acknowledged,
+      success: pipelineResult.success,
+      error: pipelineResult.error,
     }));
   } catch (err) {
     console.error('[messages] POST / error:', err);

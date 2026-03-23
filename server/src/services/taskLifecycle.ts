@@ -8,6 +8,16 @@
 
 import { Task, TaskStatus } from '../models/task.js';
 
+// 注册生命周期钩子（延迟导入避免循环依赖）
+setTimeout(async () => {
+  try {
+    const { registerTaskLifecycleHooks } = await import('./taskLifecycleHooks.js');
+    registerTaskLifecycleHooks(taskLifecycle);
+  } catch (err) {
+    console.error('[taskLifecycle] Failed to register hooks:', err);
+  }
+}, 0);
+
 // 允许的状态流转规则
 const ALLOWED_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   pending:    ['running', 'cancelled'],

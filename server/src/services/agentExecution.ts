@@ -253,9 +253,53 @@ export function updateExecution(
     releaseAgent(ctx.targetAgent);
     agentExecStates.delete(ctx.targetAgent);
     updateLoadScore(ctx.targetAgent, -10);
+
+    // 执行完成回调：触发消息回复
+    onExecutionComplete(ctx).catch((err) => {
+      console.error('[agentExecution] onExecutionComplete error:', err.message);
+    });
   }
 
   return true;
+}
+
+/**
+ * Agent 执行完成回调：向消息通道回复结果
+ */
+async function onExecutionComplete(ctx: ExecutionContext): Promise<void> {
+  try {
+    const { sendReply } = await import('./messageReply.js');
+    const { taskLifecycle } = await import('./taskLifecycle.js');
+
+    // 获取任务信息
+    const task = ctx.taskId ? taskLifecycle.getTask(ctx.taskId) : null;
+
+    // 构建回复内容
+    const replyContent = ctx.status === 'completed'
+      ? `✅ 任务已完成\n\n${ctx.result || '（无结果）'}`
+      : ctx.status === 'failed'
+      ? `❌ 任务执行失败\n\n${ctx.error || '（未知错误）'}`
+      : `⏱️ 任务执行超时\n\n${ctx.error || '（超时）'}`;
+
+    // 从任务上下文中获取 channel 和 userId（如果有）
+    if (task?.contextSnapshot) {
+      try {
+        const snapshot = JSON.parse(task.contextSnapshot);
+        if (snapshot.channel && snapshot.userId) {
+          await sendReply({
+            channel: snapshot.channel,
+            userId: snapshot.userId,
+            content: replyContent,
+          });
+        }
+      } catch {
+        // contextSnapshot 格式不符合，跳过
+      }
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[agentExecution] Reply on completion failed:', msg);
+  }
 }
 
 /**
