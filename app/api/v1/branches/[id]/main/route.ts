@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { generateRequestId, jsonSuccess, jsonError, optionsResponse, requireAuth } from "@/lib/api-shared";
 import { getBranch, getAllBranchesRaw } from "@/lib/branch-store";
 
@@ -8,8 +8,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const requestId = generateRequestId();
-  const authResult = requireAuth(request, requestId);
-  if (authResult instanceof NextResponse) return authResult;
+  const authUser = requireAuth(request, requestId);
+  if (authUser instanceof NextResponse) return authUser;
 
   try {
     const { id } = await params;

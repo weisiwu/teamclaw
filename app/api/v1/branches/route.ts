@@ -1,5 +1,5 @@
-import { NextRequest } from "next/server";
-import { generateRequestId, jsonSuccess, jsonError, optionsResponse, requireAuth, requireElevatedRole } from "@/lib/api-shared";
+import { NextRequest, NextResponse } from "next/server";
+import { generateRequestId, jsonSuccess, jsonError, optionsResponse, requireAuth } from "@/lib/api-shared";
 import { getAllBranches, createBranch } from "@/lib/branch-store";
 
 // GET /api/v1/branches — public (read-only)

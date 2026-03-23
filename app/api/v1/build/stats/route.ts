@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateRequestId, jsonError, jsonSuccess, optionsResponse, requireElevatedRole } from "@/lib/api-shared";
+import { generateRequestId, jsonSuccess, optionsResponse, requireElevatedRole } from "@/lib/api-shared";
 
 /**
  * GET /api/v1/build/stats
