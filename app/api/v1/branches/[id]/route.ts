@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateRequestId, jsonSuccess, jsonError, optionsResponse, requireAuth } from "@/lib/api-shared";
+import { generateRequestId, jsonSuccess, jsonError, optionsResponse, requireAuth, requireAdmin } from "@/lib/api-shared";
 import { getBranch, getBranchByName, updateBranch, deleteBranch } from "@/lib/branch-store";
 
 // GET /api/v1/branches/[id] — public (read-only)
@@ -46,13 +46,13 @@ export async function PUT(
   }
 }
 
-// DELETE /api/v1/branches/[id] — requires auth
+// DELETE /api/v1/branches/[id] — requires admin (destructive operation)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const requestId = generateRequestId();
-  const authResult = requireAuth(request, requestId);
+  const authResult = requireAdmin(request, requestId);
   if (authResult instanceof NextResponse) return authResult;
 
   try {

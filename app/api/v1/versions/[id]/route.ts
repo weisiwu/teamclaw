@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { versionStore, type Version } from "../version-store";
-import { generateRequestId, jsonSuccess, jsonError, optionsResponse, requireAuth } from "@/lib/api-shared";
+import { generateRequestId, jsonSuccess, jsonError, optionsResponse, requireAuth, requireAdmin, requireElevatedRole } from "@/lib/api-shared";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -36,8 +36,8 @@ export async function PUT(
 ) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
 
-  // Auth: require authentication
-  const authResult = requireAuth(request, requestId);
+  // Auth: require elevated role for full version replacement
+  const authResult = requireElevatedRole(request, requestId);
   if (authResult instanceof NextResponse) return authResult;
 
   try {
@@ -74,7 +74,7 @@ export async function PATCH(
 ) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
 
-  // Auth: require authentication
+  // Auth: require authentication for partial updates
   const authResult = requireAuth(request, requestId);
   if (authResult instanceof NextResponse) return authResult;
 
@@ -104,7 +104,7 @@ export async function PATCH(
 
 /**
  * DELETE /api/v1/versions/[id]
- * Delete a version — requires auth
+ * Delete a version — requires admin role (destructive operation)
  */
 export async function DELETE(
   request: NextRequest,
@@ -112,8 +112,8 @@ export async function DELETE(
 ) {
   const requestId = request.headers.get("X-Request-ID") || generateRequestId();
 
-  // Auth: require authentication
-  const authResult = requireAuth(request, requestId);
+  // Auth: require admin for destructive delete operation
+  const authResult = requireAdmin(request, requestId);
   if (authResult instanceof NextResponse) return authResult;
 
   try {
