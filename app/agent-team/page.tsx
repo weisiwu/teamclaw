@@ -1,18 +1,21 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { useAgentList, useTeamOverview } from "@/hooks/useAgents";
-import { AgentCard } from "@/components/agent-team/AgentCard";
-import { HierarchyChart } from "@/components/agent-team/HierarchyChart";
-import { AgentDetailPanel } from "@/components/agent-team/AgentDetailPanel";
-import { RefreshCw, Users } from "lucide-react";
-import { Agent } from "@/lib/api/agents";
-import { AgentTeamSkeleton } from "@/components/ui/projects-skeleton";
+import { useState } from 'react';
+import { useAgentList, useTeamOverview } from '@/hooks/useAgents';
+import { AgentCard } from '@/components/agent-team/AgentCard';
+import { HierarchyChart } from '@/components/agent-team/HierarchyChart';
+import { AgentDetailPanel } from '@/components/agent-team/AgentDetailPanel';
+import { PipelineStatusPanel, PipelineStarter } from '@/components/agent-team/PipelineStatusPanel';
+import { RefreshCw, Users, Zap } from 'lucide-react';
+import { Agent } from '@/lib/api/agents';
+import { AgentTeamSkeleton } from '@/components/ui/projects-skeleton';
 
 export default function AgentTeamPage() {
   const { data: agents, isLoading, error, refetch } = useAgentList();
   const { data: overview } = useTeamOverview();
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [activePipelineId, setActivePipelineId] = useState<string | null>(null);
+  const [showPipelinePanel, setShowPipelinePanel] = useState(false);
 
   if (error) {
     return (
@@ -38,30 +41,58 @@ export default function AgentTeamPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Agent 团队</h1>
             <p className="text-sm text-gray-500">
-              {agents ? `${agents.length} 个 Agent 在线` : "加载中..."}
+              {agents ? `${agents.length} 个 Agent 在线` : '加载中...'}
             </p>
           </div>
         </div>
-        <button
-          onClick={() => refetch()}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          title="刷新"
-        >
-          <RefreshCw className="w-5 h-5 text-gray-500" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowPipelinePanel(p => !p)}
+            className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              showPipelinePanel
+                ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                : 'hover:bg-gray-100 text-gray-600'
+            }`}
+            title="协作流水线"
+          >
+            <Zap className="w-4 h-4" />
+            流水线
+            {activePipelineId && <span className="w-2 h-2 rounded-full bg-blue-500" />}
+          </button>
+          <button
+            onClick={() => refetch()}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            title="刷新"
+          >
+            <RefreshCw className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
         <AgentTeamSkeleton />
       ) : (
         <>
+          {/* Pipeline Panel */}
+          {showPipelinePanel && (
+            <div className="space-y-4">
+              <PipelineStarter
+                onStarted={pipelineId => {
+                  setActivePipelineId(pipelineId);
+                  setShowPipelinePanel(true);
+                }}
+              />
+              <PipelineStatusPanel pipelineId={activePipelineId} />
+            </div>
+          )}
+
           {/* Hierarchy Chart */}
           {overview && (
             <HierarchyChart
               overview={overview}
               selectedAgent={selectedAgent?.name || null}
-              onSelectAgent={(name) => {
-                const a = agents?.find((ag) => ag.name === name);
+              onSelectAgent={name => {
+                const a = agents?.find(ag => ag.name === name);
                 if (a) setSelectedAgent(a);
               }}
             />
@@ -71,7 +102,7 @@ export default function AgentTeamPage() {
           <div>
             <h2 className="text-sm font-semibold text-gray-700 mb-3">团队成员</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-              {agents?.map((agent) => (
+              {agents?.map(agent => (
                 <AgentCard
                   key={agent.name}
                   agent={agent}
@@ -92,8 +123,11 @@ export default function AgentTeamPage() {
                     <span className="font-medium text-gray-700 w-20">{from}</span>
                     <span className="text-gray-400">→</span>
                     <div className="flex gap-1.5">
-                      {toList.map((to) => (
-                        <span key={to} className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs">
+                      {toList.map(to => (
+                        <span
+                          key={to}
+                          className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs"
+                        >
                           {to}
                         </span>
                       ))}
@@ -111,10 +145,7 @@ export default function AgentTeamPage() {
 
       {/* Detail Panel */}
       {selectedAgent && (
-        <AgentDetailPanel
-          agent={selectedAgent}
-          onClose={() => setSelectedAgent(null)}
-        />
+        <AgentDetailPanel agent={selectedAgent} onClose={() => setSelectedAgent(null)} />
       )}
     </div>
   );

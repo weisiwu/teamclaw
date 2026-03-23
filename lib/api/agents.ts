@@ -2,10 +2,10 @@
  * Agent API - 调用真实后端
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9700";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9700';
 
 // ============ 类型定义 ============
-export type AgentStatus = "idle" | "busy" | "error" | "offline";
+export type AgentStatus = 'idle' | 'busy' | 'error' | 'offline';
 export type AgentLevel = 1 | 2 | 3;
 
 export interface Agent {
@@ -38,7 +38,7 @@ export interface DispatchRequest {
   toAgent: string;
   taskId: string;
   taskTitle: string;
-  priority?: "low" | "normal" | "high" | "urgent";
+  priority?: 'low' | 'normal' | 'high' | 'urgent';
   deadline?: string;
   dependencies?: string[];
   description?: string;
@@ -49,20 +49,68 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       ...options?.headers,
     },
   });
   const json = await res.json();
-  if (json.code !== 0) throw new Error(json.message || "API 请求失败");
+  if (json.code !== 0) throw new Error(json.message || 'API 请求失败');
   return json.data as T;
+}
+
+// ============ Pipeline 类型 ============
+export type PipelineStageName = 'confirm' | 'clarify' | 'code' | 'review' | 'notify' | 'complete';
+export type PipelineStatus = 'pending' | 'running' | 'completed' | 'failed' | 'blocked';
+
+export interface PipelineStage {
+  name: PipelineStageName;
+  agent: string;
+  status: PipelineStatus;
+  input?: string;
+  output?: string;
+  startedAt?: string;
+  completedAt?: string;
+  error?: string;
+}
+
+export interface Pipeline {
+  pipelineId: string;
+  taskId: string;
+  originalRequirement: string;
+  stages: PipelineStage[];
+  currentStageIndex: number;
+  status: PipelineStatus;
+  pmSessionId?: string;
+  codeResult?: string;
+  reviewResult?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClarificationQuestion {
+  index: number;
+  question: string;
+  answered: boolean;
+  answer?: string;
+}
+
+export interface PMSession {
+  sessionId: string;
+  taskId: string;
+  originalRequirement: string;
+  questions: ClarificationQuestion[];
+  totalQuestions: number;
+  status: 'active' | 'waiting' | 'completed';
+  requirementDoc?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ============ Agent API ============
 export const agentApi = {
   /** 获取所有 Agent 列表 */
   async getAll(): Promise<Agent[]> {
-    const data = await request<{ list: Agent[]; total: number }>("/api/v1/agents");
+    const data = await request<{ list: Agent[]; total: number }>('/api/v1/agents');
     return data.list;
   },
 
@@ -73,31 +121,76 @@ export const agentApi = {
 
   /** 获取团队编排概览 */
   async getTeamOverview(): Promise<TeamOverview> {
-    return request<TeamOverview>("/api/v1/agents/team");
+    return request<TeamOverview>('/api/v1/agents/team');
   },
 
   /** 更新 Agent 配置 */
-  async updateConfig(name: string, updates: { defaultModel?: string; capabilities?: string[] }): Promise<Agent> {
+  async updateConfig(
+    name: string,
+    updates: { defaultModel?: string; capabilities?: string[] }
+  ): Promise<Agent> {
     return request<Agent>(`/api/v1/agents/${name}/config`, {
-      method: "PUT",
+      method: 'PUT',
       body: JSON.stringify(updates),
     });
   },
 
   /** 获取 Agent 历史会话 */
-  async getSessions(name: string): Promise<{ sessionId: string; updatedAt: string; label: string }[]> {
-    const data = await request<{ list: { sessionId: string; updatedAt: string; label: string }[]; total: number }>(
-      `/api/v1/agents/${name}/sessions`
-    );
+  async getSessions(
+    name: string
+  ): Promise<{ sessionId: string; updatedAt: string; label: string }[]> {
+    const data = await request<{
+      list: { sessionId: string; updatedAt: string; label: string }[];
+      total: number;
+    }>(`/api/v1/agents/${name}/sessions`);
     return data.list;
   },
 
   /** 向指定 Agent 分发任务 */
   async dispatch(req: DispatchRequest): Promise<{ taskId: string; message: string }> {
     return request<{ taskId: string; message: string }>(`/api/v1/agents/${req.toAgent}/dispatch`, {
-      method: "POST",
+      method: 'POST',
       body: JSON.stringify(req),
     });
+  },
+
+  /** 启动协作流水线 */
+  async startPipeline(
+    taskId: string,
+    requirement: string
+  ): Promise<{ pipelineId: string; status: PipelineStatus }> {
+    return request<{ pipelineId: string; status: PipelineStatus }>(
+      '/api/v1/agents/pipeline/start',
+      {
+        method: 'POST',
+        body: JSON.stringify({ taskId, requirement }),
+      }
+    );
+  },
+
+  /** 获取流水线状态 */
+  async getPipeline(pipelineId: string): Promise<Pipeline> {
+    return request<Pipeline>(`/api/v1/agents/pipeline/${pipelineId}`);
+  },
+
+  /** 提交 PM 澄清问题回答 */
+  async submitPMAnswer(
+    pipelineId: string,
+    questionIndex: number,
+    answer: string
+  ): Promise<{ remaining: number; isComplete: boolean }> {
+    return request<{ remaining: number; isComplete: boolean }>(
+      `/api/v1/agents/pipeline/${pipelineId}/answer`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ questionIndex, answer }),
+      }
+    );
+  },
+
+  /** 获取 PM 会话状态 */
+  async getPMSession(pipelineId: string): Promise<PMSession | null> {
+    return request<PMSession | null>(`/api/v1/agents/pipeline/${pipelineId}/pm-session`);
   },
 };
 

@@ -7,32 +7,37 @@
  * POST /api/v1/agents/:name/dispatch - 向指定 Agent 分发任务
  * GET  /api/v1/agents/team         - 获取团队编排概览
  *
- * 执行引擎 (新增):
+ * 执行引擎:
  * POST /api/v1/agents/execute       - 派发执行任务
  * GET  /api/v1/agents/executions    - 获取执行历史
  * GET  /api/v1/agents/executions/:executionId - 获取执行详情
  * POST /api/v1/agents/:name/abort   - 强制终止执行
  *
- * 健康监控 (新增):
+ * 健康监控:
  * GET  /api/v1/agents/health        - 获取团队健康报告
  * POST /api/v1/agents/health/check  - 触发健康检查+自动恢复
  * GET  /api/v1/agents/health/heartbeat/:name - 记录心跳
+ *
+ * 协作流水线 (新增):
+ * POST /api/v1/agents/pipeline/start - 启动完整协作流水线
+ * GET  /api/v1/agents/pipeline/:pipelineId - 查询流水线执行状态
+ * POST /api/v1/agents/pipeline/:pipelineId/answer - 提交 PM 澄清问题回答
+ * GET  /api/v1/agents/pipeline/:pipelineId/pm-session - 获取 PM 会话状态
+ *
+ * PM 协议:
+ * GET  /api/v1/agents/pm/session/:sessionId - 查询 PM 问答会话状态
  */
 
-import { Router } from "express";
-import { success, error } from "../utils/response.js";
+import { Router } from 'express';
+import { success, error } from '../utils/response.js';
 import {
   getAllAgents,
   getAgent,
   updateAgentConfig,
   getAgentSessions,
   getTeamOverviewData,
-} from "../services/agentService.js";
-import {
-  dispatchTask,
-  completeTask,
-  getActiveTasks,
-} from "../services/dispatchService.js";
+} from '../services/agentService.js';
+import { dispatchTask, completeTask, getActiveTasks } from '../services/dispatchService.js';
 import {
   dispatchToAgent,
   getExecution,
@@ -40,33 +45,41 @@ import {
   abortExecution,
   getAgentExecutionStats,
   getAgentExecutionState,
-  DispatchRequest,
   ExecutionContext,
-} from "../services/agentExecution.js";
+} from '../services/agentExecution.js';
 import {
   getTeamHealthReport,
   runHealthCheck,
   recordHeartbeat,
   getHeartbeatHistory,
-} from "../services/agentHealth.js";
-import { DispatchRequest as DispatchReqModel } from "../models/agent.js";
+} from '../services/agentHealth.js';
+import { DispatchRequest as DispatchReqModel } from '../models/agent.js';
+
+// 协作流水线
+import {
+  createPipeline,
+  executePipeline,
+  getPipeline,
+  submitPMAnswer,
+} from '../services/agentPipeline.js';
+import { getClarificationSession } from '../services/pmProtocol.js';
 
 const router = Router();
 
 // GET /api/v1/agents - 获取所有 Agent
-router.get("/", (req, res) => {
+router.get('/', (req, res) => {
   const agents = getAllAgents();
   res.json(success({ list: agents, total: agents.length }));
 });
 
 // GET /api/v1/agents/team - 获取团队编排概览
-router.get("/team", (req, res) => {
+router.get('/team', (req, res) => {
   const overview = getTeamOverviewData();
   res.json(success(overview));
 });
 
 // GET /api/v1/agents/:name - 获取单个 Agent 详情
-router.get("/:name", (req, res) => {
+router.get('/:name', (req, res) => {
   const { name } = req.params;
   const agent = getAgent(name);
   if (!agent) {
@@ -76,7 +89,7 @@ router.get("/:name", (req, res) => {
 });
 
 // PUT /api/v1/agents/:name/config - 更新 Agent 配置
-router.put("/:name/config", (req, res) => {
+router.put('/:name/config', (req, res) => {
   const { name } = req.params;
   const { defaultModel, capabilities } = req.body;
 
@@ -88,19 +101,19 @@ router.put("/:name/config", (req, res) => {
 });
 
 // GET /api/v1/agents/:name/sessions - 获取 Agent 历史会话
-router.get("/:name/sessions", (req, res) => {
+router.get('/:name/sessions', (req, res) => {
   const { name } = req.params;
   const sessions = getAgentSessions(name);
   res.json(success({ list: sessions, total: sessions.length }));
 });
 
 // POST /api/v1/agents/:name/dispatch - 向指定 Agent 分发任务
-router.post("/:name/dispatch", (req, res) => {
+router.post('/:name/dispatch', (req, res) => {
   const { name } = req.params;
   const { fromAgent, taskId, taskTitle, priority, deadline, dependencies, description } = req.body;
 
   if (!fromAgent || !taskId || !taskTitle) {
-    return res.status(400).json(error("缺少必填字段：fromAgent, taskId, taskTitle"));
+    return res.status(400).json(error('缺少必填字段：fromAgent, taskId, taskTitle'));
   }
 
   const dispatchReq: DispatchReqModel = {
@@ -108,7 +121,7 @@ router.post("/:name/dispatch", (req, res) => {
     toAgent: name,
     taskId,
     taskTitle,
-    priority: priority || "normal",
+    priority: priority || 'normal',
     deadline,
     dependencies,
     description,
@@ -122,17 +135,17 @@ router.post("/:name/dispatch", (req, res) => {
 });
 
 // POST /api/v1/agents/:name/complete - 完成任务（辅助端点）
-router.post("/:name/complete", (req, res) => {
+router.post('/:name/complete', (req, res) => {
   const { taskId } = req.body;
   if (!taskId) {
-    return res.status(400).json(error("缺少 taskId"));
+    return res.status(400).json(error('缺少 taskId'));
   }
   const ok = completeTask(taskId);
   res.json(success({ completed: ok }));
 });
 
 // GET /api/v1/agents/tasks/active - 获取活跃任务列表（辅助端点）
-router.get("/tasks/active", (req, res) => {
+router.get('/tasks/active', (req, res) => {
   const tasks = getActiveTasks();
   res.json(success({ list: tasks, total: tasks.length }));
 });
@@ -140,16 +153,16 @@ router.get("/tasks/active", (req, res) => {
 // ============ 执行引擎路由 ============
 
 // POST /api/v1/agents/execute - 派发执行任务
-router.post("/execute", (req, res) => {
+router.post('/execute', (req, res) => {
   const { dispatcher, targetAgent, taskId, prompt, timeoutMs, model } = req.body;
 
   if (!dispatcher || !targetAgent || !taskId || !prompt) {
-    return res.status(400).json(error("缺少必填字段：dispatcher, targetAgent, taskId, prompt"));
+    return res.status(400).json(error('缺少必填字段：dispatcher, targetAgent, taskId, prompt'));
   }
 
   const result = dispatchToAgent({ dispatcher, targetAgent, taskId, prompt, timeoutMs, model });
 
-  if ("error" in result) {
+  if ('error' in result) {
     return res.status(400).json(error(result.error));
   }
 
@@ -157,14 +170,14 @@ router.post("/execute", (req, res) => {
 });
 
 // GET /api/v1/agents/executions - 获取执行历史
-router.get("/executions", (req, res) => {
+router.get('/executions', (req, res) => {
   const { agentName, dispatcher, taskId, status, limit, offset } = req.query;
 
   const result = getExecutionHistory({
     agentName: agentName as string,
     dispatcher: dispatcher as string,
     taskId: taskId as string,
-    status: status as ExecutionContext["status"],
+    status: status as ExecutionContext['status'],
     limit: limit ? parseInt(limit as string) : 20,
     offset: offset ? parseInt(offset as string) : 0,
   });
@@ -173,7 +186,7 @@ router.get("/executions", (req, res) => {
 });
 
 // GET /api/v1/agents/executions/:executionId - 获取执行详情
-router.get("/executions/:executionId", (req, res) => {
+router.get('/executions/:executionId', (req, res) => {
   const { executionId } = req.params;
   const execution = getExecution(executionId);
 
@@ -185,26 +198,32 @@ router.get("/executions/:executionId", (req, res) => {
 });
 
 // GET /api/v1/agents/:name/execution-state - 获取 Agent 当前执行状态
-router.get("/:name/execution-state", (req, res) => {
+router.get('/:name/execution-state', (req, res) => {
   const { name } = req.params;
   const state = getAgentExecutionState(name);
   res.json(success(state || null));
 });
 
 // GET /api/v1/agents/:name/stats - 获取 Agent 执行统计
-router.get("/:name/stats", (req, res) => {
+router.get('/:name/stats', (req, res) => {
   const { name } = req.params;
   const allStats = getAgentExecutionStats(name);
-  const stats = allStats[name] || { total: 0, completed: 0, failed: 0, timeout: 0, avgDurationMs: 0 };
+  const stats = allStats[name] || {
+    total: 0,
+    completed: 0,
+    failed: 0,
+    timeout: 0,
+    avgDurationMs: 0,
+  };
   res.json(success(stats));
 });
 
 // POST /api/v1/agents/:name/abort - 强制终止 Agent 当前执行
-router.post("/:name/abort", (req, res) => {
+router.post('/:name/abort', (req, res) => {
   const { name } = req.params;
   const { reason } = req.body;
 
-  const aborted = abortExecution(name, reason || "手动终止");
+  const aborted = abortExecution(name, reason || '手动终止');
   if (!aborted) {
     return res.status(404).json(error(`Agent '${name}' 当前无执行任务可终止`));
   }
@@ -213,7 +232,7 @@ router.post("/:name/abort", (req, res) => {
 });
 
 // GET /api/v1/agents/executions/stats - 获取所有 Agent 执行统计
-router.get("/executions/stats", (req, res) => {
+router.get('/executions/stats', (req, res) => {
   const stats = getAgentExecutionStats();
   res.json(success(stats));
 });
@@ -221,30 +240,110 @@ router.get("/executions/stats", (req, res) => {
 // ============ 健康监控路由 ============
 
 // GET /api/v1/agents/health - 获取团队健康报告
-router.get("/health", (req, res) => {
+router.get('/health', (req, res) => {
   const report = getTeamHealthReport();
   res.json(success(report));
 });
 
 // POST /api/v1/agents/health/check - 触发健康检查+自动恢复
-router.post("/health/check", (req, res) => {
+router.post('/health/check', (req, res) => {
   const result = runHealthCheck();
   res.json(success(result));
 });
 
 // POST /api/v1/agents/health/heartbeat/:name - 记录 Agent 心跳
-router.post("/health/heartbeat/:name", (req, res) => {
+router.post('/health/heartbeat/:name', (req, res) => {
   const { name } = req.params;
   recordHeartbeat(name);
   res.json(success({ recorded: true, agent: name, at: new Date().toISOString() }));
 });
 
 // GET /api/v1/agents/health/heartbeat/:name - 获取心跳历史
-router.get("/health/heartbeat/:name", (req, res) => {
+router.get('/health/heartbeat/:name', (req, res) => {
   const { name } = req.params;
   const limit = parseInt(req.query.limit as string) || 20;
   const history = getHeartbeatHistory(name, limit);
   res.json(success({ agent: name, history, total: history.length }));
+});
+
+// ============ 协作流水线路由 ============
+
+// POST /api/v1/agents/pipeline/start - 启动完整协作流水线
+router.post('/pipeline/start', async (req, res) => {
+  const { taskId, requirement } = req.body;
+
+  if (!taskId || !requirement) {
+    return res.status(400).json(error('缺少必填字段：taskId, requirement'));
+  }
+
+  try {
+    const pipeline = await createPipeline(taskId, requirement);
+    // 异步执行流水线（不阻塞 HTTP 响应）
+    executePipeline(pipeline.pipelineId).catch(err => {
+      console.error('[agent routes] Pipeline execution error:', err);
+    });
+    res.json(success({ pipelineId: pipeline.pipelineId, status: pipeline.status }));
+  } catch (err) {
+    res.status(500).json(error(`创建流水线失败: ${err}`));
+  }
+});
+
+// GET /api/v1/agents/pipeline/:pipelineId - 查询流水线执行状态
+router.get('/pipeline/:pipelineId', (req, res) => {
+  const { pipelineId } = req.params;
+  const pipeline = getPipeline(pipelineId);
+
+  if (!pipeline) {
+    return res.status(404).json(error(`流水线 ${pipelineId} 不存在`));
+  }
+
+  res.json(success(pipeline));
+});
+
+// POST /api/v1/agents/pipeline/:pipelineId/answer - 提交 PM 澄清问题回答
+router.post('/pipeline/:pipelineId/answer', async (req, res) => {
+  const { pipelineId } = req.params;
+  const { questionIndex, answer } = req.body;
+
+  if (questionIndex === undefined || !answer) {
+    return res.status(400).json(error('缺少必填字段：questionIndex, answer'));
+  }
+
+  try {
+    const result = await submitPMAnswer(pipelineId, questionIndex, answer);
+    res.json(success(result));
+  } catch (err) {
+    res.status(400).json(error(`${err}`));
+  }
+});
+
+// GET /api/v1/agents/pipeline/:pipelineId/pm-session - 获取 PM 会话状态
+router.get('/pipeline/:pipelineId/pm-session', (req, res) => {
+  const { pipelineId } = req.params;
+  const pipeline = getPipeline(pipelineId);
+
+  if (!pipeline) {
+    return res.status(404).json(error(`流水线 ${pipelineId} 不存在`));
+  }
+
+  if (!pipeline.pmSessionId) {
+    return res.json(success(null));
+  }
+
+  const session = getClarificationSession(pipeline.pmSessionId);
+  res.json(success(session || null));
+});
+
+// GET /api/v1/agents/pm/session/:sessionId - 查询 PM 问答会话状态
+router.get('/pm/session/:sessionId', (req, res) => {
+  const { sessionId } = req.params;
+  const session = getClarificationSession(sessionId);
+
+  if (!session) {
+    return res.status(404).json(error(`PM Session ${sessionId} 不存在`));
+  }
+
+  res.json(success(session));
 });
 
 export default router;
