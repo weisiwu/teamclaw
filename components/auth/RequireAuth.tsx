@@ -30,8 +30,8 @@ export function RequireAuth({
     if (isAuthenticated === false) {
       // 未登录，重定向
       router.push(redirectTo);
-    } else if (isAuthenticated === true && requireAdmin && user?.role !== "admin") {
-      // 需要管理员权限但当前用户不是管理员
+    } else if (isAuthenticated === true && requireAdmin && user?.role !== "admin" && user?.role !== "vice_admin" && user?.role !== "owner") {
+      // 需要管理员权限但当前用户不是管理员/副管理员/所有者
       router.push(redirectTo);
     }
   }, [isAuthenticated, user, requireAdmin, redirectTo, router]);
@@ -54,8 +54,8 @@ export function RequireAuth({
     return null;
   }
 
-  // 需要管理员权限但未满足
-  if (requireAdmin && user?.role !== "admin") {
+  // 需要管理员权限但未满足（admin/vice_admin/owner 均可访问）
+  if (requireAdmin && user?.role !== "admin" && user?.role !== "vice_admin" && user?.role !== "owner") {
     return null;
   }
 

@@ -116,11 +116,11 @@ export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction
     return;
   }
 
-  if (role !== "admin") {
+  if (role !== "admin" && role !== "vice_admin") {
     res.status(403).json({
       code: 403,
       data: null,
-      message: "需要管理员权限",
+      message: "需要管理员或副管理员权限",
     });
     return;
   }
