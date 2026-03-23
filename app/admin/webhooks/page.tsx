@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react';
 import type { Webhook, WebhookHistory } from '../../../lib/api/webhooks';
 import { PermissionGuard } from '@/components/layout/PermissionGuard';
-import { CheckCircle2, XCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, Trash2, AlertTriangle } from 'lucide-react';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 const EVENT_OPTIONS = [
   'version.created', 'version.deleted', 'version.bumped',
@@ -20,6 +22,7 @@ export default function WebhooksPage() {
   const [historyMap, setHistoryMap] = useState<Record<string, WebhookHistory[]>>({});
   const [testing, setTesting] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, { success: boolean; statusCode?: number; error?: string } | null>>({});
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; webhookId: string }>({ open: false, webhookId: '' });
 
   // Toast 通知
   const [toastMsg, setToastMsg] = useState("");
@@ -87,7 +90,6 @@ export default function WebhooksPage() {
   };
 
   const deleteWebhook = async (id: string) => {
-    if (!confirm('确定删除？')) return;
     try {
       const res = await fetch(`/api/v1/admin/webhooks/${id}`, { method: 'DELETE' });
       const data = await res.json();
@@ -245,7 +247,7 @@ export default function WebhooksPage() {
                       className="px-3 py-1 text-xs border rounded hover:bg-gray-50">
                       {wh.status === 'active' ? '暂停' : '启用'}
                     </button>
-                    <button onClick={() => deleteWebhook(wh.id)}
+                    <button onClick={() => setDeleteConfirm({ open: true, webhookId: wh.id })}
                       className="px-3 py-1 text-xs border border-red-300 text-red-600 rounded hover:bg-red-50">删除</button>
                   </div>
                 </div>
@@ -273,6 +275,39 @@ export default function WebhooksPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirm.open} onOpenChange={(open) => setDeleteConfirm((prev) => ({ ...prev, open }))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              确认删除 Webhook
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600 mt-2">
+            确定要删除这个 Webhook 吗？此操作不可撤销。
+          </p>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirm((prev) => ({ ...prev, open: false }))}
+            >
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                deleteWebhook(deleteConfirm.webhookId);
+                setDeleteConfirm((prev) => ({ ...prev, open: false }));
+              }}
+            >
+              <Trash2 className="w-4 h-4 mr-1" />
+              删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Toast 通知 */}
       {toastVisible && (

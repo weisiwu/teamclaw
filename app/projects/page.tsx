@@ -2,16 +2,23 @@
 
 import Link from 'next/link';
 import { useState, useRef, useCallback } from 'react';
-import { Package } from 'lucide-react';
+import { Package, Trash2, AlertTriangle } from 'lucide-react';
 import { useProjects, useDeleteProject } from '../../hooks/useProjects';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ProjectsSkeleton } from '@/components/ui/projects-skeleton';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 export default function ProjectsPage() {
   const { data, isLoading, error, refetch } = useProjects();
   const deleteMutation = useDeleteProject();
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
   const gridRef = useRef<HTMLDivElement>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; projectId: string; projectName: string }>({
+    open: false,
+    projectId: '',
+    projectName: '',
+  });
 
   const handleGridKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!data?.projects.length) return;
@@ -162,19 +169,50 @@ export default function ProjectsPage() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirm(`确定删除项目 "${project.name}" 吗？`)) {
-                      deleteMutation.mutate(project.id);
-                    }
+                    setDeleteConfirm({ open: true, projectId: project.id, projectName: project.name });
                   }}
                   className="px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
                 >
-                  删除
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirm.open} onOpenChange={(open) => setDeleteConfirm((prev) => ({ ...prev, open }))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              确认删除项目
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground mt-2">
+            确定要删除项目 <strong className="text-foreground">&ldquo;{deleteConfirm.projectName}&rdquo;</strong> 吗？此操作不可撤销。
+          </p>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirm((prev) => ({ ...prev, open: false }))}
+            >
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                deleteMutation.mutate(deleteConfirm.projectId);
+                setDeleteConfirm((prev) => ({ ...prev, open: false }));
+              }}
+            >
+              <Trash2 className="w-4 h-4 mr-1" />
+              删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
