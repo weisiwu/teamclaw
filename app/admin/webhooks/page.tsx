@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import type { Webhook, WebhookHistory } from '../../../lib/api/webhooks';
 import { PermissionGuard } from '@/components/layout/PermissionGuard';
-import { CheckCircle2, XCircle, Trash2, AlertTriangle } from 'lucide-react';
+import { Trash2, AlertTriangle } from 'lucide-react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 
 const EVENT_OPTIONS = [
   'version.created', 'version.deleted', 'version.bumped',
@@ -15,6 +16,7 @@ const EVENT_OPTIONS = [
 ];
 
 export default function WebhooksPage() {
+  const { success, error: toastError } = useToast();
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -23,24 +25,6 @@ export default function WebhooksPage() {
   const [testing, setTesting] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, { success: boolean; statusCode?: number; error?: string } | null>>({});
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; webhookId: string }>({ open: false, webhookId: '' });
-
-  // Toast 通知
-  const [toastMsg, setToastMsg] = useState("");
-  const [toastType, setToastType] = useState<"success" | "error">("success");
-  const [toastVisible, setToastVisible] = useState(false);
-
-  const showToast = (msg: string, type: "success" | "error" = "success") => {
-    setToastMsg(msg);
-    setToastType(type);
-    setToastVisible(true);
-  };
-
-  useEffect(() => {
-    if (toastVisible) {
-      const timer = setTimeout(() => setToastVisible(false), 2500);
-      return () => clearTimeout(timer);
-    }
-  }, [toastVisible]);
 
   // Form state
   const [form, setForm] = useState({ name: '', url: '', secret: '', events: [] as string[] });
@@ -57,7 +41,7 @@ export default function WebhooksPage() {
   useEffect(() => { fetchWebhooks(); }, []);
 
   const createWebhook = async () => {
-    if (!form.name || !form.url || form.events.length === 0) { showToast('请填写完整', 'error'); return; }
+    if (!form.name || !form.url || form.events.length === 0) { toastError('请填写完整'); return; }
     try {
       const res = await fetch('/api/v1/admin/webhooks', {
         method: 'POST',
@@ -69,8 +53,9 @@ export default function WebhooksPage() {
         setWebhooks(prev => [data.data, ...prev]);
         setShowForm(false);
         setForm({ name: '', url: '', secret: '', events: [] });
+        success('Webhook 创建成功');
       }
-    } catch { showToast('创建失败', 'error'); }
+    } catch { toastError('创建失败'); }
   };
 
   const updateWebhook = async (id: string) => {
@@ -85,16 +70,20 @@ export default function WebhooksPage() {
         setWebhooks(prev => prev.map(w => w.id === id ? data.data : w));
         setEditingId(null);
         setForm({ name: '', url: '', secret: '', events: [] });
+        success('Webhook 更新成功');
       }
-    } catch { showToast('更新失败', 'error'); }
+    } catch { toastError('更新失败'); }
   };
 
   const deleteWebhook = async (id: string) => {
     try {
       const res = await fetch(`/api/v1/admin/webhooks/${id}`, { method: 'DELETE' });
       const data = await res.json();
-      if (data.success) setWebhooks(prev => prev.filter(w => w.id !== id));
-    } catch { showToast('删除失败', 'error'); }
+      if (data.success) {
+        setWebhooks(prev => prev.filter(w => w.id !== id));
+        success('Webhook 已删除');
+      }
+    } catch { toastError('删除失败'); }
   };
 
   const testWebhook = async (id: string) => {
@@ -309,23 +298,6 @@ export default function WebhooksPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Toast 通知 */}
-      {toastVisible && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-2 duration-200">
-          <div
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm text-white ${
-              toastType === "success" ? "bg-gray-900" : "bg-red-600"
-            }`}
-          >
-            {toastType === "success" ? (
-              <CheckCircle2 className="w-4 h-4 text-green-400" />
-            ) : (
-              <XCircle className="w-4 h-4 text-white" />
-            )}
-            <span>{toastMsg}</span>
-          </div>
-        </div>
-      )}
     </div>
     </PermissionGuard>
   );

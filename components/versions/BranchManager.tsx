@@ -39,9 +39,8 @@ import {
   Clock,
   User,
   Pencil,
-  CheckCircle,
-  XCircle,
 } from "lucide-react";
+import { useToast } from "@/components/ui/toast";
 
 interface BranchManagerProps {
   compact?: boolean;
@@ -56,28 +55,13 @@ export function BranchManager({ compact = false }: BranchManagerProps) {
   const renameMutation = useRenameBranch();
   const protectMutation = useSetBranchProtection();
   const checkoutMutation = useCheckoutBranch();
+  const { success, error: toastError } = useToast();
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState("");
   const [branchToRename, setBranchToRename] = useState<GitBranch | null>(null);
   const [branchToDelete, setBranchToDelete] = useState<GitBranch | null>(null);
-  const [toastMsg, setToastMsg] = useState("");
-  const [toastType, setToastType] = useState<"success" | "error">("success");
-  const [toastVisible, setToastVisible] = useState(false);
-
-  const showToast = (msg: string, type: "success" | "error" = "success") => {
-    setToastMsg(msg);
-    setToastType(type);
-    setToastVisible(true);
-  };
-
-  useEffect(() => {
-    if (toastVisible) {
-      const timer = setTimeout(() => setToastVisible(false), 2500);
-      return () => clearTimeout(timer);
-    }
-  }, [toastVisible]);
 
   // Reset create dialog input when opening
   useEffect(() => {
@@ -93,8 +77,9 @@ export function BranchManager({ compact = false }: BranchManagerProps) {
       await createMutation.mutateAsync({ name: newBranchName.trim() });
       setNewBranchName("");
       setShowCreateDialog(false);
+      success("分支创建成功");
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "创建分支失败", "error");
+      toastError(err instanceof Error ? err.message : "创建分支失败");
     }
   };
 
@@ -103,32 +88,36 @@ export function BranchManager({ compact = false }: BranchManagerProps) {
     try {
       await deleteMutation.mutateAsync(branchToDelete.id);
       setBranchToDelete(null);
+      success("分支已删除");
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "删除分支失败", "error");
+      toastError(err instanceof Error ? err.message : "删除分支失败");
     }
   };
 
   const handleSetMain = async (branch: GitBranch) => {
     try {
       await setMainMutation.mutateAsync(branch.id);
+      success(`已设为主分支: ${branch.name}`);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "设置主分支失败", "error");
+      toastError(err instanceof Error ? err.message : "设置主分支失败");
     }
   };
 
   const handleToggleProtection = async (branch: GitBranch) => {
     try {
       await protectMutation.mutateAsync({ branchId: branch.id, protected: !branch.isProtected });
+      success(branch.isProtected ? `已取消保护: ${branch.name}` : `已保护分支: ${branch.name}`);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "设置保护失败", "error");
+      toastError(err instanceof Error ? err.message : "设置保护失败");
     }
   };
 
   const handleCheckout = async (branch: GitBranch) => {
     try {
       await checkoutMutation.mutateAsync(branch.id);
+      success(`已检出分支: ${branch.name}`);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "检出分支失败", "error");
+      toastError(err instanceof Error ? err.message : "检出分支失败");
     }
   };
 
@@ -139,8 +128,9 @@ export function BranchManager({ compact = false }: BranchManagerProps) {
       setNewBranchName("");
       setBranchToRename(null);
       setShowRenameDialog(false);
+      success("分支重命名成功");
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "重命名失败", "error");
+      toastError(err instanceof Error ? err.message : "重命名失败");
     }
   };
 
@@ -412,23 +402,6 @@ export function BranchManager({ compact = false }: BranchManagerProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Toast 通知 */}
-      {toastVisible && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-2 duration-200">
-          <div
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm text-white ${
-              toastType === "success" ? "bg-gray-900" : "bg-red-600"
-            }`}
-          >
-            {toastType === "success" ? (
-              <CheckCircle className="w-4 h-4 text-green-400" />
-            ) : (
-              <XCircle className="w-4 h-4 text-white" />
-            )}
-            <span>{toastMsg}</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

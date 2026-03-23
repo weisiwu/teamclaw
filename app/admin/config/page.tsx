@@ -6,13 +6,13 @@ import type { SystemConfig } from '../../../lib/api/adminConfig';
 import { PermissionGuard } from '@/components/layout/PermissionGuard';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useToast } from '@/components/ui/toast';
 
 export default function AdminConfigPage() {
+  const { success, error: toastError } = useToast();
   const [config, setConfig] = useState<SystemConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'llm' | 'features' | 'security' | 'permissions'>('llm');
   const [abilities, setAbilities] = useState<Array<{ id: string; name: string; description: string; enabled: boolean; requiredRole: string }>>([]);
   const [abilitiesLoading, setAbilitiesLoading] = useState(false);
@@ -24,7 +24,7 @@ export default function AdminConfigPage() {
       const data = await res.json();
       setConfig(data.data);
     } catch {
-      setError('加载配置失败');
+      toastError('加载配置失败');
     } finally {
       setLoading(false);
     }
@@ -51,7 +51,6 @@ export default function AdminConfigPage() {
   const saveConfig = async () => {
     if (!config) return;
     setSaving(true);
-    setSuccessMsg(null);
     try {
       const res = await fetch('/api/v1/admin/config', {
         method: 'PUT',
@@ -60,13 +59,12 @@ export default function AdminConfigPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setSuccessMsg('配置已保存');
-        setTimeout(() => setSuccessMsg(null), 3000);
+        success('配置已保存');
       } else {
-        setError(data.error || '保存失败');
+        toastError(data.error || '保存失败');
       }
     } catch {
-      setError('保存失败');
+      toastError('保存失败');
     } finally {
       setSaving(false);
     }
@@ -77,8 +75,11 @@ export default function AdminConfigPage() {
     try {
       const res = await fetch('/api/v1/admin/config/reset', { method: 'POST' });
       const data = await res.json();
-      if (data.success) setConfig(data.data);
-    } catch { setError('重置失败'); }
+      if (data.success) {
+        setConfig(data.data);
+        success('配置已重置');
+      }
+    } catch { toastError('重置失败'); }
   };
 
   const exportConfig = async () => {
@@ -92,7 +93,8 @@ export default function AdminConfigPage() {
       a.download = `system-config-${Date.now()}.json`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch { setError('导出失败'); }
+      success('配置已导出');
+    } catch { toastError('导出失败'); }
   };
 
   const importConfig = () => {
@@ -111,15 +113,18 @@ export default function AdminConfigPage() {
           body: JSON.stringify({ config: text }),
         });
         const data = await res.json();
-        if (data.success) setConfig(data.data);
-      } catch { setError('导入失败'); }
+        if (data.success) {
+          setConfig(data.data);
+          success('配置已导入');
+        }
+      } catch { toastError('导入失败'); }
     };
     input.click();
   };
 
   if (loading) return <div className="flex justify-center items-center min-h-screen"><span className="text-gray-500">加载中...</span></div>;
 
-  if (!config) return <div className="text-red-500 p-8">{error || '加载失败'}</div>;
+  if (!config) return <div className="text-red-500 p-8">加载失败</div>;
 
   return (
     <PermissionGuard>
@@ -140,8 +145,6 @@ export default function AdminConfigPage() {
           </div>
         </div>
 
-        {successMsg && <div className="mb-4 p-3 bg-green-50 text-green-700 rounded">{successMsg}</div>}
-        {error && <div className="mb-4 p-3 bg-red-50 text-red-700 rounded">{error}</div>}
 
         {/* Tabs */}
         <div className="flex border-b mb-6">
