@@ -31,6 +31,7 @@ const menuItems = [
   { href: "/cron", label: "定时任务", icon: Clock },
   { href: "/docs", label: "文档中心", icon: FileText },
   { href: "/tokens", label: "Token 管理", icon: Key },
+  { href: "/api-tokens", label: "API Token", icon: Key },
   { href: "/members", label: "成员管理", icon: Users },
 ];
 
