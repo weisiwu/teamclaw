@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { API_BASE, delay, autoBumpVersion } from './versionShared';
+import { API_BASE, autoBumpVersion } from './versionShared';
 import {
   Version,
   ChangelogResponse,
@@ -13,7 +13,6 @@ import {
   UpgradePreview,
   TimelineEvent,
   TimelineResponse,
-  VersionBumpType,
 } from './types';
 
 // NOTE: Mock data has been removed. API calls now properly throw errors instead of
@@ -300,97 +299,70 @@ export async function refreshVersionSummary(
 // ========== 版本升级配置 API ==========
 
 export async function getUpgradeConfig(versionId: string): Promise<VersionUpgradeConfig | null> {
-  await delay(100);
-  const config = mockUpgradeConfigs.find(c => c.versionId === versionId);
-  if (!config) {
-    return {
-      id: `cfg-${versionId}`,
-      versionId,
-      bumpType: 'patch',
-      autoTrigger: true,
-      triggerOn: ['publish'],
-      enablePreview: true,
-      historyRetention: 30,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+  const res = await fetch(`${API_BASE}/versions/${versionId}/upgrade-config`);
+  if (res.status === 404) return null;
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) {
+    return json.data;
   }
-  return config;
+  throw new Error(json.message || '获取升级配置失败');
 }
 
 export async function updateUpgradeConfig(
   versionId: string,
   updates: Partial<VersionUpgradeConfig>
 ): Promise<VersionUpgradeConfig> {
-  await delay(50);
-  let config = mockUpgradeConfigs.find(c => c.versionId === versionId);
-
-  if (!config) {
-    config = {
-      id: `cfg-${versionId}`,
-      versionId,
-      bumpType: 'patch',
-      autoTrigger: true,
-      triggerOn: ['publish'],
-      enablePreview: true,
-      historyRetention: 30,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    mockUpgradeConfigs.push(config);
+  const res = await fetch(`${API_BASE}/versions/${versionId}/upgrade-config`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) {
+    return json.data;
   }
-
-  Object.assign(config, updates, { updatedAt: new Date().toISOString() });
-  return config;
+  throw new Error(json.message || '更新升级配置失败');
 }
 
 export async function previewUpgrade(versionId: string): Promise<UpgradePreview> {
-  await delay(150);
-  try {
-    const config = await getUpgradeConfig(versionId);
-    const bumpType = config?.bumpType || 'patch';
-    const currentVersion = 'v1.0.0'; // fallback when version data not available
-    const effectiveBumpType: VersionBumpType =
-      bumpType === 'custom' ? 'patch' : (bumpType as VersionBumpType);
-    const newVersion = autoBumpVersion(currentVersion, effectiveBumpType);
-    return {
-      currentVersion,
-      newVersion,
-      bumpType: effectiveBumpType,
-      changes: [
-        { field: 'version', oldValue: currentVersion, newValue: newVersion },
-        { field: 'bumpType', oldValue: '', newValue: effectiveBumpType },
-      ],
-    };
-  } catch {
-    // Fallback
-    const currentVersion = 'v1.0.0';
-    const newVersion = autoBumpVersion(currentVersion, 'patch');
-    return {
-      currentVersion,
-      newVersion,
-      bumpType: 'patch',
-      changes: [{ field: 'version', oldValue: currentVersion, newValue: newVersion }],
-    };
+  const res = await fetch(`${API_BASE}/versions/${versionId}/upgrade/preview`);
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) {
+    return json.data;
   }
+  // Fallback to local computation if API fails
+  const currentVersion = 'v1.0.0';
+  const newVersion = autoBumpVersion(currentVersion, 'patch');
+  return {
+    currentVersion,
+    newVersion,
+    bumpType: 'patch',
+    changes: [{ field: 'version', oldValue: currentVersion, newValue: newVersion }],
+  };
 }
 
 export async function getUpgradeHistory(versionId: string): Promise<UpgradeHistoryRecord[]> {
-  await delay(100);
-  return mockUpgradeHistory.filter(h => h.versionId === versionId);
+  const res = await fetch(`${API_BASE}/versions/${versionId}/upgrade-history`);
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) {
+    return json.data.records || json.data;
+  }
+  throw new Error(json.message || '获取升级历史失败');
 }
 
 export async function addUpgradeRecord(
   record: Omit<UpgradeHistoryRecord, 'id' | 'timestamp'>
 ): Promise<UpgradeHistoryRecord> {
-  await delay(50);
-  const newRecord: UpgradeHistoryRecord = {
-    ...record,
-    id: `upg-${Date.now()}`,
-    timestamp: new Date().toLocaleString('zh-CN'),
-  };
-  mockUpgradeHistory.unshift(newRecord);
-  return newRecord;
+  const res = await fetch(`${API_BASE}/versions/${record.versionId}/upgrade-history`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(record),
+  });
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) {
+    return json.data;
+  }
+  throw new Error(json.message || '添加升级记录失败');
 }
 
 // ========== Timeline API ==========
