@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc --noEmit false --skipLibCheck || true && node fix-esm-extensions.cjs",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
+    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage"
   },
   "dependencies": {
     "archiver": "^7.0.1",
@@ -19,9 +22,9 @@
     "helmet": "^8.1.0",
     "ioredis": "^5.10.0",
     "jsonwebtoken": "^9.0.3",
+    "mammoth": "^1.6.0",
     "node-cron": "^3.0.3",
     "pdf-lib": "^1.17.1",
-    "mammoth": "^1.6.0",
     "pdf-parse": "^1.1.1",
     "pg": "^8.20.0",
     "zod": "^4.3.6"
@@ -32,11 +35,16 @@
     "@types/better-sqlite3": "^7.6.12",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
+    "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20",
     "@types/node-cron": "^3.0.11",
     "@types/pg": "^8.18.0",
+    "@types/supertest": "^7.2.0",
     "@types/uuid": "^10.0.0",
+    "jest": "^30.3.0",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^5.3.0"

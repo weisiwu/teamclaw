@@ -143,6 +143,79 @@ router.get('/runnable', (req, res) => {
   }
 });
 
+// GET /api/v1/tasks/sla - 获取所有SLA状态
+router.get('/sla', (req, res) => {
+  try {
+    const status = req.query.status as string;
+    res.json(success(getAllSLAs(status as SLAStatus)));
+  } catch (err) {
+    console.error('[TaskRoutes] all sla error:', err);
+    res.status(500).json(error(500, 'Internal server error'));
+  }
+});
+
+// GET /api/v1/tasks/sla/breached - 违约SLA列表
+router.get('/sla/breached', (_req, res) => {
+  res.json(success(getBreachedSLAs()));
+});
+
+// GET /api/v1/tasks/sla/at-risk - 风险SLA列表
+router.get('/sla/at-risk', (_req, res) => {
+  res.json(success(getAtRiskSLAs()));
+});
+
+// GET /api/v1/tasks/sla/stats - SLA统计
+router.get('/sla/stats', (req, res) => {
+  try {
+    const hours = parseInt(req.query.hours as string) || 24 * 7;
+    res.json(success(getSLAStats(hours)));
+  } catch (err) {
+    console.error('[TaskRoutes] sla stats error:', err);
+    res.status(500).json(error(500, 'Internal server error'));
+  }
+});
+
+// GET /api/v1/tasks/sla/definitions - 获取SLA定义
+router.get('/sla/definitions', (_req, res) => {
+  res.json(success(getSLADefinitions()));
+});
+
+// PUT /api/v1/tasks/sla/definitions - 更新SLA定义
+router.put('/sla/definitions', (req, res) => {
+  try {
+    updateSLADefinitions(req.body);
+    res.json(success(null));
+  } catch (err) {
+    console.error('[TaskRoutes] update sla defs error:', err);
+    res.status(500).json(error(500, 'Internal server error'));
+  }
+});
+
+// POST /api/v1/tasks/sla/:taskId/deadline - 手动设置截止时间
+router.post('/sla/:taskId/deadline', (req, res) => {
+  try {
+    const { deadline } = req.body;
+    if (!deadline) return res.status(400).json(error(400, 'deadline required'));
+    setTaskDeadline(req.params.taskId, deadline);
+    res.json(success(null));
+  } catch (err) {
+    console.error('[TaskRoutes] set deadline error:', err);
+    res.status(500).json(error(500, 'Internal server error'));
+  }
+});
+
+// GET /api/v1/tasks/sla/:taskId - 获取单个SLA（必须在 /sla/definitions 等特定路由之后）
+router.get('/sla/:taskId', (req, res) => {
+  try {
+    const sla = getTaskSLA(req.params.taskId);
+    if (!sla) return res.status(404).json(error(404, 'No SLA found'));
+    res.json(success(sla));
+  } catch (err) {
+    console.error('[TaskRoutes] sla error:', err);
+    res.status(500).json(error(500, 'Internal server error'));
+  }
+});
+
 // GET /api/v1/tasks/:taskId - 获取单个任务
 router.get('/:taskId', (req, res) => {
   try {
@@ -836,79 +909,6 @@ router.post('/:taskId/emit', async (req, res) => {
     res.json(success(null));
   } catch (err) {
     console.error('[TaskRoutes] emit error:', err);
-    res.status(500).json(error(500, 'Internal server error'));
-  }
-});
-
-// GET /api/v1/tasks/sla/:taskId - 获取任务SLA
-router.get('/sla/:taskId', (req, res) => {
-  try {
-    const sla = getTaskSLA(req.params.taskId);
-    if (!sla) return res.status(404).json(error(404, 'No SLA found'));
-    res.json(success(sla));
-  } catch (err) {
-    console.error('[TaskRoutes] sla error:', err);
-    res.status(500).json(error(500, 'Internal server error'));
-  }
-});
-
-// GET /api/v1/tasks/sla - 获取所有SLA状态
-router.get('/sla', (req, res) => {
-  try {
-    const status = req.query.status as string;
-    res.json(success(getAllSLAs(status as SLAStatus)));
-  } catch (err) {
-    console.error('[TaskRoutes] all sla error:', err);
-    res.status(500).json(error(500, 'Internal server error'));
-  }
-});
-
-// GET /api/v1/tasks/sla/breached - 违约SLA列表
-router.get('/sla/breached', (_req, res) => {
-  res.json(success(getBreachedSLAs()));
-});
-
-// GET /api/v1/tasks/sla/at-risk - 风险SLA列表
-router.get('/sla/at-risk', (_req, res) => {
-  res.json(success(getAtRiskSLAs()));
-});
-
-// GET /api/v1/tasks/sla/stats - SLA统计
-router.get('/sla/stats', (req, res) => {
-  try {
-    const hours = parseInt(req.query.hours as string) || 24 * 7;
-    res.json(success(getSLAStats(hours)));
-  } catch (err) {
-    console.error('[TaskRoutes] sla stats error:', err);
-    res.status(500).json(error(500, 'Internal server error'));
-  }
-});
-
-// POST /api/v1/tasks/sla/:taskId/deadline - 手动设置截止时间
-router.post('/sla/:taskId/deadline', (req, res) => {
-  try {
-    const { deadline } = req.body;
-    if (!deadline) return res.status(400).json(error(400, 'deadline required'));
-    setTaskDeadline(req.params.taskId, deadline);
-    res.json(success(null));
-  } catch (err) {
-    console.error('[TaskRoutes] set deadline error:', err);
-    res.status(500).json(error(500, 'Internal server error'));
-  }
-});
-
-// GET /api/v1/tasks/sla/definitions - 获取SLA定义
-router.get('/sla/definitions', (_req, res) => {
-  res.json(success(getSLADefinitions()));
-});
-
-// PUT /api/v1/tasks/sla/definitions - 更新SLA定义
-router.put('/sla/definitions', (req, res) => {
-  try {
-    updateSLADefinitions(req.body);
-    res.json(success(null));
-  } catch (err) {
-    console.error('[TaskRoutes] update sla defs error:', err);
     res.status(500).json(error(500, 'Internal server error'));
   }
 });
