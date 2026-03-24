@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * Security headers middleware for TeamClaw.
@@ -14,17 +14,17 @@ import { NextRequest, NextResponse } from "next/server";
  */
 const SECURITY_HEADERS = {
   // Prevent clickjacking: disallow embedding in iframes (except on same origin)
-  "X-Frame-Options": "SAMEORIGIN",
+  'X-Frame-Options': 'SAMEORIGIN',
 
   // Prevent MIME type sniffing
-  "X-Content-Type-Options": "nosniff",
+  'X-Content-Type-Options': 'nosniff',
 
   // XSS filter (legacy browsers)
-  "X-XSS-Protection": "1; mode=block",
+  'X-XSS-Protection': '1; mode=block',
 
   // Content Security Policy — restrict script/style sources to self + inline for Next.js
   // Developers should tighten this further per-page as needed
-  "Content-Security-Policy": [
+  'Content-Security-Policy': [
     "default-src 'self'",
     // Next.js needs 'unsafe-inline' for its style injection; keep it as narrow as possible
     "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
@@ -35,37 +35,36 @@ const SECURITY_HEADERS = {
     "frame-ancestors 'self'",
     "base-uri 'self'",
     "form-action 'self'",
-  ].join("; "),
+  ].join('; '),
 
   // Enforce HTTPS for 1 year, include subdomains, and enforce in browser
-  "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
+  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
 
   // Control referrer header sent to third parties
-  "Referrer-Policy": "strict-origin-when-cross-origin",
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
 
   // Restrict Adobe Flash/Acrobat from loading
-  "X-Permitted-Cross-Domain-Policies": "none",
+  'X-Permitted-Cross-Domain-Policies': 'none',
 
   // Permissions Policy — disable unnecessary browser features
-  "Permissions-Policy": [
-    "camera=()",
-    "microphone=()",
-    "geolocation=()",
-    "payment=()",
-  ].join(", "),
+  'Permissions-Policy': ['camera=()', 'microphone=()', 'geolocation=()', 'payment=()'].join(', '),
 } as const;
 
 // Routes that don't require authentication
+// NOTE: Be specific — avoid broad prefixes like '/api' that bypass auth for all sub-routes.
+// Only add routes here if they are truly intended to be public without any auth.
 const PUBLIC_ROUTES = [
   '/login',
-  '/api',
+  '/api/health', // Health check — no auth needed
+  '/api/v1/feishu/messages', // Feishu webhook receiver — has its own signature verification
+  '/api/v1/feishu/chats', // Feishu webhook receiver — has its own signature verification
   '/_next',
   '/favicon.ico',
   '/public',
 ];
 
 function isPublicRoute(pathname: string): boolean {
-  return PUBLIC_ROUTES.some((route) => pathname.startsWith(route));
+  return PUBLIC_ROUTES.some(route => pathname.startsWith(route));
 }
 
 export function middleware(request: NextRequest): NextResponse {
@@ -73,7 +72,7 @@ export function middleware(request: NextRequest): NextResponse {
 
   // Redirect to /login if accessing a protected route without a valid token
   if (!isPublicRoute(pathname)) {
-    const authHeader = request.headers.get("authorization");
+    const authHeader = request.headers.get('authorization');
     const hasToken = authHeader?.startsWith('Bearer ');
     if (!hasToken) {
       const loginUrl = new URL('/login', request.url);
@@ -83,18 +82,16 @@ export function middleware(request: NextRequest): NextResponse {
   }
 
   // Apply security headers
-  const response = isPublicRoute(pathname)
-    ? NextResponse.next()
-    : NextResponse.next();
+  const response = isPublicRoute(pathname) ? NextResponse.next() : NextResponse.next();
 
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
     response.headers.set(key, value);
   }
 
   // Add request ID to response header for traceability
-  const requestId = request.headers.get("X-Request-ID");
+  const requestId = request.headers.get('X-Request-ID');
   if (requestId) {
-    response.headers.set("X-Request-ID", requestId);
+    response.headers.set('X-Request-ID', requestId);
   }
 
   return response;
@@ -102,5 +99,5 @@ export function middleware(request: NextRequest): NextResponse {
 
 export const config = {
   // Apply to all routes
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|public/).*)"],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|public/).*)'],
 };
