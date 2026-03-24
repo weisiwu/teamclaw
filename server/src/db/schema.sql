@@ -311,3 +311,89 @@ CREATE TABLE IF NOT EXISTS version_change_events (
 
 CREATE INDEX IF NOT EXISTS idx_version_change_events_version ON version_change_events(version_id);
 CREATE INDEX IF NOT EXISTS idx_version_change_events_created ON version_change_events(created_at DESC);
+
+-- ============ Users (from 20260324_001_create_users.sql) ============
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'member',
+  weight INTEGER NOT NULL DEFAULT 0,
+  wechat_id TEXT,
+  feishu_id TEXT,
+  remark TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_user_id ON users(user_id);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_users_wechat_id ON users(wechat_id);
+CREATE INDEX IF NOT EXISTS idx_users_feishu_id ON users(feishu_id);
+CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_wechat_id_unique ON users(wechat_id) WHERE wechat_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_feishu_id_unique ON users(feishu_id) WHERE feishu_id IS NOT NULL;
+
+-- ============ Cron Jobs (from 20260324_002_create_cron_tables.sql) ============
+CREATE TABLE IF NOT EXISTS cron_jobs (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  cron TEXT NOT NULL,
+  prompt TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by TEXT NOT NULL DEFAULT 'system',
+  last_run_at TIMESTAMPTZ,
+  last_run_status TEXT,
+  last_run_output TEXT,
+  last_run_error TEXT,
+  next_run_at TIMESTAMPTZ,
+  run_count INTEGER NOT NULL DEFAULT 0,
+  success_count INTEGER NOT NULL DEFAULT 0,
+  fail_count INTEGER NOT NULL DEFAULT 0,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS cron_runs (
+  id TEXT PRIMARY KEY,
+  cron_job_id TEXT NOT NULL REFERENCES cron_jobs(id) ON DELETE CASCADE,
+  start_time TIMESTAMPTZ NOT NULL,
+  end_time TIMESTAMPTZ,
+  status TEXT NOT NULL DEFAULT 'running',
+  output TEXT,
+  error TEXT,
+  duration_ms INTEGER,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cron_runs_cron_job_id ON cron_runs(cron_job_id);
+CREATE INDEX IF NOT EXISTS idx_cron_jobs_status ON cron_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_cron_jobs_next_run_at ON cron_jobs(next_run_at) WHERE enabled = TRUE;
+
+-- ============ Role Memory (from 20260324_003_create_role_memory_tables.sql) ============
+CREATE TABLE IF NOT EXISTS role_change_log (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  from_role TEXT,
+  to_role TEXT NOT NULL,
+  changed_by TEXT NOT NULL,
+  reason TEXT,
+  timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS permission_delegations (
+  id TEXT PRIMARY KEY,
+  delegator_id TEXT NOT NULL,
+  delegate_id TEXT NOT NULL,
+  permissions TEXT[] NOT NULL,
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  revoked_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_role_change_log_user_id ON role_change_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_role_change_log_timestamp ON role_change_log(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_permission_delegations_delegate_id ON permission_delegations(delegate_id);
+CREATE INDEX IF NOT EXISTS idx_permission_delegations_delegator_id ON permission_delegations(delegator_id);
+CREATE INDEX IF NOT EXISTS idx_permission_delegations_active ON permission_delegations(delegate_id) WHERE revoked_at IS NULL;
