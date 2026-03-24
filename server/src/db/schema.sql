@@ -1,6 +1,16 @@
 -- PostgreSQL Schema for TeamClaw
 -- H1: 统一数据存储到 PostgreSQL
 
+-- ============ Schema Migrations (managed by server/src/db/migrations/run.ts) ============
+CREATE TABLE IF NOT EXISTS _migrations (
+  id SERIAL PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL,
+  executed_at TIMESTAMPTZ DEFAULT NOW(),
+  checksum TEXT,
+  execution_time_ms INTEGER,
+  status TEXT DEFAULT 'success'
+);
+
 -- ============ Versions ============
 CREATE TABLE IF NOT EXISTS versions (
   id TEXT PRIMARY KEY,
@@ -28,6 +38,7 @@ CREATE TABLE IF NOT EXISTS versions (
 
 CREATE INDEX IF NOT EXISTS idx_versions_status_branch_created ON versions(build_status, branch, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_versions_created_at ON versions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_versions_rollback ON versions(rollback_count, last_rollback_at);
 
 -- ============ Tags ============
 CREATE TABLE IF NOT EXISTS tags (
@@ -43,6 +54,12 @@ CREATE TABLE IF NOT EXISTS tags (
 
 CREATE INDEX IF NOT EXISTS idx_tags_version ON tags(version_id);
 CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name);
+
+-- Source column (added by migration 20260321_002)
+DO $$ BEGIN
+  ALTER TABLE tags ADD COLUMN source TEXT DEFAULT 'manual';
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
 -- ============ Branches ============
 CREATE TABLE IF NOT EXISTS branches (
