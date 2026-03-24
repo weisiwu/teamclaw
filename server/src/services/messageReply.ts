@@ -1,7 +1,7 @@
 /**
  * Message Reply Service
  * 消息机制模块 - 统一封装各渠道消息回复
- * 
+ *
  * 负责将消息回复发送到飞书/微信/Web等不同通道
  */
 
@@ -11,7 +11,7 @@ export interface ReplyRequest {
   channel: Message['channel'];
   userId: string;
   content: string;
-  messageId?: string;  // 可选的回复目标消息ID（用于回复链）
+  messageId?: string; // 可选的回复目标消息ID（用于回复链）
   replyType?: 'text' | 'notification' | 'mention';
 }
 
@@ -48,25 +48,38 @@ async function sendFeishuReply(req: {
   messageId?: string;
   replyType?: string;
 }): Promise<{ success: boolean; error?: string }> {
-  const { userId, content, messageId, replyType } = req;
+  const { userId, content } = req;
 
-  // 优先尝试通过 feishuService 发送
+  // 获取飞书配置
+  const { getFeishuConfig } = await import('./feishuService.js');
+  const config = getFeishuConfig();
+
+  if (!config) {
+    console.warn(
+      `[messageReply:feishu] Feishu not configured (FEISHU_APP_ID/FEISHU_APP_SECRET not set). Cannot send to ${userId}`
+    );
+    return {
+      success: false,
+      error: '飞书未配置，请设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET 环境变量',
+    };
+  }
+
   try {
     const { sendFeishuMessage } = await import('./feishuService.js');
-    const result = await sendFeishuMessage({
+    await sendFeishuMessage({
+      appId: config.appId,
+      appSecret: config.appSecret,
       receiveId: userId,
       receiveIdType: 'open_id',
       content: JSON.stringify({ text: content }),
       msgType: 'text',
     });
     return { success: true };
-  } catch {
-    // feishuService 不可用时降级到日志
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[messageReply:feishu] Failed to send message to ${userId}: ${msg}`);
+    return { success: false, error: msg };
   }
-
-  // 降级：记录日志（实际生产中应接入飞书 API）
-  console.log(`[messageReply:feishu] Would send to ${userId}: ${content}`);
-  return { success: true };
 }
 
 /**
@@ -77,8 +90,10 @@ async function sendWechatReply(req: {
   content: string;
 }): Promise<{ success: boolean; error?: string }> {
   const { userId, content } = req;
-  console.log(`[messageReply:wechat] Would send to ${userId}: ${content}`);
-  return { success: true };
+  console.warn(
+    `[messageReply:wechat] WeChat sending not implemented. Would send to ${userId}: ${content}`
+  );
+  return { success: false, error: '微信通道发送功能未实现（WeChat sending not implemented）' };
 }
 
 /**
@@ -89,14 +104,16 @@ async function sendWebReply(req: {
   content: string;
 }): Promise<{ success: boolean; error?: string }> {
   const { userId, content } = req;
-  console.log(`[messageReply:web] Would send to ${userId}: ${content}`);
-  return { success: true };
+  console.warn(
+    `[messageReply:web] Web sending not implemented. Would send to ${userId}: ${content}`
+  );
+  return { success: false, error: 'Web 通道发送功能未实现（Web sending not implemented）' };
 }
 
 /**
  * 构建标准"已收到"回复文本
  */
-export function buildAcknowledgmentReply(userName: string): string {
+export function buildAcknowledgmentReply(): string {
   return `✅ 收到！您的消息已加入处理队列，main 会尽快回复您。`;
 }
 
