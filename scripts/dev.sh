@@ -297,18 +297,22 @@ if [ "$SKIP_DOCKER" = false ] && [ "$FRONTEND_ONLY" = false ]; then
     warn "ChromaDB 启动超时"
   fi
 
-  # 初始化数据库
-  if [ -f "$SCRIPT_DIR/db-init.sh" ]; then
-    info "初始化数据库..."
-    chmod +x "$SCRIPT_DIR/db-init.sh"
-    "$SCRIPT_DIR/db-init.sh" 2>&1 | tail -3
-    success "数据库初始化完成"
-  fi
+  # 数据库迁移由后端 server 启动时自动执行（index.ts → runMigrations）
+  # 如需手动执行：./scripts/db-init.sh
 
   echo ""
 fi
 
-# ── Step 5: 启动后端 ──────────────────────────────────────────
+# ── Step 5: 加载 .env ─────────────────────────────────────────
+if [ -f "$PROJECT_ROOT/.env" ]; then
+  info "加载环境变量..."
+  set -a
+  source <(grep -v '^\s*#' "$PROJECT_ROOT/.env" | grep -v '^\s*$')
+  set +a
+  success ".env 已加载"
+fi
+
+# ── Step 6: 启动后端 ──────────────────────────────────────────
 if [ "$FRONTEND_ONLY" = false ]; then
   info "启动后端服务 (Express :9700)..."
 
@@ -319,11 +323,11 @@ if [ "$FRONTEND_ONLY" = false ]; then
     echo "$EXISTING_PID" > "$PID_DIR/backend.pid"
     success "使用已有后端进程 (PID: $EXISTING_PID)"
   else
-    cd "$SERVER_DIR"
-    npx tsx watch src/index.ts > "$LOG_DIR/backend.log" 2>&1 &
+    # 从项目根目录启动后端（确保 .env 路径正确）
+    cd "$PROJECT_ROOT"
+    npx tsx watch server/src/index.ts > "$LOG_DIR/backend.log" 2>&1 &
     BACKEND_PID=$!
     echo "$BACKEND_PID" > "$PID_DIR/backend.pid"
-    cd "$PROJECT_ROOT"
 
     # 等待后端启动
     RETRIES=0

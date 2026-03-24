@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { Router } from 'express';
 import { onShutdown, registerShutdownHandlers } from './utils/shutdown.js';
 import { join } from 'path';

@@ -106,3 +106,12 @@ export async function runMigrations(): Promise<void> {
   }
   console.log('[migrations] All migrations completed');
 }
+
+// Auto-invoke when run directly: npx tsx server/src/db/migrations/run.ts
+const isMain = process.argv[1]?.endsWith('run.ts') || process.argv[1]?.endsWith('run.js');
+if (isMain && !process.env.__MIGRATION_IMPORTED__) {
+  process.env.__MIGRATION_IMPORTED__ = '1';
+  runMigrations()
+    .then(() => { process.exit(0); })
+    .catch((err) => { console.error('[migrations] Fatal:', err); process.exit(1); });
+}
