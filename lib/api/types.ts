@@ -285,6 +285,79 @@ export interface UpdateCapabilityRequest {
   enabled: boolean;
 }
 
+// ========== Token 用量统计与监控类型 (iter-19) ==========
+
+/** 单个 API Token 的用量汇总 */
+export interface ApiTokenUsageSummary {
+  tokenId: string;
+  tokenName: string;       // Token 名称（脱敏显示）
+  tokenPrefix: string;    // Token 前缀（用于识别）
+  monthlyBudget: number;  // 月度预算（token 数）
+  currentMonthUsage: number;  // 当月用量
+  totalUsage: number;        // 累计用量
+  callCount: number;          // 调用次数
+  successCount: number;      // 成功次数
+  failCount: number;          // 失败次数
+  avgResponseTime: number;   // 平均响应时间（ms）
+  inputTokens: number;       // 当月输入 token
+  outputTokens: number;      // 当月输出 token
+  cost: number;              // 当月成本（元）
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Agent 维度的用量统计 */
+export interface AgentTokenUsage {
+  agentName: string;
+  callCount: number;       // 调用次数
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalTokens: number;
+  totalCost: number;
+  avgTokensPerCall: number;
+  modelDistribution: Record<string, number>;  // 模型 -> 调用次数
+  tokenDistribution: Record<string, number>;  // 模型 -> token 消耗
+  lastCalledAt: string;
+}
+
+/** LLM 调用日志记录 */
+export interface LLMCallLog {
+  id: string;
+  timestamp: string;
+  agentName: string;
+  tokenId: string;
+  tokenName: string;     // 脱敏后的 token 名称
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  durationMs: number;
+  status: "success" | "error" | "timeout";
+  errorMessage?: string;
+  cost: number;
+}
+
+/** 用量统计筛选参数 */
+export interface TokenUsageFilters {
+  startDate?: string;
+  endDate?: string;
+  agent?: string;
+  tokenId?: string;
+  model?: string;
+  status?: "all" | "success" | "error" | "timeout";
+  page?: number;
+  pageSize?: number;
+}
+
+/** 分页响应 */
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 // ========== 版本管理类型 ==========
 
 export type VersionStatus = "draft" | "published" | "archived" | "rolled_back";

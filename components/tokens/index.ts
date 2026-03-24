@@ -3,3 +3,6 @@ export { TokenTrendChart } from "./TokenTrendChart";
 export { TokenDailyTable } from "./TokenDailyTable";
 export { TokenTaskTable } from "./TokenTaskTable";
 export { TokenFilterBar } from "./TokenFilterBar";
+export { TokenUsageByToken } from "./TokenUsageByToken";
+export { TokenUsageByAgent } from "./TokenUsageByAgent";
+export { LLMCallLogTable } from "./LLMCallLogTable";

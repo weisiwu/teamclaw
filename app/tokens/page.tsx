@@ -11,6 +11,9 @@ import {
   TokenDailyTable,
   TokenTaskTable,
   TokenFilterBar,
+  TokenUsageByToken,
+  TokenUsageByAgent,
+  LLMCallLogTable,
 } from "@/components/tokens";
 import {
   useTokenSummary,
@@ -18,6 +21,40 @@ import {
   useTokenTaskList,
   useTokenTrend,
 } from "@/hooks/useTokens";
+import {
+  useTokenUsageSummary,
+  useAgentTokenUsage,
+  useLLMCallLogs,
+} from "@/hooks/useTokenUsage";
+import { TokenUsageFilters } from "@/lib/api/types";
+
+type Tab = "overview" | "byToken" | "byAgent" | "calls";
+
+function Tabs({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
+  const tabs: { key: Tab; label: string }[] = [
+    { key: "overview", label: "总览" },
+    { key: "byToken", label: "按 Token" },
+    { key: "byAgent", label: "按 Agent" },
+    { key: "calls", label: "调用日志" },
+  ];
+  return (
+    <div className="flex gap-1 border-b border-gray-200">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          onClick={() => onChange(t.key)}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            active === t.key
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 // Token 页面内容组件
 function TokensContent() {
@@ -25,18 +62,24 @@ function TokensContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  // Tab 状态
+  const [activeTab, setActiveTab] = useState<Tab>("overview");
+
   // 从 URL 获取筛选参数
   const startDate = searchParams.get("startDate") || undefined;
   const endDate = searchParams.get("endDate") || undefined;
   const taskSearch = searchParams.get("taskSearch") || undefined;
   const taskPage = Number(searchParams.get("taskPage")) || 1;
 
+  // 调用日志筛选
+  const [callFilters, setCallFilters] = useState<TokenUsageFilters>({
+    page: 1,
+    pageSize: 20,
+  });
+
   // 筛选参数
   const dateFilters = useMemo(
-    () => ({
-      startDate,
-      endDate,
-    }),
+    () => ({ startDate, endDate }),
     [startDate, endDate]
   );
 
@@ -54,6 +97,11 @@ function TokensContent() {
   const { data: dailyData, isLoading: dailyLoading } = useTokenDailyList(dateFilters);
   const { data: taskData, isLoading: taskLoading } = useTokenTaskList(taskFilters);
   const { data: trendData, isLoading: trendLoading } = useTokenTrend(30);
+
+  // 新增：用量统计 API
+  const { data: tokenUsageData, isLoading: tokenUsageLoading } = useTokenUsageSummary();
+  const { data: agentUsageData, isLoading: agentUsageLoading } = useAgentTokenUsage();
+  const { data: llmCallsData, isLoading: llmCallsLoading } = useLLMCallLogs(callFilters);
 
   // 刷新数据
   const handleRefresh = () => {
@@ -177,38 +225,75 @@ function TokensContent() {
         </div>
       </div>
 
-      {/* Token 汇总卡片 */}
-      <TokenSummaryCards
-        data={summaryData?.data}
-        isLoading={summaryLoading}
-      />
+      {/* Tab 导航 */}
+      <Tabs active={activeTab} onChange={setActiveTab} />
 
-      {/* 筛选栏 */}
-      <TokenFilterBar
-        startDate={startDate}
-        endDate={endDate}
-        onStartDateChange={handleStartDateChange}
-        onEndDateChange={handleEndDateChange}
-        onClear={handleClearFilters}
-      />
+      {/* Tab 内容 */}
+      {activeTab === "overview" && (
+        <>
+          {/* Token 汇总卡片 */}
+          <TokenSummaryCards data={summaryData?.data} isLoading={summaryLoading} />
 
-      {/* 图表区域 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <TokenTrendChart data={trendData?.data} isLoading={trendLoading} />
-        <TokenDailyTable data={dailyData?.data} isLoading={dailyLoading} />
-      </div>
+          {/* 筛选栏 */}
+          <TokenFilterBar
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={handleStartDateChange}
+            onEndDateChange={handleEndDateChange}
+            onClear={handleClearFilters}
+          />
 
-      {/* 任务 Token 列表 */}
-      <TokenTaskTable
-        data={taskData?.data}
-        total={taskData?.total}
-        page={taskData?.page}
-        pageSize={taskData?.pageSize}
-        totalPages={taskData?.totalPages}
-        isLoading={taskLoading}
-        onSearchChange={handleTaskSearchChange}
-        onPageChange={handleTaskPageChange}
-      />
+          {/* 图表区域 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <TokenTrendChart data={trendData?.data} isLoading={trendLoading} />
+            <TokenDailyTable data={dailyData?.data} isLoading={dailyLoading} />
+          </div>
+
+          {/* 任务 Token 列表 */}
+          <TokenTaskTable
+            data={taskData?.data}
+            total={taskData?.total}
+            page={taskData?.page}
+            pageSize={taskData?.pageSize}
+            totalPages={taskData?.totalPages}
+            isLoading={taskLoading}
+            onSearchChange={handleTaskSearchChange}
+            onPageChange={handleTaskPageChange}
+          />
+        </>
+      )}
+
+      {activeTab === "byToken" && (
+        <div className="space-y-4">
+          <TokenUsageByToken
+            data={tokenUsageData?.data}
+            isLoading={tokenUsageLoading}
+          />
+        </div>
+      )}
+
+      {activeTab === "byAgent" && (
+        <div className="space-y-4">
+          <TokenUsageByAgent
+            data={agentUsageData?.data}
+            isLoading={agentUsageLoading}
+          />
+        </div>
+      )}
+
+      {activeTab === "calls" && (
+        <LLMCallLogTable
+          data={llmCallsData?.data}
+          total={llmCallsData?.total}
+          page={llmCallsData?.page}
+          pageSize={llmCallsData?.pageSize}
+          totalPages={llmCallsData?.totalPages}
+          isLoading={llmCallsLoading}
+          filters={callFilters}
+          onFiltersChange={setCallFilters}
+          onPageChange={(p) => setCallFilters((f) => ({ ...f, page: p }))}
+        />
+      )}
 
       {/* Toast 通知 */}
       {toastVisible && (
