@@ -37,28 +37,11 @@ function extractUserFromToken(req: AuthRequest): JwtPayload | null {
 }
 
 /**
- * 兼容旧方式（仅开发环境）
- * Header 格式: X-User-Id: user_001, X-User-Role: admin
- */
-function extractUserFromHeaders(req: AuthRequest): { id?: string; role?: Role } {
-  const userId = req.headers["x-user-id"] as string | undefined;
-  const role = req.headers["x-user-role"] as Role | undefined;
-  return { id: userId, role };
-}
-
-/**
- * 提取用户身份：优先从 Token，兼容旧 header（仅开发环境）
+ * 提取用户身份：仅从 Token 解析
  */
 function extractUser(req: AuthRequest): { id: string; role: Role } | null {
-  // 优先从 Token 解析
   const fromToken = extractUserFromToken(req);
   if (fromToken) return { id: fromToken.userId, role: fromToken.role as Role };
-
-  // 兼容旧方式（开发环境限定）
-  if (process.env.NODE_ENV !== 'development') return null;
-  const { id, role } = extractUserFromHeaders(req);
-  if (id && role) return { id, role };
-
   return null;
 }
 
