@@ -50,7 +50,9 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-slate-900 dark:to-slate-800 px-4">
+    <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-slate-900 dark:to-slate-800 px-4 z-50">
+      {/* Full-screen overlay to block interaction with background */}
+      <div className="fixed inset-0 bg-black/50 -z-10" />
       <div className="w-full max-w-md">
         {/* Logo / Title */}
         <div className="text-center mb-8 animate-fade-in-up">
