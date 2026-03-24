@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { API_BASE } from "./versionShared";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { API_BASE } from './versionShared';
 import type {
   Version,
   VersionSnapshot,
@@ -20,19 +20,21 @@ import type {
   BuildEnhancementSettings,
   BuildNotificationSettings,
   BuildEnvironment,
-} from "./types";
+} from './types';
 import {
   BUILD_ENVIRONMENTS,
   DEFAULT_BUILD_RETRY_SETTINGS,
   DEFAULT_NOTIFICATION_SETTINGS,
-} from "./constants";
+} from './constants';
 
 // Re-export autoBumpVersion
-export { autoBumpVersion } from "./versionShared";
+export { autoBumpVersion } from './versionShared';
 
 // ========== 构建相关 API ==========
 
-export async function triggerBuild(versionId: string): Promise<{ success: boolean; buildId: string }> {
+export async function triggerBuild(
+  versionId: string
+): Promise<{ success: boolean; buildId: string }> {
   const res = await fetch(`${API_BASE}/versions/${encodeURIComponent(versionId)}/build`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -48,12 +50,19 @@ export async function triggerBuild(versionId: string): Promise<{ success: boolea
   throw new Error(json.message || '触发构建失败');
 }
 
-export async function rebuildVersion(versionId: string): Promise<{ success: boolean; buildId: string }> {
+export async function rebuildVersion(
+  versionId: string
+): Promise<{ success: boolean; buildId: string }> {
   return triggerBuild(versionId);
 }
 
-export async function downloadArtifact(versionId: string, format: string = 'zip'): Promise<{ success: boolean; url: string }> {
-  const res = await fetch(`${API_BASE}/versions/${encodeURIComponent(versionId)}/artifacts?format=${format}`);
+export async function downloadArtifact(
+  versionId: string,
+  format: string = 'zip'
+): Promise<{ success: boolean; url: string }> {
+  const res = await fetch(
+    `${API_BASE}/versions/${encodeURIComponent(versionId)}/artifacts?format=${format}`
+  );
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || `获取下载链接失败 (${res.status})`);
@@ -65,14 +74,16 @@ export async function downloadArtifact(versionId: string, format: string = 'zip'
   throw new Error(json.message || '获取下载链接失败');
 }
 
-export async function getDownloadHistory(): Promise<Array<{
-  id: string;
-  versionId: string;
-  version: string;
-  format: string;
-  url: string;
-  downloadedAt: string;
-}>> {
+export async function getDownloadHistory(): Promise<
+  Array<{
+    id: string;
+    versionId: string;
+    version: string;
+    format: string;
+    url: string;
+    downloadedAt: string;
+  }>
+> {
   const res = await fetch(`${API_BASE}/builds/download-history`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -143,9 +154,12 @@ export async function createSnapshot(
 }
 
 export async function restoreSnapshot(snapshotId: string): Promise<Version> {
-  const res = await fetch(`${API_BASE}/versions/snapshots/${encodeURIComponent(snapshotId)}/restore`, {
-    method: 'POST',
-  });
+  const res = await fetch(
+    `${API_BASE}/versions/snapshots/${encodeURIComponent(snapshotId)}/restore`,
+    {
+      method: 'POST',
+    }
+  );
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || `恢复快照失败 (${res.status})`);
@@ -236,7 +250,9 @@ export async function renameBranch(request: RenameBranchRequest): Promise<GitBra
   throw new Error(json.message || '重命名分支失败');
 }
 
-export async function toggleBranchProtection(request: BranchProtectionRequest): Promise<GitBranch | null> {
+export async function toggleBranchProtection(
+  request: BranchProtectionRequest
+): Promise<GitBranch | null> {
   const res = await fetch(`${API_BASE}/branches/${encodeURIComponent(request.branchId)}/protect`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -255,7 +271,10 @@ export async function toggleBranchProtection(request: BranchProtectionRequest): 
 
 // ========== Version Bump API ==========
 
-export async function bumpVersion(versionId: string, bumpType: VersionBumpType): Promise<BumpVersionResponse> {
+export async function bumpVersion(
+  versionId: string,
+  bumpType: VersionBumpType
+): Promise<BumpVersionResponse> {
   const res = await fetch(`${API_BASE}/versions/${encodeURIComponent(versionId)}/bump`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -376,7 +395,9 @@ export function getBuildEnvironments(): BuildEnvironment[] {
 
 // ========== 产物下载增强 API ==========
 
-export async function batchDownloadArtifacts(request: BatchDownloadRequest): Promise<BatchDownloadResponse> {
+export async function batchDownloadArtifacts(
+  request: BatchDownloadRequest
+): Promise<BatchDownloadResponse> {
   const res = await fetch(`${API_BASE}/builds/batch-download`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -408,7 +429,7 @@ export async function getDownloadStats(): Promise<DownloadStats> {
 
 // ========== Build Artifacts API ==========
 
-const ARTIFACTS_API = "/api/v1/build/artifacts";
+const ARTIFACTS_API = '/api/v1/build/artifacts';
 
 export interface ArtifactsResponse {
   code: number;
@@ -416,7 +437,7 @@ export interface ArtifactsResponse {
 }
 
 export async function getBuildArtifacts(versionName?: string): Promise<BuildArtifact[]> {
-  const params = versionName ? `?versionName=${encodeURIComponent(versionName)}` : "";
+  const params = versionName ? `?versionName=${encodeURIComponent(versionName)}` : '';
   const res = await fetch(`${ARTIFACTS_API}${params}`);
   const json: ArtifactsResponse = await res.json();
   if (json.code === 0 || json.code === 200) {
@@ -428,17 +449,17 @@ export async function getBuildArtifacts(versionName?: string): Promise<BuildArti
 export async function uploadBuildArtifact(
   file: File,
   versionName: string,
-  env = "production",
-  platform = "unknown",
-  arch = "unknown"
+  env = 'production',
+  platform = 'unknown',
+  arch = 'unknown'
 ): Promise<BuildArtifact> {
   const formData = new FormData();
-  formData.append("file", file);
-  formData.append("versionName", versionName);
-  formData.append("env", env);
-  formData.append("platform", platform);
-  formData.append("arch", arch);
-  const res = await fetch(ARTIFACTS_API, { method: "POST", body: formData });
+  formData.append('file', file);
+  formData.append('versionName', versionName);
+  formData.append('env', env);
+  formData.append('platform', platform);
+  formData.append('arch', arch);
+  const res = await fetch(ARTIFACTS_API, { method: 'POST', body: formData });
   const json = await res.json();
   if (json.code === 0 || json.code === 200) {
     return json.data as BuildArtifact;
@@ -448,7 +469,7 @@ export async function uploadBuildArtifact(
 
 // ========== Server Artifacts API ==========
 
-const SERVER_ARTIFACTS_API = "/api/v1/build/artifacts";
+const SERVER_ARTIFACTS_API = '/api/v1/build/artifacts';
 
 export interface ServerArtifact {
   path: string;
@@ -474,8 +495,11 @@ export interface ServerArtifactsResponse {
   };
 }
 
-export async function getVersionArtifacts(versionId: string, buildNumber?: number): Promise<ServerArtifact[]> {
-  const params = buildNumber ? `?buildNumber=${buildNumber}` : "";
+export async function getVersionArtifacts(
+  versionId: string,
+  buildNumber?: number
+): Promise<ServerArtifact[]> {
+  const params = buildNumber ? `?buildNumber=${buildNumber}` : '';
   const res = await fetch(`${SERVER_ARTIFACTS_API}/${encodeURIComponent(versionId)}${params}`);
   const json: ServerArtifactsResponse = await res.json();
   if (json.code !== 0) return [];
@@ -486,7 +510,7 @@ export async function getVersionArtifacts(versionId: string, buildNumber?: numbe
 
 export function useDownloadHistory() {
   return useQuery({
-    queryKey: ["downloadHistory"],
+    queryKey: ['downloadHistory'],
     queryFn: () => getDownloadHistory(),
   });
 }
@@ -498,14 +522,14 @@ export function useAddDownloadRecord() {
     mutationFn: (record: { versionId: string; version: string; format: string; url: string }) =>
       addDownloadRecord(record),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["downloadHistory"] });
+      queryClient.invalidateQueries({ queryKey: ['downloadHistory'] });
     },
   });
 }
 
 export function useBranches() {
   return useQuery({
-    queryKey: ["branches"],
+    queryKey: ['branches'],
     queryFn: () => getBranches(),
   });
 }
@@ -516,7 +540,7 @@ export function useCreateBranch() {
   return useMutation({
     mutationFn: (request: CreateBranchRequest) => createBranch(request),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["branches"] });
+      queryClient.invalidateQueries({ queryKey: ['branches'] });
     },
   });
 }
@@ -527,7 +551,7 @@ export function useDeleteBranch() {
   return useMutation({
     mutationFn: (branchId: string) => deleteBranch(branchId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["branches"] });
+      queryClient.invalidateQueries({ queryKey: ['branches'] });
     },
   });
 }
@@ -538,8 +562,8 @@ export function useSetMainBranch() {
   return useMutation({
     mutationFn: (branchId: string) => setMainBranch(branchId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["branches"] });
-      queryClient.invalidateQueries({ queryKey: ["mainBranch"] });
+      queryClient.invalidateQueries({ queryKey: ['branches'] });
+      queryClient.invalidateQueries({ queryKey: ['mainBranch'] });
     },
   });
 }
@@ -550,7 +574,7 @@ export function useRenameBranch() {
   return useMutation({
     mutationFn: (request: RenameBranchRequest) => renameBranch(request),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["branches"] });
+      queryClient.invalidateQueries({ queryKey: ['branches'] });
     },
   });
 }
@@ -561,21 +585,21 @@ export function useToggleBranchProtection() {
   return useMutation({
     mutationFn: (request: BranchProtectionRequest) => toggleBranchProtection(request),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["branches"] });
+      queryClient.invalidateQueries({ queryKey: ['branches'] });
     },
   });
 }
 
 export function useReleaseLogs(versionId?: string) {
   return useQuery({
-    queryKey: ["releaseLogs", versionId],
+    queryKey: ['releaseLogs', versionId],
     queryFn: () => getReleaseLogs(versionId),
   });
 }
 
 export function useBuildArtifacts(versionName?: string) {
   return useQuery({
-    queryKey: ["buildArtifacts", versionName],
+    queryKey: ['buildArtifacts', versionName],
     queryFn: () => getBuildArtifacts(versionName),
     staleTime: 30 * 1000,
   });
@@ -583,9 +607,37 @@ export function useBuildArtifacts(versionName?: string) {
 
 export function useVersionArtifacts(versionId: string, buildNumber?: number) {
   return useQuery({
-    queryKey: ["versionArtifacts", versionId, buildNumber],
+    queryKey: ['versionArtifacts', versionId, buildNumber],
     queryFn: () => getVersionArtifacts(versionId, buildNumber),
     staleTime: 30 * 1000,
     enabled: !!versionId,
+  });
+}
+
+// ========== Build Trigger Hooks (迁移自 versions.ts) ==========
+
+export function useTriggerBuild() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (versionId: string) => {
+      return triggerBuild(versionId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['versions'] });
+    },
+  });
+}
+
+export function useRebuildVersion() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (versionId: string) => {
+      return rebuildVersion(versionId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['versions'] });
+    },
   });
 }
