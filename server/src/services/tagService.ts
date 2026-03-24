@@ -3,9 +3,9 @@
 
 import { TagRecord, TagConfig } from '../models/tag.js';
 import { createTag as gitCreateTag, deleteTag as gitDeleteTag } from './gitService.js';
-import { getDb } from '../db/sqlite.js';
+import { query, queryOne, execute } from '../db/pg.js';
 
-// DB storage — tag records persisted in SQLite tags table
+// DB storage — tag records persisted in PostgreSQL tags table
 
 // 默认 tag 配置
 const defaultConfig: TagConfig = {
@@ -26,17 +26,17 @@ function isProtectedTag(tagName: string): boolean {
 
 // ========== Tag 记录管理 ==========
 
-export function createTagRecord(data: Omit<TagRecord, 'id' | 'createdAt' | 'archived' | 'protected'>): TagRecord {
-  const db = getDb();
+export async function createTagRecord(data: Omit<TagRecord, 'id' | 'createdAt' | 'archived' | 'protected'>): Promise<TagRecord> {
   const id = `tag_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
   const protected_ = isProtectedTag(data.name) ? 1 : 0;
   const now = new Date().toISOString();
   const source = data.source || 'manual';
 
-  db.prepare(`
-    INSERT INTO tags (id, name, version_id, commit_hash, annotation, protected, created_at, source)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, data.name, data.versionId, data.commitHash || null, data.annotation || data.message || null, protected_, now, source);
+  await execute(
+    `INSERT INTO tags (id, name, version_id, commit_hash, annotation, protected, created_at, source)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [id, data.name, data.versionId, data.commitHash || null, data.annotation || data.message || null, protected_, now, source]
+  );
 
   return {
     id,
@@ -54,29 +54,28 @@ export function createTagRecord(data: Omit<TagRecord, 'id' | 'createdAt' | 'arch
   };
 }
 
-export function getTagRecord(id: string): TagRecord | undefined {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM tags WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+export async function getTagRecord(id: string): Promise<TagRecord | undefined> {
+  const row = await queryOne<Record<string, unknown>>('SELECT * FROM tags WHERE id = $1', [id]);
   if (!row) return undefined;
   return rowToRecord(row);
 }
 
-export function getTagByName(name: string): TagRecord | undefined {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM tags WHERE name = ?').get(name) as Record<string, unknown> | undefined;
+export async function getTagByName(name: string): Promise<TagRecord | undefined> {
+  const row = await queryOne<Record<string, unknown>>('SELECT * FROM tags WHERE name = $1', [name]);
   if (!row) return undefined;
   return rowToRecord(row);
 }
 
-export function getAllTagRecords(): TagRecord[] {
-  const db = getDb();
-  const rows = db.prepare('SELECT * FROM tags ORDER BY created_at DESC').all() as Record<string, unknown>[];
+export async function getAllTagRecords(): Promise<TagRecord[]> {
+  const rows = await query<Record<string, unknown>>('SELECT * FROM tags ORDER BY created_at DESC');
   return rows.map(rowToRecord);
 }
 
-export function getTagsByVersionId(versionId: string): TagRecord[] {
-  const db = getDb();
-  const rows = db.prepare('SELECT * FROM tags WHERE version_id = ? ORDER BY created_at DESC').all(versionId) as Record<string, unknown>[];
+export async function getTagsByVersionId(versionId: string): Promise<TagRecord[]> {
+  const rows = await query<Record<string, unknown>>(
+    'SELECT * FROM tags WHERE version_id = $1 ORDER BY created_at DESC',
+    [versionId]
+  );
   return rows.map(rowToRecord);
 }
 
@@ -98,44 +97,42 @@ function rowToRecord(row: Record<string, unknown>): TagRecord {
   };
 }
 
-export function updateTagRecord(id: string, updates: Partial<TagRecord>): TagRecord | undefined {
-  const db = getDb();
-  const existing = db.prepare('SELECT * FROM tags WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+export async function updateTagRecord(id: string, updates: Partial<TagRecord>): Promise<TagRecord | undefined> {
+  const existing = await queryOne<Record<string, unknown>>('SELECT * FROM tags WHERE id = $1', [id]);
   if (!existing) return undefined;
 
   const name = updates.name !== undefined ? updates.name : existing.name as string;
   const annotation = updates.annotation !== undefined ? updates.annotation : existing.annotation as string | undefined;
   const protected_ = updates.protected !== undefined ? (updates.protected ? 1 : 0) : existing.protected as number;
 
-  db.prepare('UPDATE tags SET name = ?, annotation = ?, protected = ? WHERE id = ?')
-    .run(name, annotation || null, protected_, id);
+  await execute(
+    'UPDATE tags SET name = $1, annotation = $2, protected = $3 WHERE id = $4',
+    [name, annotation || null, protected_, id]
+  );
 
   return getTagRecord(id);
 }
 
-export function deleteTagRecord(id: string): boolean {
-  const db = getDb();
-  const row = db.prepare('SELECT protected FROM tags WHERE id = ?').get(id) as { protected: number } | undefined;
+export async function deleteTagRecord(id: string): Promise<boolean> {
+  const row = await queryOne<{ protected: number }>('SELECT protected FROM tags WHERE id = $1', [id]);
   if (!row) return false;
   if (row.protected === 1) return false; // 不能删除受保护标签
-  db.prepare('DELETE FROM tags WHERE id = ?').run(id);
+  await execute('DELETE FROM tags WHERE id = $1', [id]);
   return true;
 }
 
-export function deleteTagByName(name: string): boolean {
-  const record = getTagByName(name);
+export async function deleteTagByName(name: string): Promise<boolean> {
+  const record = await getTagByName(name);
   if (!record) return false;
   if (record.protected) return false;
-  const db = getDb();
-  db.prepare('DELETE FROM tags WHERE name = ?').run(name);
+  await execute('DELETE FROM tags WHERE name = $1', [name]);
   return true;
 }
 
 // ========== 归档/保护操作 ==========
 
-export function archiveTag(id: string, archived: boolean = true): TagRecord | undefined {
-  const db = getDb();
-  const record = getTagRecord(id);
+export async function archiveTag(id: string, archived: boolean = true): Promise<TagRecord | undefined> {
+  const record = await getTagRecord(id);
   if (!record) return undefined;
   if (record.protected && archived) return undefined; // 不能归档受保护标签
   // Note: tags table doesn't have an archived column in the schema,
@@ -143,9 +140,8 @@ export function archiveTag(id: string, archived: boolean = true): TagRecord | un
   return record;
 }
 
-export function protectTag(id: string, protect: boolean = true): TagRecord | undefined {
-  const db = getDb();
-  db.prepare('UPDATE tags SET protected = ? WHERE id = ?').run(protect ? 1 : 0, id);
+export async function protectTag(id: string, protect: boolean = true): Promise<TagRecord | undefined> {
+  await execute('UPDATE tags SET protected = $1 WHERE id = $2', [protect ? 1 : 0, id]);
   return getTagRecord(id);
 }
 
@@ -179,7 +175,7 @@ export function shouldAutoTag(status: string): boolean {
 }
 
 // 自动为版本创建 tag 记录 + 实际 git tag
-export function autoCreateTagForVersion(
+export async function autoCreateTagForVersion(
   versionId: string,
   versionName: string,
   options?: {
@@ -189,16 +185,16 @@ export function autoCreateTagForVersion(
     createdBy?: string;
     projectPath?: string; // 项目路径，用于创建实际 git tag
   }
-): TagRecord | null {
+): Promise<TagRecord | null> {
   if (!shouldAutoTag('published')) return null;
 
   const tagName = options?.name || makeTagName(versionName, tagConfig.tagPrefix, tagConfig.customPrefix);
 
   // 检查是否已存在同名 tag
-  const existing = getTagByName(tagName);
+  const existing = await getTagByName(tagName);
   if (existing) return existing;
 
-  const record = createTagRecord({
+  const record = await createTagRecord({
     name: tagName,
     versionId,
     versionName,
@@ -222,12 +218,12 @@ export function autoCreateTagForVersion(
 }
 
 // 重命名 tag（更新记录 + git tag）
-export function renameTag(
+export async function renameTag(
   id: string,
   newName: string,
   options?: { projectPath?: string }
-): TagRecord | null {
-  const record = getTagRecord(id);
+): Promise<TagRecord | null> {
+  const record = await getTagRecord(id);
   if (!record) return null;
   if (record.protected) return null;
 
@@ -244,16 +240,16 @@ export function renameTag(
   }
 
   // 更新 DB 记录
-  updateTagRecord(id, { name: newName });
+  await updateTagRecord(id, { name: newName });
   return getTagRecord(id);
 }
 
 // 删除 tag（删除记录 + git tag）
-export function removeTag(
+export async function removeTag(
   id: string,
   options?: { projectPath?: string }
-): boolean {
-  const record = getTagRecord(id);
+): Promise<boolean> {
+  const record = await getTagRecord(id);
   if (!record) return false;
   if (record.protected) return false;
 

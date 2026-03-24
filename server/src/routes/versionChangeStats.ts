@@ -1,27 +1,31 @@
 import { Router, Request, Response } from 'express';
 import { success, error } from '../utils/response.js';
-import { getDb } from '../db/sqlite.js';
+import { queryOne } from '../db/pg.js';
 
 const router = Router();
 
 // GET /api/v1/versions/change-stats?tag=versionId
 // Returns commit count, change type distribution, file stats, top changed files for a version
-router.get('/', (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   const tag = req.query.tag as string;
   if (!tag) {
     res.status(400).json(error(400, 'tag query parameter is required'));
     return;
   }
 
-  const db = getDb();
-
   // Try to find version by id, version string, or gitTag
-  let row = db.prepare('SELECT * FROM versions WHERE id = ? OR version = ? OR git_tag = ?').get(tag, tag, tag) as Record<string, unknown> | undefined;
+  let row = await queryOne<Record<string, unknown>>(
+    'SELECT * FROM versions WHERE id = $1 OR version = $2 OR git_tag = $3',
+    [tag, tag, tag]
+  );
 
   if (!row) {
     // Try with v prefix
     const withV = tag.startsWith('v') ? tag : `v${tag}`;
-    row = db.prepare('SELECT * FROM versions WHERE id = ? OR version = ? OR git_tag = ?').get(withV, withV, withV) as Record<string, unknown> | undefined;
+    row = await queryOne<Record<string, unknown>>(
+      'SELECT * FROM versions WHERE id = $1 OR version = $2 OR git_tag = $3',
+      [withV, withV, withV]
+    );
   }
 
   if (!row) {

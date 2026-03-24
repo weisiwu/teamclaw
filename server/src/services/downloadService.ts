@@ -7,7 +7,7 @@ import path from 'path';
 import archiver from 'archiver';
 import { v4 as uuidv4 } from 'uuid';
 import { DownloadTask, DownloadStatus, DownloadProgressEvent } from '../models/download.js';
-import { getDb } from '../db/sqlite.js';
+import { query, execute } from '../db/pg.js';
 import { EventEmitter } from 'events';
 import { getDoc } from './docService.js';
 import { getArtifact } from './artifactStore.js';
@@ -30,11 +30,10 @@ class DownloadQueue {
     this.loadPendingTasks();
   }
 
-  private loadPendingTasks(): void {
-    const db = getDb();
-    const tasks = db.prepare(
+  private async loadPendingTasks(): Promise<void> {
+    const tasks = await query<any>(
       "SELECT * FROM download_tasks WHERE status IN ('pending', 'downloading') ORDER BY created_at ASC"
-    ).all() as any[];
+    );
     
     for (const row of tasks) {
       const task: DownloadTask = {
@@ -80,7 +79,7 @@ class DownloadQueue {
     };
 
     // Save to database
-    this.saveTaskToDb(task);
+    await this.saveTaskToDb(task);
     this.tasks.set(task.id, task);
     
     // Start processing queue
@@ -102,26 +101,26 @@ class DownloadQueue {
     return total;
   }
 
-  private saveTaskToDb(task: DownloadTask): void {
-    const db = getDb();
-    db.prepare(`
-      INSERT OR REPLACE INTO download_tasks 
+  private async saveTaskToDb(task: DownloadTask): Promise<void> {
+    await execute(
+      `INSERT OR REPLACE INTO download_tasks
       (id, user_id, type, file_ids, status, progress, total_bytes, downloaded_bytes, zip_path, zip_name, created_at, completed_at, error_message)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      task.id,
-      task.userId,
-      task.type,
-      JSON.stringify(task.fileIds),
-      task.status,
-      task.progress,
-      task.totalBytes,
-      task.downloadedBytes,
-      task.zipPath,
-      task.zipName,
-      task.createdAt,
-      task.completedAt,
-      task.errorMessage
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      [
+        task.id,
+        task.userId,
+        task.type,
+        JSON.stringify(task.fileIds),
+        task.status,
+        task.progress,
+        task.totalBytes,
+        task.downloadedBytes,
+        task.zipPath,
+        task.zipName,
+        task.createdAt,
+        task.completedAt,
+        task.errorMessage,
+      ]
     );
   }
 
@@ -136,7 +135,7 @@ class DownloadQueue {
 
     this.activeDownloads.add(pending.id);
     pending.status = 'downloading';
-    this.saveTaskToDb(pending);
+    await this.saveTaskToDb(pending);
 
     try {
       await this.executeDownload(pending);
@@ -148,7 +147,7 @@ class DownloadQueue {
       console.error(`[DownloadQueue] Task ${pending.id} failed:`, err);
     } finally {
       this.activeDownloads.delete(pending.id);
-      this.saveTaskToDb(pending);
+      await this.saveTaskToDb(pending);
       this.emitProgress(pending);
       
       // Process next task
@@ -277,7 +276,7 @@ class DownloadQueue {
     }
 
     task.completedAt = new Date().toISOString();
-    this.saveTaskToDb(task);
+    await this.saveTaskToDb(task);
     this.emitProgress(task);
 
     // Clean up partial download
@@ -288,7 +287,7 @@ class DownloadQueue {
     return true;
   }
 
-  deleteTask(taskId: string): boolean {
+  async deleteTask(taskId: string): Promise<boolean> {
     const task = this.tasks.get(taskId);
     if (!task) return false;
 
@@ -298,8 +297,7 @@ class DownloadQueue {
     }
 
     // Remove from database
-    const db = getDb();
-    db.prepare('DELETE FROM download_tasks WHERE id = ?').run(taskId);
+    await execute('DELETE FROM download_tasks WHERE id = $1', [taskId]);
 
     this.tasks.delete(taskId);
     return true;
@@ -348,19 +346,19 @@ export function getDownloadFilePath(taskId: string): string | null {
 }
 
 // Cleanup old completed tasks (run periodically)
-export function cleanupOldTasks(maxAgeHours: number = 24): void {
+export async function cleanupOldTasks(maxAgeHours: number = 24): Promise<void> {
   const cutoff = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000).toISOString();
-  const db = getDb();
-  
-  const oldTasks = db.prepare(
-    "SELECT * FROM download_tasks WHERE status IN ('completed', 'failed', 'cancelled') AND created_at < ?"
-  ).all(cutoff) as any[];
+
+  const oldTasks = await query<any>(
+    "SELECT * FROM download_tasks WHERE status IN ('completed', 'failed', 'cancelled') AND created_at < $1",
+    [cutoff]
+  );
 
   for (const row of oldTasks) {
     if (row.zip_path && fs.existsSync(row.zip_path)) {
       fs.unlinkSync(row.zip_path);
     }
-    db.prepare('DELETE FROM download_tasks WHERE id = ?').run(row.id);
+    await execute('DELETE FROM download_tasks WHERE id = $1', [row.id]);
   }
 
   console.log(`[DownloadService] Cleaned up ${oldTasks.length} old tasks`);

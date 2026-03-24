@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { pool } from '../utils/db.js';
 import { redis } from '../utils/redis.js';
 import { createChromaClient } from '../utils/chromadb.js';
-import { getDb } from '../db/sqlite.js';
+import { queryOne } from '../db/pg.js';
 import { success, error } from '../utils/response.js';
 
 const router = Router();
@@ -49,29 +49,12 @@ async function checkChromaDB(): Promise<{ status: string; latency?: number; erro
   }
 }
 
-// Check SQLite connection (iter-21)
-async function checkSQLite(): Promise<{ status: string; latency?: number; error?: string }> {
-  const start = Date.now();
+// Get latest build info (iter-21, migrated to pg)
+async function getLatestBuildInfo(): Promise<{ id?: string; time?: string; status?: string } | null> {
   try {
-    const db = getDb();
-    db.prepare('SELECT 1').get();
-    return { status: 'ok', latency: Date.now() - start };
-  } catch (err) {
-    return { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' };
-  }
-}
-
-// Get latest build info (iter-21)
-function getLatestBuildInfo(): { id?: string; time?: string; status?: string } | null {
-  try {
-    const db = getDb();
-    const row = db.prepare(`
-      SELECT id, build_status, created_at 
-      FROM build_records 
-      ORDER BY created_at DESC 
-      LIMIT 1
-    `).get() as { id: string; build_status: string; created_at: string } | undefined;
-    
+    const row = await queryOne<{ id: string; build_status: string; created_at: string }>(
+      `SELECT id, build_status, created_at FROM build_records ORDER BY created_at DESC LIMIT 1`
+    );
     if (!row) return null;
     return {
       id: row.id,
@@ -83,17 +66,12 @@ function getLatestBuildInfo(): { id?: string; time?: string; status?: string } |
   }
 }
 
-// Get latest version info (iter-21)
-function getLatestVersionInfo(): { id?: string; time?: string; status?: string; version?: string } | null {
+// Get latest version info (iter-21, migrated to pg)
+async function getLatestVersionInfo(): Promise<{ id?: string; time?: string; status?: string; version?: string } | null> {
   try {
-    const db = getDb();
-    const row = db.prepare(`
-      SELECT id, version, status, created_at 
-      FROM versions 
-      ORDER BY created_at DESC 
-      LIMIT 1
-    `).get() as { id: string; version: string; status: string; created_at: string } | undefined;
-    
+    const row = await queryOne<{ id: string; version: string; status: string; created_at: string }>(
+      `SELECT id, version, status, created_at FROM versions ORDER BY created_at DESC LIMIT 1`
+    );
     if (!row) return null;
     return {
       id: row.id,
@@ -133,20 +111,19 @@ router.get('/health', async (req: Request, res: Response) => {
   });
 });
 
-// GET /api/v1/health/detailed — Detailed health check (iter-21)
+// GET /api/v1/health/detailed — Detailed health check (iter-21, migrated to pg)
 router.get('/health/detailed', async (req: Request, res: Response) => {
-  const [postgres, redis, chromadb, sqlite] = await Promise.all([
+  const [postgres, redis, chromadb] = await Promise.all([
     checkPostgres(),
     checkRedis(),
     checkChromaDB(),
-    checkSQLite(),
   ]);
 
-  const lastBuild = getLatestBuildInfo();
-  const lastVersion = getLatestVersionInfo();
+  const lastBuild = await getLatestBuildInfo();
+  const lastVersion = await getLatestVersionInfo();
 
-  const allOk = [postgres, redis, chromadb, sqlite].every(s => s.status === 'ok');
-  const anyError = [postgres, redis, chromadb, sqlite].some(s => s.status === 'error');
+  const allOk = [postgres, redis, chromadb].every(s => s.status === 'ok');
+  const anyError = [postgres, redis, chromadb].some(s => s.status === 'error');
 
   const statusCode = allOk ? 200 : anyError ? 503 : 200;
   
@@ -154,7 +131,7 @@ router.get('/health/detailed', async (req: Request, res: Response) => {
     status: allOk ? 'ok' : anyError ? 'error' : 'degraded',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    services: { postgres, redis, chromadb, sqlite },
+    services: { postgres, redis, chromadb },
     lastBuild: lastBuild || { status: 'none', message: 'No builds found' },
     lastVersion: lastVersion || { status: 'none', message: 'No versions found' },
   };

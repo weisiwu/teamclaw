@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { success, error } from '../utils/response.js';
 import { requireAdmin } from '../middleware/auth.js';
-import { getDb } from '../db/sqlite.js';
+import { query, queryOne, execute } from '../db/pg.js';
 import { VersionSummaryModel } from '../models/versionSummary.js';
 import { runBuild, getBuildConfig } from '../services/buildService.js';
 import { listArtifacts, deleteArtifacts, getArtifactInfo, getArtifactStream, importArtifactsFromDir, getArtifactsTotalSize } from '../services/artifactStore.js';
@@ -15,9 +15,11 @@ import os from 'os';
 const router = Router();
 
 // GET /api/v1/versions/:id/build-config — Get build configuration for a version
-router.get('/:id/build-config', (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+router.get('/:id/build-config', async (req: Request, res: Response) => {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT id, version, projectPath FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -32,8 +34,10 @@ router.get('/:id/build-config', (req: Request, res: Response) => {
 
 // POST /api/v1/versions/:id/build — Trigger a build for a version
 router.post('/:id/build', async (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT * FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -48,13 +52,14 @@ router.post('/:id/build', async (req: Request, res: Response) => {
     (row.projectPath as string) ||
     path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
 
-  db.prepare('UPDATE versions SET build_status = ? WHERE id = ?').run('building', req.params.id);
+  await execute('UPDATE versions SET build_status = $1 WHERE id = $2', ['building', req.params.id]);
 
   try {
     const result = await runBuild(projectPath, { buildCommand });
 
-    db.prepare('UPDATE versions SET build_status = ? WHERE id = ?').run(
-      result.success ? 'success' : 'failed', req.params.id
+    await execute(
+      'UPDATE versions SET build_status = $1 WHERE id = $2',
+      [result.success ? 'success' : 'failed', req.params.id]
     );
 
     let artifactCount = 0;
@@ -119,15 +124,17 @@ router.post('/:id/build', async (req: Request, res: Response) => {
       bumpedVersion: bumpedVersionId ? { id: bumpedVersionId, version: bumpedVersionStr } : undefined,
     }));
   } catch (err: unknown) {
-    db.prepare('UPDATE versions SET build_status = ? WHERE id = ?').run('failed', req.params.id);
+    await execute('UPDATE versions SET build_status = $1 WHERE id = $2', ['failed', req.params.id]);
     res.status(500).json(error(500, `Build failed: ${err instanceof Error ? err.message : String(err)}`));
   }
 });
 
 // GET /api/v1/versions/:id/artifacts — List build artifacts
-router.get('/:id/artifacts', (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db.prepare('SELECT id, version FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+router.get('/:id/artifacts', async (req: Request, res: Response) => {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT id, version FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -145,9 +152,11 @@ router.get('/:id/artifacts', (req: Request, res: Response) => {
 });
 
 // GET /api/v1/versions/:id/artifacts/* — Download a specific artifact
-router.get('/:id/artifacts/*', (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db.prepare('SELECT id, version FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+router.get('/:id/artifacts/*', async (req: Request, res: Response) => {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT id, version FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -174,16 +183,18 @@ router.get('/:id/artifacts/*', (req: Request, res: Response) => {
 });
 
 // DELETE /api/v1/versions/:id/artifacts — Delete all artifacts for a version（仅管理员）
-router.delete('/:id/artifacts', requireAdmin, (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db.prepare('SELECT id, version FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+router.delete('/:id/artifacts', requireAdmin, async (req: Request, res: Response) => {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT id, version FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
 
   const deleted = deleteArtifacts(req.params.id, row.version as string);
-  db.prepare('UPDATE versions SET build_status = ? WHERE id = ?').run('pending', req.params.id);
+  await execute('UPDATE versions SET build_status = $1 WHERE id = $2', ['pending', req.params.id]);
 
   res.json(success({ deleted }));
 });
@@ -191,9 +202,11 @@ router.delete('/:id/artifacts', requireAdmin, (req: Request, res: Response) => {
 // ========== Git Log Routes ==========
 
 // GET /api/v1/versions/:id/git-log — Get git commit history
-router.get('/:id/git-log', (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+router.get('/:id/git-log', async (req: Request, res: Response) => {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT id, version, projectPath FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -221,15 +234,17 @@ router.get('/:id/git-log', (req: Request, res: Response) => {
 // ========== Branch Routes (top-level) ==========
 
 // GET /api/v1/branches — List branches for a project version
-router.get('/branches', (req: Request, res: Response) => {
+router.get('/branches', async (req: Request, res: Response) => {
   const versionId = req.query.versionId as string;
   if (!versionId) {
     res.status(400).json(error(400, 'versionId query parameter required'));
     return;
   }
 
-  const db = getDb();
-  const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(versionId) as Record<string, unknown> | undefined;
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT id, version, projectPath FROM versions WHERE id = $1',
+    [versionId]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -249,7 +264,7 @@ router.get('/branches', (req: Request, res: Response) => {
 });
 
 // POST /api/v1/branches — Create a new branch
-router.post('/branches', (req: Request, res: Response) => {
+router.post('/branches', async (req: Request, res: Response) => {
   const { versionId, branchName, baseRef } = req.body as {
     versionId: string;
     branchName: string;
@@ -261,8 +276,10 @@ router.post('/branches', (req: Request, res: Response) => {
     return;
   }
 
-  const db = getDb();
-  const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(versionId) as Record<string, unknown> | undefined;
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT id, version, projectPath FROM versions WHERE id = $1',
+    [versionId]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -280,7 +297,7 @@ router.post('/branches', (req: Request, res: Response) => {
 });
 
 // PUT /api/v1/branches/primary — Set primary/default branch
-router.put('/branches/primary', (req: Request, res: Response) => {
+router.put('/branches/primary', async (req: Request, res: Response) => {
   const { versionId, branchName } = req.body as { versionId: string; branchName: string };
 
   if (!versionId || !branchName) {
@@ -288,14 +305,13 @@ router.put('/branches/primary', (req: Request, res: Response) => {
     return;
   }
 
-  const db = getDb();
-  const row = db.prepare('SELECT id FROM versions WHERE id = ?').get(versionId);
+  const row = await queryOne<Record<string, unknown>>('SELECT id FROM versions WHERE id = $1', [versionId]);
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
 
-  db.prepare('UPDATE versions SET branch = ? WHERE id = ?').run(branchName, versionId);
+  await execute('UPDATE versions SET branch = $1 WHERE id = $2', [branchName, versionId]);
 
   res.json(success({ updated: true, defaultBranch: branchName }));
 });

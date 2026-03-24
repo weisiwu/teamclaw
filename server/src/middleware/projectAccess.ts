@@ -7,7 +7,7 @@
  */
 
 import { Response, NextFunction } from 'express';
-import { getDb } from '../db/sqlite.js';
+import { queryOne } from '../db/pg.js';
 import { AuthRequest } from './auth.js';
 
 /**
@@ -19,7 +19,7 @@ import { AuthRequest } from './auth.js';
  *
  * 注意：此中间件应配合 requireAuth 使用，或在调用前确保 req.user 已填充
  */
-export function requireProjectAccess(req: AuthRequest, res: Response, next: NextFunction): void {
+export async function requireProjectAccess(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   // FIX: 从 JWT 验证后的 req.user 获取身份，不再信任 HTTP Header
   // 需要调用方先执行 requireAuth 中间件
   const userId = req.user?.id;
@@ -42,11 +42,11 @@ export function requireProjectAccess(req: AuthRequest, res: Response, next: Next
 
   // 检查版本是否存在并验证权限
   try {
-    const db = getDb();
     const versionId = req.params.id;
-    const row = db
-      .prepare('SELECT id, created_by, project_id FROM versions WHERE id = ?')
-      .get(versionId) as { id: string; created_by: string; project_id: string | null } | undefined;
+    const row = await queryOne<{ id: string; created_by: string; project_id: string | null }>(
+      'SELECT id, created_by, project_id FROM versions WHERE id = $1',
+      [versionId]
+    );
 
     if (!row) {
       res.status(404).json({

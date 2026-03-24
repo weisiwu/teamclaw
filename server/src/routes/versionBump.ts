@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { success, error } from '../utils/response.js';
-import { getDb } from '../db/sqlite.js';
+import { query, queryOne, execute } from '../db/pg.js';
 import { VersionSummaryModel } from '../models/versionSummary.js';
 import { isValidSemver } from '../services/semver.js';
 import { performBump, formatBumpSummary } from '../services/versionBump.js';
@@ -51,8 +51,10 @@ function makeTagName(version: string, prefix: VersionSettings['tagPrefix'], cust
 
 // POST /api/v1/versions/:id/bump — 手动 bump（自动生成摘要）
 router.post('/:id/bump', async (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT * FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -64,7 +66,7 @@ router.post('/:id/bump', async (req: Request, res: Response) => {
   const previousVersion = row.version as string;
   const newVersion = autoBumpVersion(previousVersion, type);
 
-  db.prepare('UPDATE versions SET version = ? WHERE id = ?').run(newVersion, req.params.id);
+  await execute('UPDATE versions SET version = $1 WHERE id = $2', [newVersion, req.params.id]);
 
   if (settings.autoTag && settings.tagOnStatus.includes('published')) {
     const tagName = makeTagName(newVersion, settings.tagPrefix, settings.customPrefix);
@@ -72,7 +74,7 @@ router.post('/:id/bump', async (req: Request, res: Response) => {
       path.join(process.env.TEAMCLAW_PROJECTS_DIR || os.homedir() + '/.openclaw/projects', req.params.id);
     try {
       createTag(projectPath, tagName, `Release ${newVersion}`);
-      db.prepare('UPDATE versions SET tag_created = 1 WHERE id = ?').run(req.params.id);
+      await execute('UPDATE versions SET tag_created = 1 WHERE id = $1', [req.params.id]);
     } catch (err) {
       console.warn('[bump] Failed to create git tag:', err);
     }
@@ -110,8 +112,10 @@ router.post('/:id/bump', async (req: Request, res: Response) => {
 
 // POST /api/v1/versions/:id/publish — 发布版本（触发 auto-bump）
 router.post('/:id/publish', async (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT * FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -139,9 +143,10 @@ router.post('/:id/publish', async (req: Request, res: Response) => {
     }
   }
 
-  db.prepare(
-    'UPDATE versions SET version = ?, build_status = ?, tag_created = ? WHERE id = ?'
-  ).run(newVersion, 'success', tagCreated ? 1 : 0, req.params.id);
+  await execute(
+    'UPDATE versions SET version = $1, build_status = $2, tag_created = $3 WHERE id = $4',
+    [newVersion, 'success', tagCreated ? 1 : 0, req.params.id]
+  );
 
   try {
     const commitLog = (row.commit_log as string) || `Version ${newVersion} published`;
@@ -157,7 +162,7 @@ router.post('/:id/publish', async (req: Request, res: Response) => {
       breaking: generated.breaking,
       createdBy: 'system',
     });
-    db.prepare('UPDATE versions SET summary = ? WHERE id = ?').run(generated.content, req.params.id);
+    await execute('UPDATE versions SET summary = $1 WHERE id = $2', [generated.content, req.params.id]);
   } catch (err) {
     console.warn('[publish] Auto summary generation failed:', err);
   }
@@ -203,8 +208,10 @@ router.post('/summary/batch-generate', async (req: Request, res: Response) => {
     const results: { versionId: string; success: boolean; error?: string }[] = [];
 
     for (const id of versionIds) {
-      const db = getDb();
-      const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+      const row = await queryOne<Record<string, unknown>>(
+        'SELECT id, version, projectPath FROM versions WHERE id = $1',
+        [id]
+      );
       if (!row) {
         results.push({ versionId: id, success: false, error: 'Version not found' });
         continue;
@@ -242,8 +249,10 @@ router.post('/summary/batch-generate', async (req: Request, res: Response) => {
 
 // POST /api/v1/versions/:id/bump-with-task — Bump version based on task type
 router.post('/:id/bump-with-task', async (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT * FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -288,9 +297,11 @@ router.post('/:id/bump-with-task', async (req: Request, res: Response) => {
 });
 
 // POST /api/v1/versions/:id/auto-bump — Manually trigger auto-bump (creates new bumped version)
-router.post('/:id/auto-bump', (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+router.post('/:id/auto-bump', async (req: Request, res: Response) => {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT * FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -310,10 +321,11 @@ router.post('/:id/auto-bump', (req: Request, res: Response) => {
   const tagName = makeTagName(newVersionStr, settings.tagPrefix, settings.customPrefix);
 
   const newId = `v${Date.now()}`;
-  db.prepare(`
-    INSERT INTO versions (id, version, branch, summary, created_by, created_at, build_status, tag_created)
-    VALUES (?, ?, ?, ?, 'system', datetime('now'), ?, 1)
-  `).run(newId, newVersionStr, row.branch as string || 'main', `Auto-bump ${newVersionStr}`, row.build_status as string || 'pending');
+  await execute(
+    `INSERT INTO versions (id, version, branch, summary, created_by, created_at, build_status, tag_created)
+    VALUES ($1, $2, $3, $4, 'system', datetime('now'), $5, 1)`,
+    [newId, newVersionStr, row.branch as string || 'main', `Auto-bump ${newVersionStr}`, row.build_status as string || 'pending']
+  );
 
   createTagRecord({
     name: tagName,
@@ -335,9 +347,11 @@ router.post('/:id/auto-bump', (req: Request, res: Response) => {
 });
 
 // GET /api/v1/versions/:id/bump-preview — Preview what a bump would produce
-router.get('/:id/bump-preview', (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db.prepare('SELECT version FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+router.get('/:id/bump-preview', async (req: Request, res: Response) => {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT version FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;

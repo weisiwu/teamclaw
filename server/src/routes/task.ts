@@ -273,11 +273,11 @@ router.patch('/:taskId', requireAuth, async (req, res) => {
           try {
             const { executeAutoBump } = await import('../services/autoBump.js');
             const { getVersionSettings } = await import('../routes/version.js');
-            const { getDb } = await import('../db/sqlite.js');
-            const db = getDb();
-            const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(task.versionId) as
-              | Record<string, unknown>
-              | undefined;
+            const { queryOne } = await import('../db/pg.js');
+            const row = await queryOne<Record<string, unknown>>(
+              'SELECT * FROM versions WHERE id = $1',
+              [task.versionId]
+            );
             if (row) {
               const settings = getVersionSettings();
               if (settings.autoBump) {
@@ -437,10 +437,11 @@ router.post('/:taskId/trigger-bump', async (req, res) => {
       res.status(400).json(error(400, 'Task has no linked versionId'));
       return;
     }
-    const db = await import('../db/sqlite.js');
-    const row = db.getDb().prepare('SELECT * FROM versions WHERE id = ?').get(task.versionId) as
-      | Record<string, unknown>
-      | undefined;
+    const { queryOne } = await import('../db/pg.js');
+    const row = await queryOne<Record<string, unknown>>(
+      'SELECT * FROM versions WHERE id = $1',
+      [task.versionId]
+    );
     if (!row) {
       res.status(404).json(error(404, 'Linked version not found'));
       return;

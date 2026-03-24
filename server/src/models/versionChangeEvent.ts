@@ -1,4 +1,4 @@
-import { getDb } from '../db/sqlite.js';
+import { query, queryOne, execute } from '../db/pg.js';
 
 export type ChangeEventType =
   | 'version_created'
@@ -73,7 +73,7 @@ export const VersionChangeEventModel = {
   /**
    * Create a new change event record
    */
-  create(data: {
+  async create(data: {
     versionId: string;
     type: ChangeEventType;
     title: string;
@@ -85,80 +85,78 @@ export const VersionChangeEventModel = {
     buildId?: string;
     taskId?: string;
     metadata?: Record<string, unknown>;
-  }): VersionChangeEvent {
-    const db = getDb();
+  }): Promise<VersionChangeEvent> {
     const id = makeId();
-    db.prepare(`
-      INSERT INTO version_change_events (
+    await execute(
+      `INSERT INTO version_change_events (
         id, version_id, event_type, title, description,
         actor, actor_id, screenshot_id, changelog_id, build_id, task_id, metadata
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      data.versionId,
-      data.type,
-      data.title,
-      data.description ?? null,
-      data.actor ?? 'system',
-      data.actorId ?? null,
-      data.screenshotId ?? null,
-      data.changelogId ?? null,
-      data.buildId ?? null,
-      data.taskId ?? null,
-      data.metadata ? JSON.stringify(data.metadata) : null
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [
+        id,
+        data.versionId,
+        data.type,
+        data.title,
+        data.description ?? null,
+        data.actor ?? 'system',
+        data.actorId ?? null,
+        data.screenshotId ?? null,
+        data.changelogId ?? null,
+        data.buildId ?? null,
+        data.taskId ?? null,
+        data.metadata ? JSON.stringify(data.metadata) : null,
+      ]
     );
-    return this.findById(id)!;
+    return (await this.findById(id))!;
   },
 
-  findById(id: string): VersionChangeEvent | undefined {
-    const db = getDb();
-    const row = db.prepare('SELECT * FROM version_change_events WHERE id = ?').get(id) as DbRow | undefined;
+  async findById(id: string): Promise<VersionChangeEvent | undefined> {
+    const row = await queryOne<DbRow>('SELECT * FROM version_change_events WHERE id = $1', [id]);
     return row ? rowToEvent(row) : undefined;
   },
 
   /**
    * Get all events for a version, newest first
    */
-  findByVersionId(versionId: string): VersionChangeEvent[] {
-    const db = getDb();
-    const rows = db.prepare(
-      'SELECT * FROM version_change_events WHERE version_id = ? ORDER BY created_at DESC'
-    ).all(versionId) as DbRow[];
+  async findByVersionId(versionId: string): Promise<VersionChangeEvent[]> {
+    const rows = await query<DbRow>(
+      'SELECT * FROM version_change_events WHERE version_id = $1 ORDER BY created_at DESC',
+      [versionId]
+    );
     return rows.map(rowToEvent);
   },
 
   /**
    * Get events with associated screenshot data
    */
-  findByVersionIdWithScreenshots(versionId: string) {
-    const db = getDb();
-    const rows = db.prepare(`
-      SELECT e.*, s.screenshot_url, s.message_content, s.sender_name, s.thumbnail_url
+  async findByVersionIdWithScreenshots(versionId: string) {
+    const rows = await query(
+      `SELECT e.*, s.screenshot_url, s.message_content, s.sender_name, s.thumbnail_url
       FROM version_change_events e
       LEFT JOIN screenshots s ON e.screenshot_id = s.id
-      WHERE e.version_id = ?
-      ORDER BY e.created_at DESC
-    `).all(versionId);
+      WHERE e.version_id = $1
+      ORDER BY e.created_at DESC`,
+      [versionId]
+    );
     return rows;
   },
 
   /**
    * Delete an event (only manual_note events should be deletable)
    */
-  delete(id: string): boolean {
-    const db = getDb();
-    const result = db.prepare('DELETE FROM version_change_events WHERE id = ?').run(id);
-    return result.changes > 0;
+  async delete(id: string): Promise<boolean> {
+    const result = await execute('DELETE FROM version_change_events WHERE id = $1', [id]);
+    return result > 0;
   },
 
   /**
    * Count events for a version
    */
-  countByVersionId(versionId: string): number {
-    const db = getDb();
-    const row = db.prepare(
-      'SELECT COUNT(*) as count FROM version_change_events WHERE version_id = ?'
-    ).get(versionId) as { count: number };
-    return row.count;
+  async countByVersionId(versionId: string): Promise<number> {
+    const row = await queryOne<{ count: number }>(
+      'SELECT COUNT(*) as count FROM version_change_events WHERE version_id = $1',
+      [versionId]
+    );
+    return row?.count ?? 0;
   },
 };

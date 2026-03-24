@@ -7,16 +7,14 @@ import { eventBus, generateId } from './eventBus.js';
 import { taskLifecycle } from './taskLifecycle.js';
 import { parseChanges, applyChanges, commitChanges } from './codeApplicator.js';
 import { executeAutoBump } from './autoBump.js';
-import { getDb } from '../db/sqlite.js';
+import { query, queryOne } from '../db/pg.js';
 
-function getProjectPathForTask(taskId: string): string | undefined {
-  const db = getDb();
+async function getProjectPathForTask(taskId: string): Promise<string | undefined> {
   // 尝试从 task 关联的 version 查找 projectPath
-  const row = db
-    .prepare(
-      'SELECT projectPath FROM versions WHERE id = (SELECT versionId FROM tasks WHERE taskId = ?)'
-    )
-    .get(taskId) as { projectPath: string } | undefined;
+  const row = await queryOne<{ projectPath: string }>(
+    'SELECT projectPath FROM versions WHERE id = (SELECT versionId FROM tasks WHERE taskId = $1)',
+    [taskId]
+  );
   return row?.projectPath;
 }
 
@@ -90,10 +88,10 @@ eventBus.on('agent:pipeline:done', async payload => {
     // 5. 自动版本 bump
     const taskTitle = task?.title || '';
     const taskType = task?.tags?.[0] || 'feature';
-    const db = getDb();
-    const versionRow = db.prepare('SELECT * FROM versions WHERE id = ?').get(task?.versionId) as
-      | Record<string, unknown>
-      | undefined;
+    const versionRow = await queryOne<Record<string, unknown>>(
+      'SELECT * FROM versions WHERE id = $1',
+      [task?.versionId]
+    );
 
     let bumpResult;
     if (versionRow) {

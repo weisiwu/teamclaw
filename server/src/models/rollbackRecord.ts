@@ -1,7 +1,7 @@
 // Rollback 记录数据模型
 // 持久化存储版本回退历史
 
-import { getDb } from '../db/sqlite.js';
+import { query, queryOne, execute } from '../db/pg.js';
 
 export interface RollbackRecord {
   id: string;             // 唯一 ID (rb_xxx)
@@ -45,51 +45,51 @@ export const RollbackRecordModel = {
   /**
    * Find all rollback records for a version
    */
-  findByVersionId(versionId: string): RollbackRecord[] {
-    const db = getDb();
-    const rows = db.prepare(
-      'SELECT * FROM rollback_history WHERE version_id = ? ORDER BY created_at DESC'
-    ).all(versionId) as Record<string, unknown>[];
+  async findByVersionId(versionId: string): Promise<RollbackRecord[]> {
+    const rows = await query<Record<string, unknown>>(
+      'SELECT * FROM rollback_history WHERE version_id = $1 ORDER BY created_at DESC',
+      [versionId]
+    );
     return rows.map(rowToRecord);
   },
 
   /**
    * Find a single rollback record by ID
    */
-  findById(id: string): RollbackRecord | null {
-    const db = getDb();
-    const row = db.prepare(
-      'SELECT * FROM rollback_history WHERE id = ?'
-    ).get(id) as Record<string, unknown> | undefined;
+  async findById(id: string): Promise<RollbackRecord | null> {
+    const row = await queryOne<Record<string, unknown>>(
+      'SELECT * FROM rollback_history WHERE id = $1',
+      [id]
+    );
     return row ? rowToRecord(row) : null;
   },
 
   /**
    * Create a new rollback record
    */
-  create(data: Omit<RollbackRecord, 'createdAt'>): RollbackRecord {
-    const db = getDb();
-    db.prepare(`
-      INSERT INTO rollback_history (
+  async create(data: Omit<RollbackRecord, 'createdAt'>): Promise<RollbackRecord> {
+    await execute(
+      `INSERT INTO rollback_history (
         id, version_id, version_name, target_ref, target_type, mode,
         previous_ref, new_branch, backup_created, message, success,
         error, performed_by, performed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      data.id,
-      data.versionId,
-      data.versionName,
-      data.targetRef,
-      data.targetType,
-      data.mode,
-      data.previousRef ?? null,
-      data.newBranch ?? null,
-      data.backupCreated ? 1 : 0,
-      data.message ?? null,
-      data.success ? 1 : 0,
-      data.error ?? null,
-      data.performedBy ?? 'developer',
-      data.performedAt
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+      [
+        data.id,
+        data.versionId,
+        data.versionName,
+        data.targetRef,
+        data.targetType,
+        data.mode,
+        data.previousRef ?? null,
+        data.newBranch ?? null,
+        data.backupCreated ? 1 : 0,
+        data.message ?? null,
+        data.success ? 1 : 0,
+        data.error ?? null,
+        data.performedBy ?? 'developer',
+        data.performedAt
+      ]
     );
     return {
       ...data,
@@ -100,11 +100,11 @@ export const RollbackRecordModel = {
   /**
    * Get recent rollback records across all versions
    */
-  findRecent(limit = 20): RollbackRecord[] {
-    const db = getDb();
-    const rows = db.prepare(
-      'SELECT * FROM rollback_history ORDER BY created_at DESC LIMIT ?'
-    ).all(limit) as Record<string, unknown>[];
+  async findRecent(limit = 20): Promise<RollbackRecord[]> {
+    const rows = await query<Record<string, unknown>>(
+      'SELECT * FROM rollback_history ORDER BY created_at DESC LIMIT $1',
+      [limit]
+    );
     return rows.map(rowToRecord);
   },
 };

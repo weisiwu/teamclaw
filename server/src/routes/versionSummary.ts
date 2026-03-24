@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { success, error } from '../utils/response.js';
 import { requireAdmin } from '../middleware/auth.js';
-import { getDb } from '../db/sqlite.js';
+import { query, queryOne, execute } from '../db/pg.js';
 import { VersionSummaryModel } from '../models/versionSummary.js';
 import { ScreenshotModel } from '../models/screenshot.js';
 import { generateChangelogFromCommits } from '../services/changelogGenerator.js';
@@ -13,8 +13,7 @@ const router = Router();
 // ========== Search Route ==========
 
 // GET /api/v1/versions/search — 高级搜索
-router.get('/search', (req: Request, res: Response) => {
-  const db = getDb();
+router.get('/search', async (req: Request, res: Response) => {
   const {
     q,
     status,
@@ -29,37 +28,44 @@ router.get('/search', (req: Request, res: Response) => {
     pageSize = '20',
   } = req.query;
 
+  const sqlParams: unknown[] = [];
+  let paramIndex = 1;
   let sql = 'SELECT * FROM versions WHERE 1=1';
-  const params: Record<string, unknown> = {};
 
   if (q) {
-    sql += ' AND (version LIKE @q OR title LIKE @q OR description LIKE @q)';
-    params.q = `%${q}%`;
+    sql += ` AND (version LIKE $${paramIndex} OR title LIKE $${paramIndex} OR description LIKE $${paramIndex})`;
+    sqlParams.push(`%${q}%`);
+    paramIndex++;
   }
   if (status && status !== 'all') {
-    sql += ' AND status = @status';
-    params.status = status;
+    sql += ` AND status = $${paramIndex}`;
+    sqlParams.push(status);
+    paramIndex++;
   }
   if (buildStatus && buildStatus !== 'all') {
-    sql += ' AND build_status = @buildStatus';
-    params.buildStatus = buildStatus;
+    sql += ` AND build_status = $${paramIndex}`;
+    sqlParams.push(buildStatus);
+    paramIndex++;
   }
   if (branch) {
-    sql += ' AND branch = @branch';
-    params.branch = branch;
+    sql += ` AND branch = $${paramIndex}`;
+    sqlParams.push(branch);
+    paramIndex++;
   }
   if (dateFrom) {
-    sql += ' AND created_at >= @dateFrom';
-    params.dateFrom = dateFrom;
+    sql += ` AND created_at >= $${paramIndex}`;
+    sqlParams.push(dateFrom);
+    paramIndex++;
   }
   if (dateTo) {
-    sql += ' AND created_at <= @dateTo';
-    params.dateTo = dateTo;
+    sql += ` AND created_at <= $${paramIndex}`;
+    sqlParams.push(dateTo);
+    paramIndex++;
   }
 
   sql += ' ORDER BY created_at DESC';
 
-  const allRows = db.prepare(sql).all(params) as Array<Record<string, unknown>>;
+  const allRows = await query<Record<string, unknown>>(sql, sqlParams);
 
   const screenshotIndex = new Map<string, boolean>();
   for (const shot of ScreenshotModel.getAllScreenshots()) {
@@ -67,7 +73,7 @@ router.get('/search', (req: Request, res: Response) => {
   }
 
   const summaryIndex = new Set<string>();
-  const summaryRows = db.prepare('SELECT version_id FROM version_summaries').all() as Array<{ version_id: string }>;
+  const summaryRows = await query<{ version_id: string }>('SELECT version_id FROM version_summaries');
   for (const row of summaryRows) {
     summaryIndex.add(row.version_id);
   }
@@ -85,9 +91,10 @@ router.get('/search', (req: Request, res: Response) => {
   }
 
   if (tag) {
-    const tagRows = db.prepare(
-      'SELECT version_id FROM version_tags WHERE tag_name = ?'
-    ).all(tag) as Array<{ version_id: string }>;
+    const tagRows = await query<{ version_id: string }>(
+      'SELECT version_id FROM version_tags WHERE tag_name = $1',
+      [tag]
+    );
     const taggedVersionIds = new Set(tagRows.map(r => r.version_id));
     filteredRows = filteredRows.filter(r => taggedVersionIds.has(r.id as string));
   }
@@ -125,11 +132,13 @@ router.get('/search', (req: Request, res: Response) => {
 // ========== Timeline Stream Route ==========
 
 // GET /api/v1/versions/:id/timeline/stream — SSE real-time event stream
-router.get('/:id/timeline/stream', (req: Request, res: Response) => {
+router.get('/:id/timeline/stream', async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  const db = getDb();
-  const row = db.prepare('SELECT id, version FROM versions WHERE id = ?').get(id) as { id: string } | undefined;
+  const row = await queryOne<{ id: string }>(
+    'SELECT id, version FROM versions WHERE id = $1',
+    [id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -169,7 +178,7 @@ router.get('/:id/timeline/stream', (req: Request, res: Response) => {
 // ========== Events Routes ==========
 
 // POST /api/v1/versions/:id/events — Add a manual note to the timeline
-router.post('/:id/events', (req: Request, res: Response) => {
+router.post('/:id/events', async (req: Request, res: Response) => {
   const { id: versionId } = req.params;
   const { note, actor, actorId } = req.body as {
     note: string;
@@ -182,8 +191,7 @@ router.post('/:id/events', (req: Request, res: Response) => {
     return;
   }
 
-  const db = getDb();
-  const row = db.prepare('SELECT id FROM versions WHERE id = ?').get(versionId);
+  const row = await queryOne('SELECT id FROM versions WHERE id = $1', [versionId]);
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -200,13 +208,13 @@ router.post('/:id/events', (req: Request, res: Response) => {
 });
 
 // DELETE /api/v1/versions/:id/events/:eventId — Delete a manual note
-router.delete('/:id/events/:eventId', (req: Request, res: Response) => {
+router.delete('/:id/events/:eventId', async (req: Request, res: Response) => {
   const { id: versionId, eventId } = req.params;
-  const db = getDb();
 
-  const event = db.prepare(
-    'SELECT id, event_type FROM version_change_events WHERE id = ? AND version_id = ?'
-  ).get(eventId, versionId) as { id: string; event_type: string } | undefined;
+  const event = await queryOne<{ id: string; event_type: string }>(
+    'SELECT id, event_type FROM version_change_events WHERE id = $1 AND version_id = $2',
+    [eventId, versionId]
+  );
   if (!event) {
     res.status(404).json(error(404, 'Event not found'));
     return;
@@ -218,7 +226,7 @@ router.delete('/:id/events/:eventId', (req: Request, res: Response) => {
   }
 
   try {
-    db.prepare('DELETE FROM version_change_events WHERE id = ?').run(eventId);
+    await execute('DELETE FROM version_change_events WHERE id = $1', [eventId]);
     res.json(success({ eventId }));
   } catch (err) {
     console.error('[version] Delete event error:', err);
@@ -227,19 +235,19 @@ router.delete('/:id/events/:eventId', (req: Request, res: Response) => {
 });
 
 // PUT /api/v1/versions/:id/events/:eventId — Update a manual note
-router.put('/:id/events/:eventId', (req: Request, res: Response) => {
+router.put('/:id/events/:eventId', async (req: Request, res: Response) => {
   const { id: versionId, eventId } = req.params;
   const { note } = req.body as { note: string };
-  const db = getDb();
 
   if (!note || typeof note !== 'string') {
     res.status(400).json(error(400, 'note is required and must be a string'));
     return;
   }
 
-  const event = db.prepare(
-    'SELECT id, event_type FROM version_change_events WHERE id = ? AND version_id = ?'
-  ).get(eventId, versionId) as { id: string; event_type: string } | undefined;
+  const event = await queryOne<{ id: string; event_type: string }>(
+    'SELECT id, event_type FROM version_change_events WHERE id = $1 AND version_id = $2',
+    [eventId, versionId]
+  );
   if (!event) {
     res.status(404).json(error(404, 'Event not found'));
     return;
@@ -251,7 +259,7 @@ router.put('/:id/events/:eventId', (req: Request, res: Response) => {
   }
 
   try {
-    db.prepare('UPDATE version_change_events SET description = ? WHERE id = ?').run(note, eventId);
+    await execute('UPDATE version_change_events SET description = $1 WHERE id = $2', [note, eventId]);
     res.json(success({ eventId }));
   } catch (err) {
     console.error('[version] Update event error:', err);
@@ -262,10 +270,12 @@ router.put('/:id/events/:eventId', (req: Request, res: Response) => {
 // ========== Timeline Route ==========
 
 // GET /api/v1/versions/:id/timeline — 获取版本变更时间线
-router.get('/:id/timeline', (req: Request, res: Response) => {
+router.get('/:id/timeline', async (req: Request, res: Response) => {
   const { id: versionId } = req.params;
-  const db = getDb();
-  const row = db.prepare('SELECT id, version, created_at FROM versions WHERE id = ?').get(versionId) as Record<string, unknown> | undefined;
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT id, version, created_at FROM versions WHERE id = $1',
+    [versionId]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -390,7 +400,7 @@ router.put('/:id/summary', (req: Request, res: Response) => {
 
     const summary = VersionSummaryModel.update(id, { content, features, changes, fixes, breaking });
     if (content !== undefined) {
-      getDb().prepare('UPDATE versions SET summary = ? WHERE id = ?').run(content, id);
+      await execute('UPDATE versions SET summary = $1 WHERE id = $2', [content, id]);
     }
     res.json(success(summary));
   } catch (err) {
@@ -429,7 +439,7 @@ router.post('/:id/summary/generate', async (req: Request, res: Response) => {
       createdBy: 'AI',
     });
 
-    getDb().prepare('UPDATE versions SET summary = ? WHERE id = ?').run(generated.content, id);
+    await execute('UPDATE versions SET summary = $1 WHERE id = $2', [generated.content, id]);
 
     try {
       const entryCount = (generated.features?.length || 0) + (generated.fixes?.length || 0) + (generated.improvements?.length || 0);
@@ -449,8 +459,10 @@ router.post('/:id/summary/generate', async (req: Request, res: Response) => {
 router.post('/:id/summary/refresh', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const db = getDb();
-    const row = db.prepare('SELECT id, version FROM versions WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    const row = await queryOne<Record<string, unknown>>(
+      'SELECT id, version FROM versions WHERE id = $1',
+      [id]
+    );
     if (!row) {
       res.status(404).json(error(404, 'Version not found'));
       return;
@@ -474,7 +486,7 @@ router.post('/:id/summary/refresh', async (req: Request, res: Response) => {
       createdBy: 'AI',
     });
 
-    db.prepare('UPDATE versions SET summary = ? WHERE id = ?').run(generated.content, id);
+    await execute('UPDATE versions SET summary = $1 WHERE id = $2', [generated.content, id]);
 
     res.json(success({
       ...summary,
@@ -489,8 +501,8 @@ router.post('/:id/summary/refresh', async (req: Request, res: Response) => {
 });
 
 // GET /api/v1/versions/:id/summary/status — Check if summary exists
-router.get('/:id/summary/status', (req: Request, res: Response) => {
-  const row = getDb().prepare('SELECT id FROM versions WHERE id = ?').get(req.params.id);
+router.get('/:id/summary/status', async (req: Request, res: Response) => {
+  const row = await queryOne('SELECT id FROM versions WHERE id = $1', [req.params.id]);
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;

@@ -6,7 +6,7 @@
 import { taskLifecycle } from '../services/taskLifecycle.js';
 import { Task, TaskStatus } from '../models/task.js';
 import { executeAutoBump } from '../services/autoBump.js';
-import { getDb } from '../db/sqlite.js';
+import { queryOne } from '../db/pg.js';
 
 /**
  * 注册 auto-bump hook 到 taskLifecycle
@@ -22,10 +22,10 @@ export function registerAutoBumpHook(): void {
       return;
     }
 
-    const db = getDb();
-    const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(task.versionId) as
-      | Record<string, unknown>
-      | undefined;
+    const row = await queryOne<Record<string, unknown>>(
+      'SELECT * FROM versions WHERE id = $1',
+      [task.versionId]
+    );
 
     if (!row) {
       console.warn(`[autoBump] Version ${task.versionId} not found for task ${task.taskId}`);
@@ -33,9 +33,10 @@ export function registerAutoBumpHook(): void {
     }
 
     // 获取全局 autoBump 设置
-    const autoBumpSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('version.autoBump') as
-      | { value: string }
-      | undefined;
+    const autoBumpSetting = await queryOne<{ value: string }>(
+      'SELECT value FROM settings WHERE key = $1',
+      ['version.autoBump']
+    );
 
     const autoBumpEnabled = autoBumpSetting ? autoBumpSetting.value === 'true' : true; // 默认开启
 

@@ -8,15 +8,13 @@ import { taskLifecycle } from './taskLifecycle.js';
 import { taskMemory } from './taskMemory.js';
 import { buildService } from './buildService.js';
 import { changelogGenerator } from './changelogGenerator.js';
-import { getDb } from '../db/sqlite.js';
+import { queryOne } from '../db/pg.js';
 
-function getProjectPathForTask(taskId: string): string | undefined {
-  const db = getDb();
-  const row = db
-    .prepare(
-      'SELECT projectPath FROM versions WHERE id = (SELECT versionId FROM tasks WHERE taskId = ?)'
-    )
-    .get(taskId) as { projectPath: string } | undefined;
+async function getProjectPathForTask(taskId: string): Promise<string | undefined> {
+  const row = await queryOne<{ projectPath: string }>(
+    'SELECT projectPath FROM versions WHERE id = (SELECT versionId FROM tasks WHERE taskId = $1)',
+    [taskId]
+  );
   return row?.projectPath;
 }
 
@@ -38,7 +36,7 @@ eventBus.on('version:bumped', async payload => {
     return;
   }
 
-  const projectPath = getProjectPathForTask(taskId as string);
+  const projectPath = await getProjectPathForTask(taskId as string);
   if (!projectPath) {
     console.warn('[versionToBuild] No projectPath found for task', taskId);
     return;

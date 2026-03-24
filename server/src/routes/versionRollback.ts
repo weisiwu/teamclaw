@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { success, error } from '../utils/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireProjectAccess } from '../middleware/projectAccess.js';
-import { getDb } from '../db/sqlite.js';
+import { queryOne, execute } from '../db/pg.js';
 import { VersionSummaryModel } from '../models/versionSummary.js';
 import { RollbackRecordModel } from '../models/rollbackRecord.js';
 import {
@@ -23,8 +23,8 @@ import os from 'os';
 const router = Router();
 
 // GET /api/v1/versions/:id/rollback-history — Get rollback history for a version
-router.get('/:id/rollback-history', (req: Request, res: Response) => {
-  const row = getDb().prepare('SELECT id FROM versions WHERE id = ?').get(req.params.id);
+router.get('/:id/rollback-history', async (req: Request, res: Response) => {
+  const row = await queryOne('SELECT id FROM versions WHERE id = $1', [req.params.id]);
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -35,11 +35,11 @@ router.get('/:id/rollback-history', (req: Request, res: Response) => {
 });
 
 // GET /api/v1/versions/:id/rollback-targets — Get available rollback targets
-router.get('/:id/rollback-targets', (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db
-    .prepare('SELECT id, version, projectPath FROM versions WHERE id = ?')
-    .get(req.params.id) as Record<string, unknown> | undefined;
+router.get('/:id/rollback-targets', async (req: Request, res: Response) => {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT id, version, projectPath FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -57,11 +57,11 @@ router.get('/:id/rollback-targets', (req: Request, res: Response) => {
 });
 
 // GET /api/v1/versions/:id/rollback-preview — Preview what a rollback would do
-router.get('/:id/rollback-preview', (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db
-    .prepare('SELECT id, version, projectPath FROM versions WHERE id = ?')
-    .get(req.params.id) as Record<string, unknown> | undefined;
+router.get('/:id/rollback-preview', async (req: Request, res: Response) => {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT id, version, projectPath FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -85,11 +85,11 @@ router.get('/:id/rollback-preview', (req: Request, res: Response) => {
 });
 
 // GET /api/v1/versions/:id/head-status — Check if version is at current HEAD (iter75)
-router.get('/:id/head-status', (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db
-    .prepare('SELECT id, version, projectPath, commit_hash FROM versions WHERE id = ?')
-    .get(req.params.id) as Record<string, unknown> | undefined;
+router.get('/:id/head-status', async (req: Request, res: Response) => {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT id, version, projectPath, commit_hash FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -131,10 +131,10 @@ router.post(
   requireAuth,
   requireProjectAccess,
   async (req: AuthRequest, res: Response) => {
-    const db = getDb();
-    const row = db
-      .prepare('SELECT id, version, projectPath, created_by FROM versions WHERE id = ?')
-      .get(req.params.id) as Record<string, unknown> | undefined;
+    const row = await queryOne<Record<string, unknown>>(
+      'SELECT id, version, projectPath, created_by FROM versions WHERE id = $1',
+      [req.params.id]
+    );
     if (!row) {
       res.status(404).json(error(404, 'Version not found'));
       return;
@@ -194,14 +194,13 @@ router.post(
     });
 
     const now = new Date().toISOString();
-    db.prepare(
-      `
-    UPDATE versions
+    await execute(
+      `UPDATE versions
     SET rollback_count = COALESCE(rollback_count, 0) + 1,
-        last_rollback_at = ?
-    WHERE id = ?
-  `
-    ).run(now, req.params.id);
+        last_rollback_at = $1
+    WHERE id = $2`,
+      [now, req.params.id]
+    );
 
     try {
       onVersionRollback(
@@ -234,17 +233,18 @@ router.post(
         breaking: [],
         createdBy: 'system',
       });
-      db.prepare('UPDATE versions SET summary = ? WHERE id = ?').run(
+      await execute('UPDATE versions SET summary = $1 WHERE id = $2', [
         `已回退到 ${target}`,
-        req.params.id
-      );
+        req.params.id,
+      ]);
     } catch (err) {
       console.warn('[rollback] Auto summary generation failed:', err);
     }
 
-    const updated = db
-      .prepare('SELECT rollback_count, last_rollback_at FROM versions WHERE id = ?')
-      .get(req.params.id) as { rollback_count: number; last_rollback_at: string } | undefined;
+    const updated = await queryOne<{ rollback_count: number; last_rollback_at: string }>(
+      'SELECT rollback_count, last_rollback_at FROM versions WHERE id = $1',
+      [req.params.id]
+    );
 
     auditService.log({
       action: 'version_rollback',

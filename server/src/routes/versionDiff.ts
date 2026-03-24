@@ -1,18 +1,18 @@
 import { Router, Request, Response } from 'express';
 import { success, error } from '../utils/response.js';
 import { diffTwoVersions, getCommitsBetween } from '../services/versionDiff.js';
-import { getDb } from '../db/sqlite.js';
+import { queryOne } from '../db/pg.js';
 import path from 'path';
 import os from 'os';
 
 const router = Router();
 
 // GET /api/v1/versions/:id/diff — File-level diff for a version against its parent tag
-router.get('/:id/diff', (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db
-    .prepare('SELECT id, version, git_tag, projectPath FROM versions WHERE id = ?')
-    .get(req.params.id) as Record<string, unknown> | undefined;
+router.get('/:id/diff', async (req: Request, res: Response) => {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT id, version, git_tag, projectPath FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -44,11 +44,11 @@ router.get('/:id/diff', (req: Request, res: Response) => {
 });
 
 // GET /api/v1/versions/:id/diff/commits — Get commits between version and its parent
-router.get('/:id/diff/commits', (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db
-    .prepare('SELECT id, version, git_tag, projectPath FROM versions WHERE id = ?')
-    .get(req.params.id) as Record<string, unknown> | undefined;
+router.get('/:id/diff/commits', async (req: Request, res: Response) => {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT id, version, git_tag, projectPath FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;

@@ -8,7 +8,7 @@ import { auditService } from '../services/auditService.js';
 import { ScreenshotModel } from '../models/screenshot.js';
 import { VersionSummaryModel } from '../models/versionSummary.js';
 import { versionRepo } from '../db/repositories/versionRepo.js';
-import { getDb } from '../db/sqlite.js';
+import { query, queryOne, execute } from '../db/pg.js';
 import { isValidSemver } from '../services/semver.js';
 import { createTag } from '../services/gitService.js';
 import { createTagRecord } from '../services/tagService.js';
@@ -105,19 +105,20 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // GET /api/v1/versions/:id — 详情
-router.get('/:id', validateId(uuidSchema), (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as
-    | Record<string, unknown>
-    | undefined;
+router.get('/:id', validateId(uuidSchema), async (req: Request, res: Response) => {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT * FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
   }
   const summaryRecord = VersionSummaryModel.findByVersionId(req.params.id);
-  const tagRow = db
-    .prepare('SELECT protected FROM tags WHERE version_id = ? LIMIT 1')
-    .get(req.params.id) as { protected: number } | undefined;
+  const tagRow = await queryOne<{ protected: number }>(
+    'SELECT protected FROM tags WHERE version_id = $1 LIMIT 1',
+    [req.params.id]
+  );
   res.json(
     success({
       id: row.id,
@@ -142,8 +143,7 @@ router.get('/:id', validateId(uuidSchema), (req: Request, res: Response) => {
 });
 
 // POST /api/v1/versions — 创建版本
-router.post('/', (req: Request, res: Response) => {
-  const db = getDb();
+router.post('/', async (req: Request, res: Response) => {
   const { version, title, description, status, tags, branch, projectPath } = req.body as {
     version: string;
     title: string;
@@ -168,12 +168,11 @@ router.post('/', (req: Request, res: Response) => {
   const now = new Date().toISOString();
   const vBranch = branch || 'main';
 
-  db.prepare(
-    `
-    INSERT INTO versions (id, version, branch, summary, created_by, created_at, build_status, tag_created)
-    VALUES (?, ?, ?, ?, ?, ?, 'pending', 0)
-  `
-  ).run(id, version, vBranch, description || '', 'system', now);
+  await execute(
+    `INSERT INTO versions (id, version, branch, summary, created_by, created_at, build_status, tag_created)
+    VALUES ($1, $2, $3, $4, $5, $6, 'pending', 0)`,
+    [id, version, vBranch, description || '', 'system', now]
+  );
 
   let tagCreated = false;
   let gitTagName: string | undefined;
@@ -188,9 +187,10 @@ router.post('/', (req: Request, res: Response) => {
       tagCreated = createTag(effectiveProjectPath, gitTagName, `Release ${version} - ${title}`);
       if (tagCreated) {
         const tagTime = new Date().toISOString();
-        db.prepare(
-          'UPDATE versions SET tag_created = 1, git_tag = ?, git_tag_created_at = ? WHERE id = ?'
-        ).run(gitTagName, tagTime, id);
+        await execute(
+          'UPDATE versions SET tag_created = 1, git_tag = $1, git_tag_created_at = $2 WHERE id = $3',
+          [gitTagName, tagTime, id]
+        );
         createTagRecord({
           name: gitTagName,
           versionId: id,
@@ -250,11 +250,11 @@ router.post('/', (req: Request, res: Response) => {
 });
 
 // PUT /api/v1/versions/:id — 更新版本
-router.put('/:id', validateId(uuidSchema), requireAdmin, (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as
-    | Record<string, unknown>
-    | undefined;
+router.put('/:id', validateId(uuidSchema), requireAdmin, async (req: Request, res: Response) => {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT * FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -262,13 +262,13 @@ router.put('/:id', validateId(uuidSchema), requireAdmin, (req: Request, res: Res
 
   const { description } = req.body as { description?: string };
   if (description !== undefined) {
-    db.prepare('UPDATE versions SET summary = ? WHERE id = ?').run(description, req.params.id);
+    await execute('UPDATE versions SET summary = $1 WHERE id = $2', [description, req.params.id]);
   }
 
-  const updatedRow = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<
-    string,
-    unknown
-  >;
+  const updatedRow = await queryOne<Record<string, unknown>>(
+    'SELECT * FROM versions WHERE id = $1',
+    [req.params.id]
+  );
 
   res.json(
     success({
@@ -295,11 +295,11 @@ router.delete(
   validateId(uuidSchema),
   requireAuth,
   requireProjectAccess,
-  (req: AuthRequest, res: Response) => {
-    const db = getDb();
-    const row = db
-      .prepare('SELECT id, version, created_by FROM versions WHERE id = ?')
-      .get(req.params.id) as { id: string; version: string; created_by: string } | undefined;
+  async (req: AuthRequest, res: Response) => {
+    const row = await queryOne<{ id: string; version: string; created_by: string }>(
+      'SELECT id, version, created_by FROM versions WHERE id = $1',
+      [req.params.id]
+    );
     if (!row) {
       res.status(404).json(error(404, 'Version not found'));
       return;
@@ -314,7 +314,7 @@ router.delete(
       userAgent: req.headers['user-agent'] as string | undefined,
     });
 
-    db.prepare('DELETE FROM versions WHERE id = ?').run(req.params.id);
+    await execute('DELETE FROM versions WHERE id = $1', [req.params.id]);
     res.json(success({ deleted: true }));
   }
 );

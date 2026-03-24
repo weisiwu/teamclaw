@@ -281,7 +281,7 @@ export function loadChangelog(versionTag: string): string | null {
 // Version Change Events — event tracking for the version timeline
 // =============================================================================
 
-import { getDb } from '../db/sqlite.js';
+import { query, queryOne, execute } from '../db/pg.js';
 import type { ChangeEventType } from '../models/versionChangeEvent.js';
 
 export interface TimelineEvent {
@@ -336,7 +336,7 @@ function makeEventId(): string {
 /**
  * Record a version change event
  */
-export function recordChangeEvent(data: {
+export async function recordChangeEvent(data: {
   versionId: string;
   type: ChangeEventType;
   title: string;
@@ -348,27 +348,27 @@ export function recordChangeEvent(data: {
   buildId?: string;
   taskId?: string;
   metadata?: Record<string, unknown>;
-}): string {
-  const db = getDb();
+}): Promise<string> {
   const id = makeEventId();
-  db.prepare(`
-    INSERT INTO version_change_events (
+  await execute(
+    `INSERT INTO version_change_events (
       id, version_id, event_type, title, description,
       actor, actor_id, screenshot_id, changelog_id, build_id, task_id, metadata
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    id,
-    data.versionId,
-    data.type,
-    data.title,
-    data.description ?? null,
-    data.actor ?? 'system',
-    data.actorId ?? null,
-    data.screenshotId ?? null,
-    data.changelogId ?? null,
-    data.buildId ?? null,
-    data.taskId ?? null,
-    data.metadata ? JSON.stringify(data.metadata) : null
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+    [
+      id,
+      data.versionId,
+      data.type,
+      data.title,
+      data.description ?? null,
+      data.actor ?? 'system',
+      data.actorId ?? null,
+      data.screenshotId ?? null,
+      data.changelogId ?? null,
+      data.buildId ?? null,
+      data.taskId ?? null,
+      data.metadata ? JSON.stringify(data.metadata) : null,
+    ]
   );
 
   // Publish to SSE subscribers (iter-49)
@@ -385,7 +385,11 @@ export function recordChangeEvent(data: {
   const subs = subscribers.get(data.versionId);
   if (subs) {
     for (const cb of subs) {
-      try { cb({ versionId: data.versionId, event }); } catch { /* ignore subscriber errors */ }
+      try {
+        cb({ versionId: data.versionId, event });
+      } catch {
+        /* ignore subscriber errors */
+      }
     }
   }
 
@@ -395,10 +399,30 @@ export function recordChangeEvent(data: {
 /**
  * Get the full timeline for a version
  */
-export function getVersionTimeline(versionId: string): TimelineEvent[] {
-  const db = getDb();
-  const rows = db.prepare(`
-    SELECT
+export async function getVersionTimeline(versionId: string): Promise<TimelineEvent[]> {
+  const rows = await query<
+    {
+      id: string;
+      event_type: string;
+      title: string;
+      description: string | null;
+      actor: string;
+      created_at: string;
+      screenshot_id: string | null;
+      screenshot_url: string | null;
+      message_content: string | null;
+      sender_name: string | null;
+      thumbnail_url: string | null;
+      changelog_id: string | null;
+      metadata: string | null;
+      features: string | null;
+      fixes: string | null;
+      improvements: string | null;
+      breaking: string | null;
+      docs: string | null;
+    }
+  >(
+    `SELECT
       e.*,
       s.screenshot_url,
       s.message_content,
@@ -412,30 +436,12 @@ export function getVersionTimeline(versionId: string): TimelineEvent[] {
     FROM version_change_events e
     LEFT JOIN screenshots s ON e.screenshot_id = s.id
     LEFT JOIN version_changelog_entries c ON e.changelog_id = c.id
-    WHERE e.version_id = ?
-    ORDER BY e.created_at DESC
-  `).all(versionId) as Array<{
-    id: string;
-    event_type: string;
-    title: string;
-    description: string | null;
-    actor: string;
-    created_at: string;
-    screenshot_id: string | null;
-    screenshot_url: string | null;
-    message_content: string | null;
-    sender_name: string | null;
-    thumbnail_url: string | null;
-    changelog_id: string | null;
-    metadata: string | null;
-    features: string | null;
-    fixes: string | null;
-    improvements: string | null;
-    breaking: string | null;
-    docs: string | null;
-  }>;
+    WHERE e.version_id = $1
+    ORDER BY e.created_at DESC`,
+    [versionId]
+  );
 
-  return rows.map(row => ({
+  return rows.map((row) => ({
     id: row.id,
     type: row.event_type as ChangeEventType,
     title: row.title,
@@ -443,28 +449,31 @@ export function getVersionTimeline(versionId: string): TimelineEvent[] {
     actor: row.actor,
     timestamp: row.created_at,
     screenshotId: row.screenshot_id ?? undefined,
-    changelogId: row.changelog_id ?? undefined,
-    screenshot: row.screenshot_id ? {
-      id: row.screenshot_id,
-      url: row.screenshot_url!,
-      thumbnailUrl: row.thumbnail_url ?? undefined,
-      messageContent: row.message_content ?? undefined,
-      senderName: row.sender_name ?? undefined,
-    } : undefined,
-    changelog: row.changelog_id ? {
-      features: row.features ? JSON.parse(row.features) : [],
-      fixes: row.fixes ? JSON.parse(row.fixes) : [],
-      improvements: row.improvements ? JSON.parse(row.improvements) : [],
-      breaking: row.breaking ? JSON.parse(row.breaking) : [],
-      docs: row.docs ? JSON.parse(row.docs) : [],
-    } : undefined,
+    screenshot: row.screenshot_id
+      ? {
+          id: row.screenshot_id,
+          url: row.screenshot_url!,
+          thumbnailUrl: row.thumbnail_url ?? undefined,
+          messageContent: row.message_content ?? undefined,
+          senderName: row.sender_name ?? undefined,
+        }
+      : undefined,
+    changelog: row.changelog_id
+      ? {
+          features: row.features ? JSON.parse(row.features) : [],
+          fixes: row.fixes ? JSON.parse(row.fixes) : [],
+          improvements: row.improvements ? JSON.parse(row.improvements) : [],
+          breaking: row.breaking ? JSON.parse(row.breaking) : [],
+          docs: row.docs ? JSON.parse(row.docs) : [],
+        }
+      : undefined,
   }));
 }
 
 /**
  * Hook: called when a version is created
  */
-export function onVersionCreated(versionId: string, actor: string, actorId?: string): string {
+export async function onVersionCreated(versionId: string, actor: string, actorId?: string): Promise<string> {
   return recordChangeEvent({
     versionId,
     type: 'version_created',
@@ -478,12 +487,12 @@ export function onVersionCreated(versionId: string, actor: string, actorId?: str
 /**
  * Hook: called when a screenshot is linked to a version
  */
-export function onScreenshotLinked(
+export async function onScreenshotLinked(
   versionId: string,
   screenshotId: string,
   actor: string,
   actorId?: string
-): string {
+): Promise<string> {
   return recordChangeEvent({
     versionId,
     type: 'screenshot_linked',
@@ -498,12 +507,12 @@ export function onScreenshotLinked(
 /**
  * Hook: called when a changelog is generated
  */
-export function onChangelogGenerated(
+export async function onChangelogGenerated(
   versionId: string,
   changelogId: string,
   entryCount: number,
   actor: string = 'ai'
-): string {
+): Promise<string> {
   return recordChangeEvent({
     versionId,
     type: 'changelog_generated',
@@ -517,12 +526,12 @@ export function onChangelogGenerated(
 /**
  * Hook: called when a manual note is added
  */
-export function onManualNote(
+export async function onManualNote(
   versionId: string,
   note: string,
   actor: string,
   actorId?: string
-): string {
+): Promise<string> {
   return recordChangeEvent({
     versionId,
     type: 'manual_note',
@@ -536,14 +545,14 @@ export function onManualNote(
 /**
  * Hook: called when a version rollback is performed
  */
-export function onVersionRollback(
+export async function onVersionRollback(
   versionId: string,
   targetRef: string,
   targetType: 'tag' | 'branch' | 'commit',
   actor: string,
   actorId?: string,
   metadata?: Record<string, unknown>
-): string {
+): Promise<string> {
   return recordChangeEvent({
     versionId,
     type: 'version_rollback',

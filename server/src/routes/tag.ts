@@ -29,7 +29,7 @@ import {
   removeTag,
 } from '../services/tagService.js';
 import { ScreenshotModel } from '../models/screenshot.js';
-import { getDb } from '../db/sqlite.js';
+import { query } from '../db/pg.js';
 
 const router = Router();
 
@@ -39,7 +39,7 @@ const DEFAULT_PROJECT_PATH = process.env.TEAMCLAW_PROJECT_PATH || '';
 // ========== Tag 记录 CRUD ==========
 
 // GET /api/v1/tags — 获取所有标签记录（从 git + DB 合并）
-router.get('/', (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   const {
     protected: isProtected,
     source,
@@ -75,10 +75,7 @@ router.get('/', (req: Request, res: Response) => {
   for (const shot of ScreenshotModel.getAllScreenshots()) {
     screenshotIndex.add(shot.versionId);
   }
-  const db = getDb();
-  const summaryRows = db.prepare('SELECT version_id FROM version_summaries').all() as Array<{
-    version_id: string;
-  }>;
+  const summaryRows = await query<{ version_id: string }>('SELECT version_id FROM version_summaries');
   const summaryIndex = new Set<string>();
   for (const row of summaryRows) {
     summaryIndex.add(row.version_id);
@@ -598,7 +595,7 @@ router.delete('/bulk', requireAdmin, (req: Request, res: Response) => {
 });
 
 // GET /api/v1/tags/search — 标签搜索（支持名称/日期范围过滤）
-router.get('/search', (req: Request, res: Response) => {
+router.get('/search', async (req: Request, res: Response) => {
   const {
     q,
     source,
@@ -627,10 +624,7 @@ router.get('/search', (req: Request, res: Response) => {
     screenshotIndex.add(shot.versionId);
   }
 
-  const db = getDb();
-  const summaryRows = db.prepare('SELECT version_id FROM version_summaries').all() as Array<{
-    version_id: string;
-  }>;
+  const summaryRows = await query<{ version_id: string }>('SELECT version_id FROM version_summaries');
   const summaryIndex = new Set<string>();
   for (const row of summaryRows) {
     summaryIndex.add(row.version_id);

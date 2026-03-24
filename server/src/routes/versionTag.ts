@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { success, error } from '../utils/response.js';
-import { getDb } from '../db/sqlite.js';
+import { queryOne, execute } from '../db/pg.js';
 import { getTags, createTag, getGitLog, getCurrentBranch } from '../services/gitService.js';
 import { autoCreateTagForVersion, createTagRecord } from '../services/tagService.js';
 import { getSettings } from '../services/versionSettingsStore.js';
@@ -21,9 +21,11 @@ function makeTagName(version: string, prefix: VersionSettings['tagPrefix'], cust
 }
 
 // GET /api/v1/versions/:id/git-tags — Get git tags
-router.get('/:id/git-tags', (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+router.get('/:id/git-tags', async (req: Request, res: Response) => {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT id, version, projectPath FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -37,9 +39,11 @@ router.get('/:id/git-tags', (req: Request, res: Response) => {
 });
 
 // POST /api/v1/versions/:id/git-tags — Create a git tag for a version
-router.post('/:id/git-tags', (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db.prepare('SELECT id, version, projectPath FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+router.post('/:id/git-tags', async (req: Request, res: Response) => {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT id, version, projectPath FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -56,7 +60,7 @@ router.post('/:id/git-tags', (req: Request, res: Response) => {
   const created = createTag(projectPath, name, message);
 
   if (created) {
-    db.prepare('UPDATE versions SET tag_created = 1 WHERE id = ?').run(req.params.id);
+    await execute('UPDATE versions SET tag_created = 1 WHERE id = $1', [req.params.id]);
     autoCreateTagForVersion(req.params.id, row.version as string, {
       name,
       message,
@@ -69,9 +73,11 @@ router.post('/:id/git-tags', (req: Request, res: Response) => {
 });
 
 // POST /api/v1/versions/:id/create-tag — Manually trigger tag creation for a version
-router.post('/:id/create-tag', (req: Request, res: Response) => {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
+router.post('/:id/create-tag', async (req: Request, res: Response) => {
+  const row = await queryOne<Record<string, unknown>>(
+    'SELECT * FROM versions WHERE id = $1',
+    [req.params.id]
+  );
   if (!row) {
     res.status(404).json(error(404, 'Version not found'));
     return;
@@ -98,9 +104,10 @@ router.post('/:id/create-tag', (req: Request, res: Response) => {
     return;
   }
 
-  db.prepare(
-    'UPDATE versions SET tag_created = 1, git_tag = ?, git_tag_created_at = ? WHERE id = ?'
-  ).run(tagRecord.name, tagRecord.createdAt, req.params.id);
+  await execute(
+    'UPDATE versions SET tag_created = 1, git_tag = $1, git_tag_created_at = $2 WHERE id = $3',
+    [tagRecord.name, tagRecord.createdAt, req.params.id]
+  );
 
   res.status(201).json(success({
     versionId: req.params.id,

@@ -195,21 +195,12 @@ export function getSearchSuggestions(query: string, limit: number = 5): string[]
 
 // Search history persistence (SQLite + memory cache)
 
-function getDb() {
-  try {
-    const { getDb } = require('../db/sqlite.js');
-    return getDb();
-  } catch {
-    return null;
-  }
-}
+import { query, execute } from '../db/pg.js';
 
 // Ensure search_history table exists
-function ensureSearchHistoryTable(): void {
+async function ensureSearchHistoryTable(): Promise<void> {
   try {
-    const db = getDb();
-    if (!db) return;
-    db.exec(`
+    await execute(`
       CREATE TABLE IF NOT EXISTS search_history (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -223,58 +214,58 @@ function ensureSearchHistoryTable(): void {
     `);
   } catch { /* ignore */ }
 }
-ensureSearchHistoryTable();
+await ensureSearchHistoryTable();
 
 // Save search query to user history (SQLite + memory cache)
-export function saveSearchHistory(userId: string, query: string, type: 'keyword' | 'semantic' = 'keyword', filters: SearchFilter = {}, resultCount = 0): void {
-  if (!query || query.trim().length < 2) return;
+export function saveSearchHistory(userId: string, queryStr: string, type: 'keyword' | 'semantic' = 'keyword', filters: SearchFilter = {}, resultCount = 0): void {
+  if (!queryStr || queryStr.trim().length < 2) return;
 
   // Memory cache
   const key = `history_${userId}`;
   let history = searchHistoryMap.get(key) || [];
-  history = history.filter(h => h !== query);
-  history.unshift(query);
+  history = history.filter(h => h !== queryStr);
+  history.unshift(queryStr);
   if (history.length > 20) history = history.slice(0, 20);
   searchHistoryMap.set(key, history);
 
-  // SQLite persistence
-  try {
-    const db = getDb();
-    if (!db) return;
-    const id = `hist_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    db.prepare(`
-      INSERT INTO search_history (id, user_id, query, type, filters, result_count, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, userId, query, type, JSON.stringify(filters), resultCount, new Date().toISOString());
+  // SQLite persistence (fire-and-forget async)
+  saveSearchHistoryAsync(userId, queryStr, type, filters, resultCount).catch(() => {/* ignore */});
+}
 
-    // Keep max 50 entries per user in DB
-    db.prepare(`
-      DELETE FROM search_history WHERE user_id = ? AND id NOT IN (
-        SELECT id FROM search_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 50
-      )
-    `).run(userId, userId);
-  } catch { /* ignore */ }
+async function saveSearchHistoryAsync(userId: string, queryStr: string, type: 'keyword' | 'semantic', filters: SearchFilter, resultCount: number): Promise<void> {
+  const id = `hist_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  await execute(
+    `INSERT INTO search_history (id, user_id, query, type, filters, result_count, created_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [id, userId, queryStr, type, JSON.stringify(filters), resultCount, new Date().toISOString()]
+  );
+
+  // Keep max 50 entries per user in DB
+  await execute(
+    `DELETE FROM search_history WHERE user_id = $1 AND id NOT IN (
+      SELECT id FROM search_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50
+    )`,
+    [userId, userId]
+  );
 }
 
 // Get search history for user (SQLite primary, memory fallback)
-export function getSearchHistory(userId: string, limit: number = 10): Array<{ id: string; query: string; type: string; resultCount: number; createdAt: string }> {
+export async function getSearchHistory(userId: string, limit: number = 10): Promise<Array<{ id: string; query: string; type: string; resultCount: number; createdAt: string }>> {
   // Try memory first
   const key = `history_${userId}`;
   const memHistory = searchHistoryMap.get(key) || [];
 
   // Try SQLite
   try {
-    const db = getDb();
-    if (db) {
-      const rows = db.prepare(`
-        SELECT id, query, type, result_count as resultCount, created_at as createdAt
+    const rows = await query<any>(
+      `SELECT id, query, type, result_count as resultCount, created_at as createdAt
         FROM search_history
-        WHERE user_id = ?
+        WHERE user_id = $1
         ORDER BY created_at DESC
-        LIMIT ?
-      `).all(userId, limit) as any[];
-      return rows;
-    }
+        LIMIT $2`,
+      [userId, limit]
+    );
+    return rows;
   } catch { /* ignore */ }
 
   // Fallback: convert memory history to structured format
@@ -290,23 +281,25 @@ export function getSearchHistory(userId: string, limit: number = 10): Array<{ id
 // Clear search history for user
 export function clearSearchHistory(userId: string): void {
   searchHistoryMap.delete(`history_${userId}`);
+  clearSearchHistoryAsync(userId).catch(() => {/* ignore */});
+}
+
+async function clearSearchHistoryAsync(userId: string): Promise<void> {
   try {
-    const db = getDb();
-    db?.prepare('DELETE FROM search_history WHERE user_id = ?').run(userId);
+    await execute('DELETE FROM search_history WHERE user_id = $1', [userId]);
   } catch { /* ignore */ }
 }
 
 // Get search history records from DB
-export function getSearchHistoryRecords(userId: string, limit: number = 10): any[] {
+export async function getSearchHistoryRecords(userId: string, limit: number = 10): Promise<any[]> {
   try {
-    const db = getDb();
-    if (!db) return [];
-    return db.prepare(`
-      SELECT id, query, type, filters, result_count as resultCount, created_at as createdAt
+    return await query(
+      `SELECT id, query, type, filters, result_count as resultCount, created_at as createdAt
       FROM search_history
-      WHERE user_id = ?
+      WHERE user_id = $1
       ORDER BY created_at DESC
-      LIMIT ?
-    `).all(userId, limit);
+      LIMIT $2`,
+      [userId, limit]
+    );
   } catch { return []; }
 }
