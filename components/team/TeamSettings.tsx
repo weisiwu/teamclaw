@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Role, ROLES, ROLE_OPTIONS } from '@/lib/auth/roles';
+import { Role, ROLES, ROLE_OPTIONS, isElevatedRole } from '@/lib/auth/roles';
 import {
   listTeamMembers,
   addMember,
@@ -68,7 +68,7 @@ function RoleDropdown({
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute left-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border rounded-lg shadow-lg py-1 min-w-[120px]">
-            {ROLE_OPTIONS.filter(r => r.id !== 'owner').map(r => (
+            {ROLE_OPTIONS.map(r => (
               <button
                 key={r.id}
                 onClick={() => { onUpdate(memberId, r.id); setOpen(false); }}
@@ -95,7 +95,7 @@ export function TeamSettings({ currentUserRole }: TeamSettingsProps) {
 
   // 新增成员 Dialog
   const [addOpen, setAddOpen] = useState(false);
-  const [addForm, setAddForm] = useState<AddMemberRequest>({ name: '', role: 'developer' });
+  const [addForm, setAddForm] = useState<AddMemberRequest>({ name: '', role: 'member' });
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState('');
 
@@ -106,7 +106,7 @@ export function TeamSettings({ currentUserRole }: TeamSettingsProps) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const canManage = currentUserRole === 'owner' || currentUserRole === 'admin';
+  const canManage = isElevatedRole(currentUserRole);
 
   const loadMembers = useCallback(async () => {
     setLoading(true);
@@ -139,7 +139,7 @@ export function TeamSettings({ currentUserRole }: TeamSettingsProps) {
     try {
       await addMember(addForm);
       setAddOpen(false);
-      setAddForm({ name: '', role: 'developer' });
+      setAddForm({ name: '', role: 'member' });
       loadMembers();
     } catch (e) {
       setAddError(e instanceof Error ? e.message : '添加失败');
@@ -307,7 +307,7 @@ export function TeamSettings({ currentUserRole }: TeamSettingsProps) {
                               <button
                                 onClick={() => { setDeleteId(member.id); setMenuMemberId(null); }}
                                 className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                                disabled={member.role === 'owner'}
+                                disabled={false}
                               >
                                 <Trash2 className="w-4 h-4" />
                                 移除成员
@@ -370,7 +370,7 @@ export function TeamSettings({ currentUserRole }: TeamSettingsProps) {
                 value={addForm.role}
                 onChange={e => setAddForm({ ...addForm, role: e.target.value as Role })}
               >
-                {ROLE_OPTIONS.filter(r => r.id !== 'owner').map(r => (
+                {ROLE_OPTIONS.map(r => (
                   <option key={r.id} value={r.id}>{r.labelZh} — {r.description}</option>
                 ))}
               </select>

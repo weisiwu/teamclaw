@@ -3,7 +3,7 @@
  * TeamClaw 人员与权限模块 - 团队成员 CRUD
  */
 
-import { Role } from '../auth/roles';
+import type { Role } from '@/lib/auth/roles';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9700';
 

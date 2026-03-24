@@ -5,7 +5,7 @@ import { Monitor, Moon, Sun, Users, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { TeamSettings } from '@/components/team/TeamSettings';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { Role } from '@/lib/auth/roles';
+import type { Role } from '@/lib/auth/roles';
 
 export default function Settings() {
   const { theme, setTheme, resolvedTheme } = useTheme();
@@ -16,14 +16,8 @@ export default function Settings() {
     setMounted(true);
   }, []);
 
-  // Map auth role to TeamSettings Role type (auth uses 'admin'|'vice_admin'|'member')
-  const roleMap: Record<string, Role> = {
-    admin: 'admin',
-    vice_admin: 'owner',
-    member: 'developer',
-    viewer: 'viewer',
-  };
-  const currentUserRole = roleMap[user?.role as string] ?? 'viewer';
+  // 直接使用后端角色：admin | vice_admin | member
+  const currentUserRole = (user?.role as Role) ?? 'member';
   const [activeSection, setActiveSection] = useState<'appearance' | 'team'>('appearance');
 
   if (!mounted) {
