@@ -1,11 +1,16 @@
 import { createChromaClient } from '../utils/chromadb.js';
 
+interface RetryableError extends Error {
+  retryable?: boolean;
+  retryAfter?: number;
+}
+
 // ── 配置常量 ────────────────────────────────────────
-const BATCH_SIZE = 100;           // 每批文档数
-const MAX_CONCURRENCY = 3;        // 最大并发批次数
-const MAX_RETRIES = 3;            // 最大重试次数
+const BATCH_SIZE = 100; // 每批文档数
+const MAX_CONCURRENCY = 3; // 最大并发批次数
+const MAX_RETRIES = 3; // 最大重试次数
 const INITIAL_RETRY_DELAY = 1000; // 初始重试延迟 (ms)
-const REQUEST_TIMEOUT = 30000;    // 单次请求超时 (ms)
+const REQUEST_TIMEOUT = 30000; // 单次请求超时 (ms)
 
 // ── 批量 Embedding ──────────────────────────────────
 
@@ -42,9 +47,11 @@ async function getBatchEmbeddings(
 
     if (response.status === 429) {
       const retryAfter = response.headers.get('Retry-After');
-      const err = new Error(`Rate limited${retryAfter ? `, retry after ${retryAfter}s` : ''}`);
-      (err as any).retryable = true;
-      (err as any).retryAfter = retryAfter ? parseInt(retryAfter, 10) * 1000 : undefined;
+      const err = new Error(
+        `Rate limited${retryAfter ? `, retry after ${retryAfter}s` : ''}`
+      ) as RetryableError;
+      err.retryable = true;
+      err.retryAfter = retryAfter ? parseInt(retryAfter, 10) * 1000 : undefined;
       throw err;
     }
 
@@ -58,9 +65,7 @@ async function getBatchEmbeddings(
     };
 
     // API 返回按 index 排序，确保顺序正确
-    return json.data
-      .sort((a, b) => a.index - b.index)
-      .map(d => d.embedding);
+    return json.data.sort((a, b) => a.index - b.index).map(d => d.embedding);
   } finally {
     clearTimeout(timeout);
   }
@@ -68,10 +73,7 @@ async function getBatchEmbeddings(
 
 // ── 指数退避重试 ────────────────────────────────────
 
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  label: string
-): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -79,15 +81,18 @@ async function withRetry<T>(
       return await fn();
     } catch (err) {
       lastError = err as Error;
-      const retryable = (err as any).retryable !== false;
+      const retryErr = err as RetryableError;
+      const retryable = retryErr.retryable !== false;
 
       if (!retryable || attempt === MAX_RETRIES) {
         throw err;
       }
 
-      const retryAfter = (err as any).retryAfter;
+      const retryAfter = retryErr.retryAfter;
       const delay = retryAfter || INITIAL_RETRY_DELAY * Math.pow(2, attempt);
-      console.warn(`[vectorStore] ${label} 失败 (attempt ${attempt + 1}/${MAX_RETRIES + 1})，${delay}ms 后重试: ${(err as Error).message}`);
+      console.warn(
+        `[vectorStore] ${label} 失败 (attempt ${attempt + 1}/${MAX_RETRIES + 1})，${delay}ms 后重试: ${(err as Error).message}`
+      );
       await new Promise(r => setTimeout(r, delay));
     }
   }
@@ -130,7 +135,9 @@ export async function addDocuments(
     throw new Error('OPENAI_API_KEY 未配置');
   }
 
-  console.log(`[vectorStore] 向量化 ${texts.length} 篇文档，分 ${Math.ceil(texts.length / BATCH_SIZE)} 批处理...`);
+  console.log(
+    `[vectorStore] 向量化 ${texts.length} 篇文档，分 ${Math.ceil(texts.length / BATCH_SIZE)} 批处理...`
+  );
 
   // 创建索引数组用于分批
   const indices = texts.map((_, i) => i);
@@ -155,13 +162,17 @@ export async function addDocuments(
           `batch ${bi + j + 1}/${batches.length}`
         );
 
-        // 写入 ChromaDB
-        await collection.add({
-          ids: batchIds,
-          embeddings,
-          documents: batchTexts,
-          metadatas: batchMetas,
-        });
+        // 带重试的 ChromaDB 写入（ChromaDB 也可能因网络/Rate Limit 失败）
+        await withRetry(
+          async () =>
+            collection.add({
+              ids: batchIds,
+              embeddings,
+              documents: batchTexts,
+              metadatas: batchMetas,
+            }),
+          `ChromaDB batch ${bi + j + 1}/${batches.length}`
+        );
 
         processed += batchIndices.length;
         console.log(`[vectorStore] 已处理 ${processed}/${texts.length}`);
@@ -176,7 +187,9 @@ export async function query(
   collectionName: string,
   queryText: string,
   topK = 5
-): Promise<Array<{ id: string; document: string; distance: number; metadata: Record<string, unknown> }>> {
+): Promise<
+  Array<{ id: string; document: string; distance: number; metadata: Record<string, unknown> }>
+> {
   const client = createChromaClient();
   const collection = await client.getCollection({ name: collectionName });
 
