@@ -13,6 +13,7 @@ import { usePermission } from "@/hooks/usePermission";
 import type { Member, MemberRole, MemberStatus, CreateMemberRequest, UpdateMemberRequest } from "@/lib/api/types";
 import { ROLE_LABELS, MEMBER_ROLE_OPTIONS } from "@/lib/api/constants";
 import { Pencil, Trash2, UserPlus,  Search, Users, ArrowUpDown, ArrowUp, ArrowDown, Download, Upload, X, Power, PowerOff, Eye } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 // xlsx lazy loaded — only needed for import/export, saves ~500KB from initial bundle
 type XLSXModule = typeof import("xlsx");
 
@@ -554,137 +555,103 @@ export default function MembersPage() {
       />
 
       {/* Delete Confirmation Dialog */}
-      {deleteConfirmId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div 
-            className="fixed inset-0 bg-black/50" 
-            onClick={() => setDeleteConfirmId(null)}
-          />
-          <div className="relative z-50 bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-sm p-6">
-            <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">确认删除</h3>
-            <p className="text-gray-600 dark:text-gray-300 mb-6">
-              确定要删除该成员吗？此操作不可撤销。
-            </p>
-            <div className="flex justify-end gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setDeleteConfirmId(null)}
-              >
-                取消
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => handleDelete(deleteConfirmId)}
-                disabled={deleteMember.isPending}
-              >
-                {deleteMember.isPending ? "删除中..." : "删除"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>确认删除</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-4">
+            确定要删除该成员吗？此操作不可撤销。
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>取消</Button>
+            <Button
+              variant="destructive"
+              onClick={() => handleDelete(deleteConfirmId!)}
+              disabled={deleteMember.isPending}
+            >
+              {deleteMember.isPending ? "删除中..." : "删除"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Batch Delete Confirmation Dialog */}
-      {batchDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div 
-            className="fixed inset-0 bg-black/50" 
-            onClick={() => setBatchDeleteConfirm(false)}
-          />
-          <div className="relative z-50 bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-sm p-6">
-            <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">确认批量删除</h3>
-            <p className="text-gray-600 dark:text-gray-300 mb-6">
-              确定要删除选中的 {selectedIds.size} 个成员吗？此操作不可撤销。
-            </p>
-            <div className="flex justify-end gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setBatchDeleteConfirm(false)}
-              >
-                取消
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={handleBatchDelete}
-                disabled={batchDeleteMembers.isPending}
-              >
-                {batchDeleteMembers.isPending ? "删除中..." : "删除"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog open={batchDeleteConfirm} onOpenChange={setBatchDeleteConfirm}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>确认批量删除</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-4">
+            确定要删除选中的 {selectedIds.size} 个成员吗？此操作不可撤销。
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchDeleteConfirm(false)}>取消</Button>
+            <Button
+              variant="destructive"
+              onClick={handleBatchDelete}
+              disabled={batchDeleteMembers.isPending}
+            >
+              {batchDeleteMembers.isPending ? "删除中..." : "删除"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Member Detail Dialog */}
-      {viewingMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div 
-            className="fixed inset-0 bg-black/50" 
-            onClick={() => setViewingMember(null)}
-          />
-          <div className="relative z-50 bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">成员详情</h3>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => setViewingMember(null)}
-              >
-                <X className="w-4 h-4" />
-              </Button>
+      <Dialog open={!!viewingMember} onOpenChange={(open) => !open && setViewingMember(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <DialogTitle>成员详情</DialogTitle>
             </div>
-            
-            <div className="space-y-4">
-              <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
-                <span className="text-gray-500 dark:text-gray-400">ID</span>
-                <span className="text-sm font-mono text-gray-700 dark:text-gray-300">{viewingMember.id}</span>
-              </div>
-              <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
-                <span className="text-gray-500 dark:text-gray-400">姓名</span>
-                <span className="text-gray-900 dark:text-white font-medium">{viewingMember.name}</span>
-              </div>
-              <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
-                <span className="text-gray-500 dark:text-gray-400">角色</span>
-                <Badge variant={getRoleBadgeVariant(viewingMember.role)}>
-                  {ROLE_LABELS[viewingMember.role]}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
-                <span className="text-gray-500 dark:text-gray-400">权重</span>
-                <span className="text-gray-900 dark:text-white">{viewingMember.weight}</span>
-              </div>
-              <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
-                <span className="text-gray-500 dark:text-gray-400">状态</span>
-                <Badge variant={viewingMember.status === "active" ? "success" : "info"}>
-                  {viewingMember.status === "active" ? "启用" : "禁用"}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
-                <span className="text-gray-500 dark:text-gray-400">加入时间</span>
-                <span className="text-gray-700 dark:text-gray-300">{viewingMember.createdAt}</span>
-              </div>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
+              <span className="text-gray-500 dark:text-gray-400">ID</span>
+              <span className="text-sm font-mono text-gray-700 dark:text-gray-300">{viewingMember?.id}</span>
             </div>
-
-            <div className="flex justify-end gap-3 mt-6">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setViewingMember(null);
-                  handleEdit(viewingMember);
-                }}
-              >
-                <Pencil className="w-4 h-4 mr-2" />
-                编辑
-              </Button>
-              <Button
-                onClick={() => setViewingMember(null)}
-              >
-                关闭
-              </Button>
+            <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
+              <span className="text-gray-500 dark:text-gray-400">姓名</span>
+              <span className="text-gray-900 dark:text-white font-medium">{viewingMember?.name}</span>
+            </div>
+            <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
+              <span className="text-gray-500 dark:text-gray-400">角色</span>
+              <Badge variant={viewingMember ? getRoleBadgeVariant(viewingMember.role) : 'secondary'}>
+                {viewingMember && ROLE_LABELS[viewingMember.role]}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
+              <span className="text-gray-500 dark:text-gray-400">权重</span>
+              <span className="text-gray-900 dark:text-white">{viewingMember?.weight}</span>
+            </div>
+            <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
+              <span className="text-gray-500 dark:text-gray-400">状态</span>
+              <Badge variant={viewingMember?.status === "active" ? "success" : "info"}>
+                {viewingMember?.status === "active" ? "启用" : "禁用"}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
+              <span className="text-gray-500 dark:text-gray-400">加入时间</span>
+              <span className="text-gray-700 dark:text-gray-300">{viewingMember?.createdAt}</span>
             </div>
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const m = viewingMember;
+                setViewingMember(null);
+                if (m) handleEdit(m);
+              }}
+            >
+              <Pencil className="w-4 h-4 mr-2" />
+              编辑
+            </Button>
+            <Button onClick={() => setViewingMember(null)}>关闭</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

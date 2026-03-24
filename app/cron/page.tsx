@@ -12,7 +12,6 @@ import {
   PlayCircle,
   PauseCircle,
   Edit,
-  X,
   Clock,
   History,
   Loader2,
@@ -216,23 +215,16 @@ function CronModal({
     onClose();
   };
 
-  if (!isOpen) return null;
-
   const isPending = createCron.isPending || updateCron.isPending;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-
-      <div className="relative bg-card rounded-lg shadow-xl w-full max-w-lg mx-4 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-foreground">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>
             {editCron ? "编辑定时任务" : "添加定时任务"}
-          </h2>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="w-5 h-5" />
-          </Button>
-        </div>
+          </DialogTitle>
+        </DialogHeader>
 
         <div className="space-y-4">
           <div>
@@ -273,7 +265,7 @@ function CronModal({
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-6">
+        <DialogFooter>
           <Button variant="outline" onClick={onClose}>
             取消
           </Button>
@@ -288,9 +280,9 @@ function CronModal({
           >
             {isPending ? "保存中..." : "保存"}
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -306,22 +298,17 @@ function CronRunLogModal({
 }) {
   const { data: runs, isLoading, error } = useCronRuns(cron?.id || "");
 
-  if (!isOpen || !cron) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-
-      <div className="relative bg-card rounded-lg shadow-xl w-full max-w-2xl mx-4 p-6 max-h-[80vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">运行日志</h2>
-            <p className="text-sm text-muted-foreground">{cron.name}</p>
+    <Dialog open={isOpen && !!cron} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+        <DialogHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle>运行日志</DialogTitle>
+              <p className="text-sm text-muted-foreground mt-1">{cron?.name}</p>
+            </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="w-5 h-5" />
-          </Button>
-        </div>
+        </DialogHeader>
 
         <div className="flex-1 overflow-y-auto space-y-3">
           {isLoading ? (
@@ -364,8 +351,8 @@ function CronRunLogModal({
             <div className="py-8 text-center text-muted-foreground">暂无运行记录</div>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
