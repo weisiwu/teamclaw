@@ -5,8 +5,14 @@
 
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { execSync } from 'child_process';
-import { checkout, getCurrentBranch, createBranch, tagExists, type GitCommit } from './gitService.js';
+import { execFileSync } from 'child_process';
+import {
+  checkout,
+  getCurrentBranch,
+  createBranch,
+  tagExists,
+  type GitCommit,
+} from './gitService.js';
 
 export interface RollbackResult {
   success: boolean;
@@ -137,7 +143,7 @@ export function rollbackToBranch(
   }
 
   try {
-    execSync(`git checkout ${branchName}`, {
+    execFileSync('git', ['checkout', branchName], {
       cwd: projectPath,
       encoding: 'utf-8',
       timeout: 30000,
@@ -190,7 +196,7 @@ export function rollbackToCommit(
   try {
     // First, create a detached branch pointing to the commit
     if (options.createBranch && options.branchName) {
-      execSync(`git checkout -b ${options.branchName} ${commitHash}`, {
+      execFileSync('git', ['checkout', '-b', options.branchName!, commitHash], {
         cwd: projectPath,
         encoding: 'utf-8',
         timeout: 30000,
@@ -207,7 +213,7 @@ export function rollbackToCommit(
     }
 
     // Direct checkout to commit
-    execSync(`git checkout ${commitHash}`, {
+    execFileSync('git', ['checkout', commitHash], {
       cwd: projectPath,
       encoding: 'utf-8',
       timeout: 30000,
@@ -262,9 +268,10 @@ export function getRollbackPreview(
 
   try {
     // Get commits that would be lost (current is ahead of target)
-    const diffOutput = execSync(
-      `git log --oneline ${targetRef}..${currentRef} 2>/dev/null | head -50`,
-      { cwd: projectPath, encoding: 'utf-8', timeout: 10000 }
+    const diffOutput = execFileSync(
+      'git',
+      ['log', '--oneline', `${targetRef}..${currentRef}`, '-50'],
+      { cwd: projectPath, encoding: 'utf-8', timeout: 10000, stdio: ['ignore', 'pipe', 'pipe'] }
     );
 
     const commitsAhead = diffOutput
@@ -272,13 +279,21 @@ export function getRollbackPreview(
       .filter(Boolean)
       .map(line => {
         const [hash, ...msgParts] = line.split(' ');
-        return { hash, shortHash: hash.slice(0, 7), message: msgParts.join(' '), author: '', authorEmail: '', date: '' };
+        return {
+          hash,
+          shortHash: hash.slice(0, 7),
+          message: msgParts.join(' '),
+          author: '',
+          authorEmail: '',
+          date: '',
+        };
       });
 
     // Get commits that would be gained (target is ahead of current)
-    const aheadOutput = execSync(
-      `git log --oneline ${currentRef}..${targetRef} 2>/dev/null | head -50`,
-      { cwd: projectPath, encoding: 'utf-8', timeout: 10000 }
+    const aheadOutput = execFileSync(
+      'git',
+      ['log', '--oneline', `${currentRef}..${targetRef}`, '-50'],
+      { cwd: projectPath, encoding: 'utf-8', timeout: 10000, stdio: ['ignore', 'pipe', 'pipe'] }
     );
 
     const commitsBehind = aheadOutput
@@ -286,16 +301,25 @@ export function getRollbackPreview(
       .filter(Boolean)
       .map(line => {
         const [hash, ...msgParts] = line.split(' ');
-        return { hash, shortHash: hash.slice(0, 7), message: msgParts.join(' '), author: '', authorEmail: '', date: '' };
+        return {
+          hash,
+          shortHash: hash.slice(0, 7),
+          message: msgParts.join(' '),
+          author: '',
+          authorEmail: '',
+          date: '',
+        };
       });
 
     // Get files that differ
     let filesChanged: string[] = [];
     try {
-      const filesOutput = execSync(
-        `git diff --name-only ${targetRef} ${currentRef} 2>/dev/null`,
-        { cwd: projectPath, encoding: 'utf-8', timeout: 10000 }
-      );
+      const filesOutput = execFileSync('git', ['diff', '--name-only', targetRef, currentRef], {
+        cwd: projectPath,
+        encoding: 'utf-8',
+        timeout: 10000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
       filesChanged = filesOutput.split('\n').filter(Boolean);
     } catch {
       // No diff
@@ -356,8 +380,16 @@ export function getRollbackTargets(
 
   try {
     // Get tags
-    const tagsOutput = execSync(
-      `git tag -l --format='%(refname:short)||%(objectname)||%(creatordate:iso)' --sort=-creatordate | head -${maxTags}`,
+    const tagsOutput = execFileSync(
+      'git',
+      [
+        'tag',
+        '-l',
+        '--format=%(refname:short)||%(objectname)||%(creatordate:iso)',
+        `--sort=-creatordate`,
+        '-n',
+        String(maxTags),
+      ],
       { cwd: projectPath, encoding: 'utf-8', timeout: 10000 }
     );
 
@@ -365,14 +397,15 @@ export function getRollbackTargets(
       .split('\n')
       .filter(Boolean)
       .map(line => {
-        const [name, commit, date] = line.replace(/'/g, '').split('||');
+        const [name, commit, date] = line.split('||');
         return { name: name?.trim() || '', commit: commit?.trim() || '', date: date?.trim() || '' };
       })
       .filter(t => t.name);
 
     // Get branches
-    const branchesOutput = execSync(
-      `git branch -a --format='%(refname:short)||%(HEAD)' | head -${maxBranches}`,
+    const branchesOutput = execFileSync(
+      'git',
+      ['branch', '-a', '--format=%(refname:short)||%(HEAD)', '-n', String(maxBranches)],
       { cwd: projectPath, encoding: 'utf-8', timeout: 10000 }
     );
 

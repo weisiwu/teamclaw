@@ -3,7 +3,7 @@
  * Handles: git log, tag creation, branch listing, current branch, commit diff
  */
 
-import { execSync, exec } from 'child_process';
+import { execFileSync, execFile } from 'child_process';
 import { existsSync } from 'fs';
 import { join } from 'path';
 
@@ -34,7 +34,7 @@ export interface GitBranch {
 
 function execGit(cwd: string, args: string[]): string {
   try {
-    return execSync('git ' + args.join(' '), {
+    return execFileSync('git', args, {
       cwd,
       encoding: 'utf-8',
       timeout: 30000,
@@ -48,9 +48,9 @@ function execGit(cwd: string, args: string[]): string {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function _execGitAsync(cwd: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
-    exec('git ' + args.join(' '), { cwd, encoding: 'utf-8', timeout: 30000 }, (err, stdout, stderr) => {
+    execFile('git', args, { cwd, encoding: 'utf-8', timeout: 30000 }, (err, stdout, stderr) => {
       if (err) reject(new Error(stderr || err.message));
-      else resolve(stdout);
+      else resolve(stdout as string);
     });
   });
 }
@@ -125,16 +125,23 @@ export function getTags(cwd: string): GitTag[] {
   if (!existsSync(join(cwd, '.git'))) return [];
 
   try {
-    const output = execGit(cwd, ['tag', '-l', '--format=%(refname:short)||%(objectname)||%(creatordate:iso)', '--sort=-creatordate']);
+    const output = execGit(cwd, [
+      'tag',
+      '-l',
+      '--format=%(refname:short)||%(objectname)||%(creatordate:iso)',
+      '--sort=-creatordate',
+    ]);
     const lines = output.split('\n').filter(Boolean);
-    return lines.map(line => {
-      const parts = line.split('||');
-      return {
-        name: parts[0] || '',
-        commit: parts[1] || '',
-        date: parts[2] || '',
-      };
-    }).filter(t => t.name);
+    return lines
+      .map(line => {
+        const parts = line.split('||');
+        return {
+          name: parts[0] || '',
+          commit: parts[1] || '',
+          date: parts[2] || '',
+        };
+      })
+      .filter(t => t.name);
   } catch {
     return [];
   }
@@ -181,16 +188,18 @@ export function getBranches(cwd: string): GitBranch[] {
   try {
     const output = execGit(cwd, ['branch', '-a', '--format=%(refname:short)||%(HEAD)']);
     const lines = output.split('\n').filter(Boolean);
-    return lines.map(line => {
-      const parts = line.split('||');
-      const name = parts[0]?.trim() || '';
-      const isCurrent = parts[1]?.trim() === '*';
-      return {
-        name,
-        isCurrent,
-        isRemote: name.startsWith('remotes/') || name.startsWith('origin/'),
-      };
-    }).filter(b => b.name);
+    return lines
+      .map(line => {
+        const parts = line.split('||');
+        const name = parts[0]?.trim() || '';
+        const isCurrent = parts[1]?.trim() === '*';
+        return {
+          name,
+          isCurrent,
+          isRemote: name.startsWith('remotes/') || name.startsWith('origin/'),
+        };
+      })
+      .filter(b => b.name);
   } catch {
     return [];
   }
@@ -245,7 +254,11 @@ export function checkout(cwd: string, ref: string): boolean {
 /**
  * Get diff stats between two refs
  */
-export function getDiffStats(cwd: string, fromRef: string, toRef: string): { files: string[]; insertions: number; deletions: number } {
+export function getDiffStats(
+  cwd: string,
+  fromRef: string,
+  toRef: string
+): { files: string[]; insertions: number; deletions: number } {
   if (!existsSync(join(cwd, '.git'))) {
     return { files: [], insertions: 0, deletions: 0 };
   }
@@ -304,7 +317,10 @@ export function getTagCommit(cwd: string, tagName: string): string {
 /**
  * Get detailed info about a git tag including author, date, message, annotation
  */
-export function getTagDetails(cwd: string, tagName: string): {
+export function getTagDetails(
+  cwd: string,
+  tagName: string
+): {
   name: string;
   commit: string;
   date: string;
@@ -361,14 +377,16 @@ export function getCommitsBetween(cwd: string, fromRef: string, toRef: string): 
       '--pretty=format:%H||%h||%s||%an||%ae||%aI',
     ]);
     const lines = output.split('\n').filter(Boolean);
-    return lines.map(line => {
-      const parts = line.split('||');
-      if (parts.length >= 6) {
-        const [hash, shortHash, message, author, authorEmail, date] = parts;
-        return { hash, shortHash, message, author, authorEmail, date };
-      }
-      return { hash: '', shortHash: '', message: '', author: '', authorEmail: '', date: '' };
-    }).filter(c => c.hash);
+    return lines
+      .map(line => {
+        const parts = line.split('||');
+        if (parts.length >= 6) {
+          const [hash, shortHash, message, author, authorEmail, date] = parts;
+          return { hash, shortHash, message, author, authorEmail, date };
+        }
+        return { hash: '', shortHash: '', message: '', author: '', authorEmail: '', date: '' };
+      })
+      .filter(c => c.hash);
   } catch {
     return [];
   }
@@ -397,7 +415,10 @@ export function compareBranches(
       '--count',
       `${baseBranch}...${branch}`,
     ]);
-    const [behind, ahead] = output.trim().split('\t').map(n => parseInt(n) || 0);
+    const [behind, ahead] = output
+      .trim()
+      .split('\t')
+      .map(n => parseInt(n) || 0);
     return { ahead, behind };
   } catch {
     return { ahead: 0, behind: 0 };

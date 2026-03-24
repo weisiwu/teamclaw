@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { existsSync } from 'fs';
 import { join } from 'path';
 
@@ -95,7 +95,7 @@ export class GitHistoryAnalyzer {
     projectPath: string
   ): Array<{ path: string; changeCount: number; lastModified: string }> {
     try {
-      const output = execSync('git log --format="%H" --name-only -n 200', {
+      const output = execFileSync('git', ['log', '--format=%H', '--name-only', '-n', '200'], {
         cwd: projectPath,
         encoding: 'utf-8',
         maxBuffer: 5 * 1024 * 1024,
@@ -128,8 +128,9 @@ export class GitHistoryAnalyzer {
     try {
       const branches: Array<{ name: string; ahead: number; behind: number; lastCommit: string }> =
         [];
-      const branchOutput = execSync(
-        'git branch -a --format="%(refname:short)|%(upstream:short)|%(objectname:short)"',
+      const branchOutput = execFileSync(
+        'git',
+        ['branch', '-a', '--format=%(refname:short)|%(upstream:short)|%(objectname:short)'],
         { cwd: projectPath, encoding: 'utf-8', maxBuffer: 1024 * 1024 }
       );
       for (const line of branchOutput.trim().split('\n')) {
@@ -218,7 +219,7 @@ export function parseGitLog(projectPath: string, limit = 200): CommitEntry[] {
   if (!existsSync(join(projectPath, '.git'))) return [];
 
   try {
-    const output = execSync(`git log --format="%H|%aI|%s|%an" -n ${limit}`, {
+    const output = execFileSync('git', ['log', '--format=%H|%aI|%s|%an', '-n', String(limit)], {
       cwd: projectPath,
       encoding: 'utf-8',
       maxBuffer: 10 * 1024 * 1024,
