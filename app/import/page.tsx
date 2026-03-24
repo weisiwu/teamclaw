@@ -137,17 +137,17 @@ export default function ImportPage() {
                 currentStep > i + 1
                   ? 'bg-green-500 text-white'
                   : currentStep === i + 1
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-500'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground'
               }`}
             >
               {currentStep > i + 1 ? '✓' : i + 1}
             </div>
-            <span className="text-xs mt-1 text-gray-500 hidden sm:block">{label}</span>
+            <span className="text-xs mt-1 text-muted-foreground hidden sm:block">{label}</span>
           </div>
           {i < 3 && (
             <div
-              className={`w-12 h-0.5 mx-1 ${currentStep > i + 1 ? 'bg-green-400' : 'bg-gray-200'}`}
+              className={`w-12 h-0.5 mx-1 ${currentStep > i + 1 ? 'bg-green-400' : 'bg-gray-200 dark:bg-slate-700'}`}
             />
           )}
         </div>
@@ -158,15 +158,15 @@ export default function ImportPage() {
   // 步骤1
   const renderStep1 = () => (
     <div className="max-w-2xl mx-auto">
-      <h2 className="text-xl font-semibold mb-6 text-gray-900">步骤 1/4：选择数据源</h2>
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <h2 className="text-xl font-semibold mb-6 text-foreground">步骤 1/4：选择数据源</h2>
+      <div className="bg-card rounded-lg shadow-sm border border-border p-6">
         {/* 数据源切换 */}
         <div className="flex gap-3 mb-6">
           <button
             className={`flex-1 py-3 rounded-lg text-sm font-medium border transition-colors ${
               source === 'url'
-                ? 'bg-blue-50 border-blue-300 text-blue-700'
-                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                ? 'bg-blue-50 dark:bg-blue-950 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                : 'bg-muted border-border text-muted-foreground hover:bg-muted/80'
             }`}
             onClick={() => setSource('url')}
           >
@@ -175,8 +175,8 @@ export default function ImportPage() {
           <button
             className={`flex-1 py-3 rounded-lg text-sm font-medium border transition-colors ${
               source === 'local'
-                ? 'bg-blue-50 border-blue-300 text-blue-700'
-                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                ? 'bg-blue-50 dark:bg-blue-950 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                : 'bg-muted border-border text-muted-foreground hover:bg-muted/70'
             }`}
             onClick={() => setSource('local')}
           >
@@ -187,43 +187,43 @@ export default function ImportPage() {
         {source === 'url' ? (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Git 仓库地址</label>
+              <label className="block text-sm font-medium text-foreground mb-2">Git 仓库地址</label>
               <input
                 type="url"
                 value={url}
                 onChange={e => setUrl(e.target.value)}
                 placeholder="https://github.com/weisiwu/teamclaw"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                className="w-full px-4 py-2.5 border border-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-background text-foreground"
               />
-              <p className="mt-2 text-xs text-gray-500">支持 GitHub、GitLab 等任意 Git 仓库</p>
+              <p className="mt-2 text-xs text-muted-foreground">支持 GitHub、GitLab 等任意 Git 仓库</p>
             </div>
           </div>
         ) : (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">本地项目路径</label>
+            <label className="block text-sm font-medium text-foreground mb-2">本地项目路径</label>
             <input
               type="text"
               value={localPath}
               onChange={e => setLocalPath(e.target.value)}
               placeholder="/Users/xxx/Desktop/my-project"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              className="w-full px-4 py-2.5 border border-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-background text-foreground"
             />
           </div>
         )}
 
         <div className="mt-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">项目名称（可选）</label>
+          <label className="block text-sm font-medium text-foreground mb-2">项目名称（可选）</label>
           <input
             type="text"
             value={projectName}
             onChange={e => setProjectName(e.target.value)}
             placeholder="留空则自动从仓库名提取"
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            className="w-full px-4 py-2.5 border border-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-background text-foreground"
           />
         </div>
 
         {error && (
-          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          <div className="mt-4 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm">
             {error}
           </div>
         )}
@@ -244,47 +244,47 @@ export default function ImportPage() {
   // 步骤2
   const renderStep2 = () => (
     <div className="max-w-2xl mx-auto">
-      <h2 className="text-xl font-semibold mb-6 text-gray-900">步骤 2/4：确认项目信息</h2>
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <h2 className="text-xl font-semibold mb-6 text-foreground">步骤 2/4：确认项目信息</h2>
+      <div className="bg-card rounded-lg shadow-sm border border-border p-6">
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">项目名称</label>
+            <label className="block text-sm font-medium text-foreground mb-1">项目名称</label>
             <input
               type="text"
               value={projectInfo?.name || ''}
               onChange={e =>
                 setProjectInfo(prev => (prev ? { ...prev, name: e.target.value } : null))
               }
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-background text-foreground"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">技术栈</label>
-            <div className="flex flex-wrap gap-2 px-4 py-2 border border-gray-200 rounded-lg bg-gray-50 min-h-[42px]">
+            <label className="block text-sm font-medium text-foreground mb-1">技术栈</label>
+            <div className="flex flex-wrap gap-2 px-4 py-2 border border-border rounded-lg bg-muted min-h-[42px]">
               {projectInfo?.techStack && projectInfo.techStack.length > 0 ? (
                 projectInfo.techStack.map(s => (
                   <span
                     key={s}
-                    className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full"
+                    className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs rounded-full"
                   >
                     {s}
                   </span>
                 ))
               ) : (
-                <span className="text-gray-400 text-sm">未识别到技术栈</span>
+                <span className="text-muted-foreground text-sm">未识别到技术栈</span>
               )}
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">构建工具</label>
-            <div className="px-4 py-2 border border-gray-200 rounded-lg bg-gray-50 text-sm text-gray-600">
+            <label className="block text-sm font-medium text-foreground mb-1">构建工具</label>
+            <div className="px-4 py-2 border border-border rounded-lg bg-muted text-sm text-foreground">
               {projectInfo?.buildTool || '未检测到'}
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Git 仓库</label>
-            <div className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg bg-gray-50">
-              <span className={projectInfo?.hasGit ? 'text-green-600' : 'text-gray-400'}>
+            <label className="block text-sm font-medium text-foreground mb-1">Git 仓库</label>
+            <div className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg bg-muted">
+              <span className={projectInfo?.hasGit ? 'text-green-600' : 'text-muted-foreground'}>
                 {projectInfo?.hasGit ? '✓ 已检测到 .git' : '− 未检测到 Git 仓库'}
               </span>
             </div>
@@ -293,7 +293,7 @@ export default function ImportPage() {
         <div className="mt-6 flex justify-between">
           <button
             onClick={() => setCurrentStep(1)}
-            className="px-6 py-2.5 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 transition-colors"
+            className="px-6 py-2.5 bg-muted text-foreground text-sm rounded-lg hover:bg-muted/70 transition-colors"
           >
             ← 上一步
           </button>
@@ -350,9 +350,9 @@ export default function ImportPage() {
 
     return (
       <div className="max-w-2xl mx-auto">
-        <h2 className="text-xl font-semibold mb-6 text-gray-900">步骤 3/4：解析进度</h2>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="mb-4 text-sm text-gray-500">
+        <h2 className="text-xl font-semibold mb-6 text-foreground">步骤 3/4：解析进度</h2>
+        <div className="bg-card rounded-lg shadow-sm border border-border p-6">
+          <div className="mb-4 text-sm text-muted-foreground">
             {taskData?.status === 'processing' ? '解析中，请稍候...' : '准备中...'}
           </div>
           <div className="space-y-3">
@@ -367,7 +367,7 @@ export default function ImportPage() {
                           ? 'text-green-600'
                           : step.status === 'running'
                             ? 'text-blue-600'
-                            : 'text-gray-400'
+                            : 'text-muted-foreground'
                       }`}
                     >
                       {step.status === 'done' && '✅ '}
@@ -375,7 +375,7 @@ export default function ImportPage() {
                       {step.status === 'pending' && '⬜ '}
                       {STEP_LABELS[step.name] || step.name}
                     </span>
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-muted-foreground">
                       {step.status === 'done'
                         ? '完成'
                         : step.status === 'running'
@@ -383,14 +383,14 @@ export default function ImportPage() {
                           : '等待'}
                     </span>
                   </div>
-                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                     <div
                       className={`h-full transition-all duration-500 ${
                         step.status === 'done'
                           ? 'bg-green-500 w-full'
                           : step.status === 'running'
                             ? 'bg-blue-500 w-2/3 animate-pulse'
-                            : 'bg-gray-300 w-0'
+                            : 'bg-muted w-0'
                       }`}
                     />
                   </div>
@@ -405,16 +405,16 @@ export default function ImportPage() {
   // 步骤4: 完成
   const renderStep4 = () => (
     <div className="max-w-2xl mx-auto">
-      <h2 className="text-xl font-semibold mb-6 text-gray-900">步骤 4/4：完成</h2>
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+      <h2 className="text-xl font-semibold mb-6 text-foreground">步骤 4/4：完成</h2>
+      <div className="bg-card rounded-lg shadow-sm border border-border p-8 text-center">
+        <div className="w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-4">
           <span className="text-3xl">✅</span>
         </div>
-        <h3 className="text-xl font-semibold text-gray-900 mb-2">项目导入完成！</h3>
-        <p className="text-gray-600 text-sm mb-6">已生成摘要和 Skills，您可以开始使用了</p>
-        <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left max-w-sm mx-auto">
-          <h4 className="font-medium text-gray-700 mb-2 text-sm">项目信息</h4>
-          <div className="text-sm text-gray-600 space-y-1">
+        <h3 className="text-xl font-semibold text-foreground mb-2">项目导入完成！</h3>
+        <p className="text-muted-foreground text-sm mb-6">已生成摘要和 Skills，您可以开始使用了</p>
+        <div className="bg-muted rounded-lg p-4 mb-6 text-left max-w-sm mx-auto">
+          <h4 className="font-medium text-foreground mb-2 text-sm">项目信息</h4>
+          <div className="text-sm text-muted-foreground space-y-1">
             <p>名称：{projectInfo?.name}</p>
             <p>技术栈：{projectInfo?.techStack?.join(', ')}</p>
             <p>构建工具：{projectInfo?.buildTool || '未知'}</p>
@@ -429,7 +429,7 @@ export default function ImportPage() {
           </button>
           <button
             onClick={handleRestart}
-            className="px-6 py-2.5 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 transition-colors"
+            className="px-6 py-2.5 bg-muted text-foreground text-sm rounded-lg hover:bg-muted/70 transition-colors"
           >
             继续导入
           </button>
@@ -439,7 +439,7 @@ export default function ImportPage() {
   );
 
   return (
-    <div className="page-container">
+    <div className="page-container bg-gray-50 dark:bg-slate-900">
       <div className="max-w-4xl mx-auto px-4">
         {/* 标题 */}
         <div className="page-header">

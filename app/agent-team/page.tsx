@@ -21,9 +21,9 @@ export default function AgentTeamPage() {
     return (
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Agent 团队</h1>
+          <h1 className="text-2xl font-bold text-foreground">Agent 团队</h1>
         </div>
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-600">
+        <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-xl p-4 text-red-600 dark:text-red-400">
           加载数据失败，请检查后端服务是否运行（localhost:9700）
         </div>
       </div>
@@ -35,12 +35,12 @@ export default function AgentTeamPage() {
       {/* Header */}
       <div className="page-header">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+          <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-xl flex items-center justify-center">
             <Users className="w-5 h-5 text-blue-600" />
           </div>
           <div>
             <h1 className="page-header-title">Agent 团队</h1>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               {agents ? `${agents.length} 个 Agent 在线` : '加载中...'}
             </p>
           </div>
@@ -51,7 +51,7 @@ export default function AgentTeamPage() {
             className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
               showPipelinePanel
                 ? 'bg-blue-50 text-blue-600 border border-blue-200'
-                : 'hover:bg-gray-100 text-gray-600'
+                : 'hover:bg-muted text-muted-foreground'
             }`}
             title="协作流水线"
           >
@@ -64,7 +64,7 @@ export default function AgentTeamPage() {
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
             title="刷新"
           >
-            <RefreshCw className="w-5 h-5 text-gray-500" />
+            <RefreshCw className="w-5 h-5 text-muted-foreground" />
           </button>
         </div>
       </div>
@@ -100,7 +100,7 @@ export default function AgentTeamPage() {
 
           {/* Agent Cards Grid */}
           <div>
-            <h2 className="text-sm font-semibold text-gray-700 mb-3">团队成员</h2>
+            <h2 className="text-sm font-semibold text-foreground mb-3">团队成员</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
               {agents?.map(agent => (
                 <AgentCard
@@ -115,18 +115,18 @@ export default function AgentTeamPage() {
 
           {/* Dispatch Matrix Info */}
           {overview && (
-            <div className="bg-white rounded-xl border p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">指派规则矩阵</h3>
+            <div className="bg-card rounded-xl border border-border p-4">
+              <h3 className="text-sm font-semibold text-foreground mb-3">指派规则矩阵</h3>
               <div className="space-y-2">
                 {Object.entries(overview.dispatchMatrix).map(([from, toList]) => (
                   <div key={from} className="flex items-center gap-2 text-sm">
-                    <span className="font-medium text-gray-700 w-20">{from}</span>
-                    <span className="text-gray-400">→</span>
+                    <span className="font-medium text-foreground w-20">{from}</span>
+                    <span className="text-muted-foreground">→</span>
                     <div className="flex gap-1.5">
                       {toList.map(to => (
                         <span
                           key={to}
-                          className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs"
+                          className="bg-muted text-muted-foreground px-2 py-0.5 rounded text-xs"
                         >
                           {to}
                         </span>
@@ -135,7 +135,7 @@ export default function AgentTeamPage() {
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-gray-400 mt-3">
+              <p className="text-xs text-muted-foreground mt-3">
                 规则：高级可指派低级（Lv3 → Lv2 → Lv1），反向不可
               </p>
             </div>

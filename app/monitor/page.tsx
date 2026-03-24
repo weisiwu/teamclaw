@@ -428,7 +428,7 @@ export default function MonitorPage() {
         <div className="bg-white rounded-lg shadow p-6 dark:bg-slate-800">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200">
+              <h2 className="text-lg font-semibold text-foreground">
                 Overall Status
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">

@@ -60,18 +60,18 @@ function CronCard({
                 {CRON_STATUS_LABELS[cron.status]}
               </Badge>
             </div>
-            <h3 className="font-semibold text-gray-900 mb-1">{cron.name}</h3>
-            <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
+            <h3 className="font-semibold text-foreground mb-1">{cron.name}</h3>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
               <Clock className="w-4 h-4" />
               <span className="font-mono">{cron.cron}</span>
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-muted-foreground">
                 (每{getCronDescription(cron.cron)})
               </span>
             </div>
-            <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+            <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
               {cron.prompt}
             </p>
-            <div className="flex items-center gap-4 text-xs text-gray-500">
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
               <span>创建于：{cron.createdAt}</span>
               {cron.lastRunAt && <span>上次运行：{cron.lastRunAt}</span>}
               {cron.nextRunAt && cron.status === "running" && (
@@ -224,9 +224,9 @@ function CronModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-6">
+      <div className="relative bg-card rounded-lg shadow-xl w-full max-w-lg mx-4 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">
+          <h2 className="text-lg font-semibold text-foreground">
             {editCron ? "编辑定时任务" : "添加定时任务"}
           </h2>
           <Button variant="ghost" size="icon" onClick={onClose}>
@@ -236,34 +236,36 @@ function CronModal({
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               任务名称 *
             </label>
             <Input
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="请输入任务名称"
+              className="bg-background text-foreground"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Cron 表达式 *
             </label>
             <Input
               value={formData.cron}
               onChange={(e) => setFormData({ ...formData, cron: e.target.value })}
               placeholder="0 2 * * *"
+              className="bg-background text-foreground"
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               示例：0 2 * * * 表示每天 02:00 执行
             </p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               任务 Prompt *
             </label>
             <textarea
-              className="w-full min-h-[100px] px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
+              className="w-full min-h-[100px] px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm bg-background text-foreground"
               value={formData.prompt}
               onChange={(e) => setFormData({ ...formData, prompt: e.target.value })}
               placeholder="请输入任务执行的 Prompt 内容"
@@ -310,11 +312,11 @@ function CronRunLogModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 p-6 max-h-[80vh] overflow-hidden flex flex-col">
+      <div className="relative bg-card rounded-lg shadow-xl w-full max-w-2xl mx-4 p-6 max-h-[80vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-lg font-semibold">运行日志</h2>
-            <p className="text-sm text-gray-500">{cron.name}</p>
+            <h2 className="text-lg font-semibold text-foreground">运行日志</h2>
+            <p className="text-sm text-muted-foreground">{cron.name}</p>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />
@@ -323,16 +325,16 @@ function CronRunLogModal({
 
         <div className="flex-1 overflow-y-auto space-y-3">
           {isLoading ? (
-            <div className="py-8 text-center text-gray-500">加载中...</div>
+            <div className="py-8 text-center text-muted-foreground">加载中...</div>
           ) : error ? (
             <div className="py-8 text-center text-red-500">加载失败</div>
           ) : runs && runs.length > 0 ? (
             runs.map((run) => (
-              <Card key={run.id} className="bg-gray-50">
+              <Card key={run.id} className="bg-muted">
                 <CardContent className="p-3">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-500">{run.startTime}</span>
+                      <span className="text-sm text-muted-foreground">{run.startTime}</span>
                       <Badge
                         variant={run.status === "success" ? "success" : run.status === "failed" ? "error" : "info"}
                       >
@@ -340,18 +342,18 @@ function CronRunLogModal({
                       </Badge>
                     </div>
                     {run.endTime && (
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-muted-foreground">
                         耗时：{Math.round((new Date(run.endTime).getTime() - new Date(run.startTime).getTime()) / 1000)}秒
                       </span>
                     )}
                   </div>
                   {run.output && (
-                    <p className="text-sm text-gray-600 bg-white p-2 rounded border border-gray-200 line-clamp-2">
+                    <p className="text-sm text-foreground bg-background p-2 rounded border border-border line-clamp-2">
                       {run.output}
                     </p>
                   )}
                   {run.error && (
-                    <p className="text-sm text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                    <p className="text-sm text-red-600 bg-red-50 dark:bg-red-950 p-2 rounded border border-red-200 dark:border-red-800">
                       错误：{run.error}
                     </p>
                   )}
@@ -359,7 +361,7 @@ function CronRunLogModal({
               </Card>
             ))
           ) : (
-            <div className="py-8 text-center text-gray-500">暂无运行记录</div>
+            <div className="py-8 text-center text-muted-foreground">暂无运行记录</div>
           )}
         </div>
       </div>
@@ -548,7 +550,7 @@ export default function CronPage() {
           <DialogHeader>
             <DialogTitle>确认删除</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-gray-600 py-4">
+          <p className="text-sm text-muted-foreground py-4">
             确定要删除定时任务 <strong>{confirmDeleteId ? filteredData.find(c => c.id === confirmDeleteId)?.name : ""}</strong> 吗？此操作不可撤销。
           </p>
           <DialogFooter>

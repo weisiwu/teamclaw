@@ -38,7 +38,7 @@ function Tabs({ active, onChange }: { active: Tab; onChange: (t: Tab) => void })
     { key: "calls", label: "调用日志" },
   ];
   return (
-    <div className="flex gap-1 border-b border-gray-200">
+    <div className="flex gap-1 border-b border-border">
       {tabs.map((t) => (
         <button
           key={t.key}
@@ -46,7 +46,7 @@ function Tabs({ active, onChange }: { active: Tab; onChange: (t: Tab) => void })
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
             active === t.key
               ? "border-blue-600 text-blue-600"
-              : "border-transparent text-gray-500 hover:text-gray-700"
+              : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
           {t.label}
@@ -357,12 +357,12 @@ function TokensLoading() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardContent className="p-6">
-            <div className="animate-pulse h-[300px] bg-gray-200 rounded"></div>
+            <div className="animate-pulse h-[300px] bg-muted rounded"></div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-6">
-            <div className="animate-pulse h-[300px] bg-gray-200 rounded"></div>
+            <div className="animate-pulse h-[300px] bg-muted rounded"></div>
           </CardContent>
         </Card>
       </div>
