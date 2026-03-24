@@ -1,29 +1,56 @@
-# Breadcrumb 组件
+# Breadcrumb
 
-## 功能说明
+面包屑导航组件，自动根据当前 URL 路径生成导航路径。
 
-面包屑导航组件，显示当前位置的路径层级。
-
-## 引入
+## 导入
 
 ```tsx
-import { Breadcrumb } from '@/components/layout/Breadcrumb';
-```
-
-## 位置
-
-`components/layout/Breadcrumb.tsx`
-
-## 使用示例
-
-```tsx
-<Breadcrumb
-  items={[{ label: '首页', href: '/' }, { label: '项目', href: '/projects' }, { label: '详情' }]}
-/>
+import { Breadcrumb, BreadcrumbItem } from "@/components/layout/Breadcrumb";
 ```
 
 ## Props
 
-| 属性  | 类型                                      | 说明         |
-| ----- | ----------------------------------------- | ------------ |
-| items | `Array<{ label: string; href?: string }>` | 面包屑项列表 |
+```tsx
+interface BreadcrumbProps {
+  items?: BreadcrumbItem[];  // 手动指定面包屑项（覆盖自动生成）
+  className?: string;        // 自定义类名
+}
+
+interface BreadcrumbItem {
+  label: string;   // 显示文字
+  href?: string;   // 链接（最后一项可无链接）
+}
+```
+
+## 自动生成逻辑
+
+```tsx
+// URL: /versions/v1.2.3/detail
+// 自动生成: 首页 → Versions → V1.2.3 → Detail
+// 数字 ID 会被跳过（如 /versions/123 → 不显示 "123"）
+// 路径段会做格式转换： kebab-case → Title Case
+```
+
+## 使用示例
+
+```tsx
+// 自动生成
+<Breadcrumb />
+
+// 手动指定（优先级更高）
+<Breadcrumb
+  items={[
+    { label: "首页", href: "/" },
+    { label: "版本管理", href: "/versions" },
+    { label: "v1.2.3" },
+  ]}
+/>
+```
+
+## 设计细节
+
+- **层级分隔符**：`ChevronRight` 图标
+- **链接样式**：`text-gray-500`，hover 变蓝色
+- **当前项**：`text-gray-900 font-medium`，不可点击
+- **最大宽度**：链接有 `max-w-[120px]`，当前项有 `max-w-[160px]`，超出截断
+- **URL 数字过滤**：`/^\d+$/` 的路径段不生成面包屑
