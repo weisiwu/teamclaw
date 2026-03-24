@@ -142,7 +142,7 @@ const FilterBar = React.memo(function FilterBar({
       <CardContent className="p-4">
         <div className="flex gap-4 flex-wrap items-center">
           <div className="flex-1 min-w-[200px] relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 dark:text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-400" />
             <Input
               placeholder="搜索任务ID、标题或描述..."
               value={search}
@@ -273,7 +273,7 @@ const TaskCard = React.memo(function TaskCard({
           <div className="flex items-start gap-3">
             <button
               onClick={() => onSelect(task.id, !isSelected)}
-              className="mt-1 text-gray-400 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 dark:text-gray-300"
+              className="mt-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 dark:text-gray-300"
             >
               {isSelected ? (
                 <CheckSquare className="w-5 h-5 text-blue-500" />
@@ -292,7 +292,7 @@ const TaskCard = React.memo(function TaskCard({
                     const nextStatus = statusFlow[(currentIndex + 1) % statusFlow.length];
                     onStatusChange(task.id, nextStatus);
                   }}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 dark:bg-slate-700 transition-colors cursor-pointer"
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full hover:bg-gray-100 dark:bg-slate-700 transition-colors cursor-pointer"
                   title="点击切换状态"
                 >
                   <Badge variant={STATUS_BADGE_VARIANT[task.status]}>
@@ -1254,7 +1254,7 @@ function TasksContent() {
               <div className="flex items-center gap-2 px-2 py-1 text-sm text-gray-500 dark:text-gray-400">
                 <button
                   onClick={() => handleSelectAll(selectedTaskIds.size !== data?.data.length)}
-                  className="text-gray-400 dark:text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 dark:text-gray-300"
+                  className="text-gray-400 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 dark:text-gray-300"
                 >
                   {selectedTaskIds.size === data?.data.length ? (
                     <CheckSquare className="w-5 h-5 text-blue-500" />
@@ -1451,3 +1451,4 @@ export default function TasksPage() {
     </Suspense>
   );
 }
+

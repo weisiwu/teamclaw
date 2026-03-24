@@ -11,6 +11,7 @@ export interface Project {
   localPath?: string;
   techStack: string[];
   buildTool?: string;
+  buildMechanisms?: import('../services/buildDetector.js').BuildMechanism[];
   hasGit: boolean;
   importedAt: string;
   status: ProjectStatus;

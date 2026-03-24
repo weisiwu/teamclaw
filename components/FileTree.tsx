@@ -12,10 +12,21 @@ function FileIcon({ name, type }: { name: string; type: string }) {
   if (type === 'dir') return <span className="text-yellow-500 mr-1">📁</span>;
   const ext = name.split('.').pop()?.toLowerCase() || '';
   const iconMap: Record<string, string> = {
-    ts: '🔷', tsx: '⚛️', js: '🟨', jsx: '⚛️',
-    md: '📝', json: '📋', css: '🎨', scss: '🎨',
-    png: '🖼️', jpg: '🖼️', svg: '🖼️',
-    html: '🌐', py: '🐍', go: '🐹', rs: '🦀',
+    ts: '🔷',
+    tsx: '⚛️',
+    js: '🟨',
+    jsx: '⚛️',
+    md: '📝',
+    json: '📋',
+    css: '🎨',
+    scss: '🎨',
+    png: '🖼️',
+    jpg: '🖼️',
+    svg: '🖼️',
+    html: '🌐',
+    py: '🐍',
+    go: '🐹',
+    rs: '🦀',
   };
   return <span className="mr-1">{iconMap[ext] || '📄'}</span>;
 }
@@ -39,7 +50,7 @@ export function FileTree({ node, depth = 0 }: FileTreeProps) {
         style={{ paddingLeft: `${depth * 16 + 4}px` }}
         onClick={() => setOpen(!open)}
       >
-        <span className="mr-1 text-xs text-gray-400 dark:text-gray-500 dark:text-gray-400">{open ? '▼' : '▶'}</span>
+        <span className="mr-1 text-xs text-gray-400 dark:text-gray-400">{open ? '▼' : '▶'}</span>
         <FileIcon name={node.name} type="dir" />
         <span className="font-medium">{node.name}/</span>
       </button>

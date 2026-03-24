@@ -1,21 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Download, X, Trash2, CheckCircle, AlertCircle, Loader2, Archive, FileArchive } from 'lucide-react';
+import {
+  Download,
+  X,
+  Trash2,
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  Archive,
+  FileArchive,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  getDownloadTasks,
-  cancelDownloadTask,
-  getDownloadFileUrl,
-} from '@/lib/api/download';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { getDownloadTasks, cancelDownloadTask, getDownloadFileUrl } from '@/lib/api/download';
 import { useDownloadProgress } from '@/lib/hooks/useDownloadProgress';
 import { DownloadTask } from '@/lib/api/types';
 
@@ -52,9 +52,9 @@ function getStatusIcon(status: string) {
     case 'downloading':
       return <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />;
     case 'pending':
-      return <Archive className="w-5 h-5 text-gray-400 dark:text-gray-500 dark:text-gray-400" />;
+      return <Archive className="w-5 h-5 text-gray-400 dark:text-gray-400" />;
     case 'cancelled':
-      return <X className="w-5 h-5 text-gray-400 dark:text-gray-500 dark:text-gray-400" />;
+      return <X className="w-5 h-5 text-gray-400 dark:text-gray-400" />;
     default:
       return null;
   }
@@ -143,7 +143,7 @@ export function DownloadManager({
     window.open(url, '_blank');
   };
 
-  const pendingCount = tasks.filter((t) => ['pending', 'downloading'].includes(t.status)).length;
+  const pendingCount = tasks.filter(t => ['pending', 'downloading'].includes(t.status)).length;
 
   return (
     <div className={className}>
@@ -156,7 +156,11 @@ export function DownloadManager({
             清除
           </Button>
           <Button size="sm" onClick={handleCreateDownload} disabled={isLoading}>
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 mr-1" />}
+            {isLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4 mr-1" />
+            )}
             打包下载
           </Button>
         </div>
@@ -166,7 +170,11 @@ export function DownloadManager({
       <Button variant="outline" className="relative" onClick={() => setIsOpen(true)}>
         <Download className="w-4 h-4 mr-2" />
         下载管理
-        {pendingCount > 0 && <Badge variant="info" className="ml-2">{pendingCount}</Badge>}
+        {pendingCount > 0 && (
+          <Badge variant="info" className="ml-2">
+            {pendingCount}
+          </Badge>
+        )}
       </Button>
 
       {/* Download manager dialog */}
@@ -183,7 +191,7 @@ export function DownloadManager({
             {tasks.length === 0 ? (
               <div className="text-center py-10 text-gray-500 dark:text-gray-400">暂无下载任务</div>
             ) : (
-              tasks.map((task) => (
+              tasks.map(task => (
                 <div key={task.id} className="border rounded-lg p-4 space-y-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
@@ -191,13 +199,22 @@ export function DownloadManager({
                       <div>
                         <p className="font-medium">{task.zipName || '下载任务'}</p>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {task.fileCount || task.fileIds.length} 个文件 · {formatBytes(task.totalBytes)}
+                          {task.fileCount || task.fileIds.length} 个文件 ·{' '}
+                          {formatBytes(task.totalBytes)}
                         </p>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Badge variant={task.status === 'completed' ? 'success' : task.status === 'failed' ? 'error' : 'info'}>
+                      <Badge
+                        variant={
+                          task.status === 'completed'
+                            ? 'success'
+                            : task.status === 'failed'
+                              ? 'error'
+                              : 'info'
+                        }
+                      >
                         {getStatusText(task.status)}
                       </Badge>
 
@@ -232,7 +249,9 @@ export function DownloadManager({
                             : `${task.progress}%`}
                         </span>
                         {task.id === activeTaskId && speed > 0 && (
-                          <span>{formatSpeed(speed)} · 剩余 {formatEta(eta)}</span>
+                          <span>
+                            {formatSpeed(speed)} · 剩余 {formatEta(eta)}
+                          </span>
                         )}
                       </div>
                     </div>

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { success, error } from '../utils/response.js';
-import { Project, ImportTask } from '../models/project.js';
+import { Project } from '../models/project.js';
+import { projects } from '../services/importOrchestrator.js';
 import { cloneOrCopyProject } from '../services/gitClone.js';
 import { scanDirectory } from '../services/fileScanner.js';
 import { detectTechStack } from '../services/techDetector.js';
@@ -14,9 +15,6 @@ import { query as vectorQuery } from '../services/vectorStore.js';
 import { analyzeGitHistory, parseGitLog } from '../services/gitHistoryAnalysis.js';
 
 const router = Router();
-
-// In-memory storage (replace with DB later)
-const projects = new Map<string, Project>();
 
 // 1. POST /api/v1/projects/import — 创建导入任务（异步编排）
 router.post('/import', async (req: Request, res: Response) => {
@@ -62,10 +60,7 @@ router.post('/import', async (req: Request, res: Response) => {
       source,
       url: url || undefined,
       localPath: source === 'local' ? projectPath : undefined,
-      techStack: [
-        ...techStack.language,
-        ...techStack.framework,
-      ],
+      techStack: [...techStack.language, ...techStack.framework],
       buildTool: techStack.buildTool[0],
       hasGit: true,
       importedAt: new Date().toISOString(),
@@ -127,7 +122,8 @@ router.get('/:id/tree', async (req: Request, res: Response) => {
     return;
   }
 
-  const basePath = project.localPath ||
+  const basePath =
+    project.localPath ||
     (project.source === 'url' ? `${process.env.HOME}/.openclaw/projects/${project.name}` : null);
 
   if (!basePath) {
@@ -186,7 +182,8 @@ router.get('/:id/git-history', (req: Request, res: Response) => {
     return;
   }
 
-  const basePath = project.localPath ||
+  const basePath =
+    project.localPath ||
     (project.source === 'url' ? `${process.env.HOME}/.openclaw/projects/${project.name}` : null);
 
   if (!basePath) {

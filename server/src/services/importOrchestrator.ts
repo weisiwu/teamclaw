@@ -3,7 +3,7 @@
  * 项目导入流程管理
  */
 
-import { ImportTask, ImportStep } from '../models/project.js';
+import { ImportTask, ImportStep, Project } from '../models/project.js';
 import { importRepo } from '../db/repositories/importRepo.js';
 import { cloneOrCopyProject } from './gitClone.js';
 import { scanDirectory } from './fileScanner.js';
@@ -99,6 +99,10 @@ type StepExecutor = (ctx: ImportContext) => Promise<void>;
 // In-memory cache (taskId -> ImportTask)
 const tasks = new Map<string, ImportTask>();
 
+// In-memory project registry (shared with routes/project.ts via singleton pattern)
+const projects = new Map<string, Project>();
+export { projects };
+
 /**
  * Load tasks from DB on module init
  */
@@ -162,6 +166,14 @@ const STEP_EXECUTORS: Record<ImportStepName, StepExecutor> = {
   detectBuild: async ctx => {
     if (!ctx.projectPath) throw new Error('projectPath not set');
     ctx.buildMechanisms = await detectBuildMechanism(ctx.projectPath);
+    // Persist buildMechanisms to the project registry
+    if (ctx.projectId && ctx.buildMechanisms.length > 0) {
+      const project = projects.get(ctx.projectId);
+      if (project) {
+        project.buildMechanisms = ctx.buildMechanisms;
+        projects.set(ctx.projectId, project);
+      }
+    }
   },
 
   compress: async ctx => {

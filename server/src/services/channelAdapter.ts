@@ -261,7 +261,7 @@ export class ChannelAdapter {
     if (service) {
       await service.sendToGroup(groupId, content);
     } else {
-      console.warn(`[ChannelAdapter] Channel not registered: ${channel}`);
+      throw new Error(`[ChannelAdapter] Channel not registered: ${channel}`);
     }
   }
 

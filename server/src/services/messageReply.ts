@@ -113,8 +113,9 @@ async function sendWebReply(req: {
 /**
  * 构建标准"已收到"回复文本
  */
-export function buildAcknowledgmentReply(): string {
-  return `✅ 收到！您的消息已加入处理队列，main 会尽快回复您。`;
+export function buildAcknowledgmentReply(userName?: string): string {
+  const name = userName ? ` ${userName}` : '';
+  return `✅${name}，收到！您的消息已加入处理队列，main 会尽快回复您。`;
 }
 
 /**

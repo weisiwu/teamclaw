@@ -2,11 +2,11 @@
  * BranchMergeDialog Component
  * 分支合并对话框 - 将一个分支合并到另一个分支
  */
-"use client";
+'use client';
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { GitMerge, X, Loader2, ArrowRight, AlertTriangle, CheckCircle } from "lucide-react";
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { GitMerge, X, Loader2, ArrowRight, AlertTriangle, CheckCircle } from 'lucide-react';
 
 interface Branch {
   id: string;
@@ -20,20 +20,19 @@ interface BranchMergeDialogProps {
   branches: Branch[];
   isOpen: boolean;
   onClose: () => void;
-  onMerge: (sourceBranch: string, targetBranch: string, strategy: "merge" | "rebase") => Promise<boolean>;
+  onMerge: (
+    sourceBranch: string,
+    targetBranch: string,
+    strategy: 'merge' | 'rebase'
+  ) => Promise<boolean>;
 }
 
-export function BranchMergeDialog({
-  branches,
-  isOpen,
-  onClose,
-  onMerge,
-}: BranchMergeDialogProps) {
-  const [sourceBranch, setSourceBranch] = useState("");
-  const [targetBranch, setTargetBranch] = useState("");
-  const [mergeStrategy, setMergeStrategy] = useState<"merge" | "rebase">("merge");
+export function BranchMergeDialog({ branches, isOpen, onClose, onMerge }: BranchMergeDialogProps) {
+  const [sourceBranch, setSourceBranch] = useState('');
+  const [targetBranch, setTargetBranch] = useState('');
+  const [mergeStrategy, setMergeStrategy] = useState<'merge' | 'rebase'>('merge');
   const [isMerging, setIsMerging] = useState(false);
-  const [mergeResult, setMergeResult] = useState<"success" | "conflict" | null>(null);
+  const [mergeResult, setMergeResult] = useState<'success' | 'conflict' | null>(null);
 
   if (!isOpen) return null;
 
@@ -44,22 +43,22 @@ export function BranchMergeDialog({
 
     try {
       const success = await onMerge(sourceBranch, targetBranch, mergeStrategy);
-      setMergeResult(success ? "success" : "conflict");
+      setMergeResult(success ? 'success' : 'conflict');
     } catch {
-      setMergeResult("conflict");
+      setMergeResult('conflict');
     } finally {
       setIsMerging(false);
     }
   };
 
   const handleReset = () => {
-    setSourceBranch("");
-    setTargetBranch("");
-    setMergeStrategy("merge");
+    setSourceBranch('');
+    setTargetBranch('');
+    setMergeStrategy('merge');
     setMergeResult(null);
   };
 
-  const hasConflict = mergeResult === "conflict";
+  const hasConflict = mergeResult === 'conflict';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -87,35 +86,39 @@ export function BranchMergeDialog({
                 <label className="text-sm font-medium mb-2 block">源分支（将被合并）</label>
                 <select
                   value={sourceBranch}
-                  onChange={(e) => setSourceBranch(e.target.value)}
+                  onChange={e => setSourceBranch(e.target.value)}
                   className="w-full px-3 py-2 border rounded-md"
                 >
                   <option value="">选择分支...</option>
-                  {branches.filter(b => b.name !== targetBranch).map((b) => (
-                    <option key={b.id} value={b.name}>
-                      {b.name} {b.isMain ? "(主分支)" : ""}
-                    </option>
-                  ))}
+                  {branches
+                    .filter(b => b.name !== targetBranch)
+                    .map(b => (
+                      <option key={b.id} value={b.name}>
+                        {b.name} {b.isMain ? '(主分支)' : ''}
+                      </option>
+                    ))}
                 </select>
               </div>
 
               <div className="flex justify-center">
-                <ArrowRight className="w-5 h-5 text-gray-400 dark:text-gray-500 dark:text-gray-400 rotate-90" />
+                <ArrowRight className="w-5 h-5 text-gray-400 dark:text-gray-400 rotate-90" />
               </div>
 
               <div>
                 <label className="text-sm font-medium mb-2 block">目标分支（合并到此）</label>
                 <select
                   value={targetBranch}
-                  onChange={(e) => setTargetBranch(e.target.value)}
+                  onChange={e => setTargetBranch(e.target.value)}
                   className="w-full px-3 py-2 border rounded-md"
                 >
                   <option value="">选择分支...</option>
-                  {branches.filter(b => b.name !== sourceBranch).map((b) => (
-                    <option key={b.id} value={b.name}>
-                      {b.name} {b.isMain ? "(主分支)" : ""}
-                    </option>
-                  ))}
+                  {branches
+                    .filter(b => b.name !== sourceBranch)
+                    .map(b => (
+                      <option key={b.id} value={b.name}>
+                        {b.name} {b.isMain ? '(主分支)' : ''}
+                      </option>
+                    ))}
                 </select>
               </div>
 
@@ -126,8 +129,8 @@ export function BranchMergeDialog({
                     <input
                       type="radio"
                       name="strategy"
-                      checked={mergeStrategy === "merge"}
-                      onChange={() => setMergeStrategy("merge")}
+                      checked={mergeStrategy === 'merge'}
+                      onChange={() => setMergeStrategy('merge')}
                     />
                     <span className="text-sm">Merge（合并提交）</span>
                   </label>
@@ -135,8 +138,8 @@ export function BranchMergeDialog({
                     <input
                       type="radio"
                       name="strategy"
-                      checked={mergeStrategy === "rebase"}
-                      onChange={() => setMergeStrategy("rebase")}
+                      checked={mergeStrategy === 'rebase'}
+                      onChange={() => setMergeStrategy('rebase')}
                     />
                     <span className="text-sm">Rebase（变基）</span>
                   </label>
@@ -163,8 +166,10 @@ export function BranchMergeDialog({
               </Button>
               <Button
                 onClick={handleMerge}
-                disabled={!sourceBranch || !targetBranch || sourceBranch === targetBranch || isMerging}
-                className={hasConflict ? "bg-red-500 hover:bg-red-600" : ""}
+                disabled={
+                  !sourceBranch || !targetBranch || sourceBranch === targetBranch || isMerging
+                }
+                className={hasConflict ? 'bg-red-500 hover:bg-red-600' : ''}
               >
                 {isMerging ? (
                   <>
@@ -209,9 +214,7 @@ export function BranchMergeDialog({
               <Button variant="outline" onClick={handleReset}>
                 再次合并
               </Button>
-              <Button onClick={onClose}>
-                完成
-              </Button>
+              <Button onClick={onClose}>完成</Button>
             </div>
           </div>
         )}
