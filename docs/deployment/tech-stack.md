@@ -1,40 +1,6 @@
-# 技术栈汇总
+# TeamClaw 技术栈汇总
 
-> teamclaw 项目完整技术栈说明，包含前端、后端、基础设施、工具链等所有技术选型。
-
----
-
-## 技术栈总览
-
-| 层级 | 技术 | 版本 | 用途 |
-|------|------|------|------|
-| **前端框架** | Next.js | 14.2.35 | React 全栈框架（App Router） |
-| **UI 框架** | React | 18 | UI 渲染 |
-| **类型系统** | TypeScript | ^5 | 类型安全 |
-| **CSS 框架** | TailwindCSS | 3.4.1 | 原子化 CSS |
-| **组件库** | Base UI | ^1.3.0 | React 组件库 |
-| **状态管理** | Zustand | ^5.0.12 | 轻量状态管理 |
-| **数据请求** | TanStack Query | ^5.90.21 | 服务端状态管理 |
-| **图表** | Recharts | ^3.8.0 | 数据可视化 |
-| **Markdown** | react-markdown | ^10.1.0 | Markdown 渲染 |
-| **构建工具** | Vite / Next.js | 内置 | 打包构建 |
-| **后端框架** | Express | 4.18.2 | REST API |
-| **数据库** | PostgreSQL | 16 | 关系型主数据库 |
-| **缓存 / 消息** | Redis | 7 | 缓存、Session、消息队列 |
-| **向量数据库** | ChromaDB | latest | 语义检索 / 嵌入向量存储 |
-| **ORM** | pg (node-postgres) | ^8.20.0 | PostgreSQL 客户端 |
-| **认证** | JWT (jsonwebtoken) | ^9.0.3 | Token 认证 |
-| **密码加密** | bcryptjs | ^3.0.3 | 密码哈希 |
-| **限流** | express-rate-limit | ^8.3.1 | API 限流 |
-| **安全** | helmet | ^8.1.0 | HTTP 安全 Headers |
-| **跨域** | cors | ^2.8.5 | 跨域资源共享 |
-| **定时任务** | node-cron | ^3.0.3 | 定时任务调度 |
-| **文件处理** | archiver / mammoth / pdf-lib | - | 文件打包、Word/PDF 解析 |
-| **测试** | Vitest / Jest + Supertest | - | 单元 / 集成测试 |
-| **代码规范** | ESLint + Prettier + Husky | - | 代码风格 / Git Hooks |
-| **容器化** | Docker + Docker Compose | - | 服务容器化 |
-| **进程守护** | PM2 | - | 生产进程管理 |
-| **前端托管** | Vercel | - | Next.js 部署 |
+本文档汇总 TeamClaw 项目使用的所有技术栈和工具。
 
 ---
 
@@ -42,53 +8,41 @@
 
 ### 核心框架
 
-```
-Next.js 14.2.35        # React 全栈框架，App Router，SSR/SSG
-React 18                # UI 库
-TypeScript ^5           # 类型系统
-```
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **Next.js** | 14.2.35 | React 全栈框架，App Router |
+| **React** | 18.x | UI 组件库 |
+| **TypeScript** | 5.x | 类型安全开发 |
 
-### UI 与样式
+### UI 组件
 
-```
-TailwindCSS 3.4.1       # 原子化 CSS 框架
-@tailwindcss/typography # Markdown 内容排版插件
-Base UI 1.3.0           # 低级 React 组件库（headless）
-Lucide React 0.577.0    # 图标库
-```
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **Tailwind CSS** | 3.4.1 | 原子化 CSS 框架 |
+| **@base-ui/react** | 1.3.0 | Headless UI 组件 |
+| **shadcn/ui** | - | 组件库基础 |
+| **Lucide React** | 0.577.0 | 图标库 |
 
-### 状态管理与数据
+### 状态管理
 
-```
-Zustand 5.0.12          # 轻量全局状态管理
-TanStack Query 5.90.21  # 服务端状态（缓存、自动重试）
-```
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **Zustand** | 5.0.12 | 轻量级状态管理 |
+| **TanStack Query** | 5.90.21 | 服务端状态管理 |
 
-### 工具库
+### 数据可视化
 
-```
-recharts 3.8.0          # 图表库
-react-markdown 10.1.0   # Markdown 渲染
-remark-gfm 4.0.1        # GFM 语法支持
-rehype-highlight 7.0.2  # 代码高亮
-rehype-slug 6.0.0       # 自动添加 heading ID
-next-themes 0.4.6       # 主题切换
-xlsx 0.18.5             # Excel 文件解析
-clsx 2.1.1              # 条件 className 工具
-tailwind-merge 3.5.0    # Tailwind className 合并
-```
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **Recharts** | 3.8.0 | 图表组件 |
 
-### 构建与开发工具
+### 内容渲染
 
-```
-Vite 6.0.1              # 底层构建工具（Next.js 内置）
-ESLint 8                # 代码检查
-Prettier 3.8.1           # 代码格式化
-Husky 9.1.7             # Git Hooks
-lint-staged 16.4.0      # 暂存文件检查
-Vitest 4.1.0            # 测试框架
-@vitest/coverage-v8 4.1.0  # 覆盖率
-```
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **React Markdown** | 10.1.0 | Markdown 渲染 |
+| **Rehype Highlight** | 7.0.2 | 代码高亮 |
+| **Remark GFM** | 4.0.1 | GitHub Flavored Markdown |
 
 ---
 
@@ -96,126 +50,223 @@ Vitest 4.1.0            # 测试框架
 
 ### 核心框架
 
-```
-Express 4.18.2          # Node.js Web 框架
-TypeScript 5.3.0        # 类型系统
-tsx 4.21.0              # TypeScript 执行器（开发热重载）
-node (ESM)              # 使用 ES Module
-```
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **Express.js** | 4.x | Web 服务框架 |
+| **Node.js** | 20+ | 运行时环境 |
+| **TypeScript** | 5.x | 类型安全开发 |
 
-### 数据库与存储
+### 数据库
 
-```
-pg 8.20.0               # PostgreSQL 客户端
-ioredis 5.10.0          # Redis 客户端
-chromadb 3.4.0          # ChromaDB Node.js 客户端
-```
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **PostgreSQL** | 14+ | 主数据库 |
+| **pg** | 8.x | PostgreSQL 驱动 |
+| **SQLite** | - | 本地数据缓存 |
+| **better-sqlite3** | - | SQLite 驱动 |
 
-### 认证与安全
+### 缓存与存储
 
-```
-jsonwebtoken 9.0.3      # JWT 生成与验证
-bcryptjs 3.0.3          # 密码哈希
-helmet 8.1.0            # 安全 HTTP Headers
-cors 2.8.5              # 跨域资源共享
-express-rate-limit 8.3.1 # API 限流
-zod 4.3.6               # Schema 验证
-```
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **Redis** | 7+ | 缓存和会话存储 |
+| **ioredis** | - | Redis 客户端 |
 
-### 文件处理
+### 向量数据库
 
-```
-archiver 7.0.1          # 文件/目录打包
-mammoth 1.6.0           # Word (.docx) 文件解析
-pdf-lib 1.17.1          # PDF 生成
-pdf-parse 1.1.1         # PDF 文本提取
-xlsx 0.18.5             # Excel 解析
-```
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **ChromaDB** | latest | 向量存储（RAG） |
 
-### 定时任务与消息
+### AI/LLM 集成
 
-```
-node-cron 3.0.3         # Cron 定时任务
-```
-
-### 测试
-
-```
-jest 30.3.0             # 测试框架
-ts-jest 29.4.6          # TypeScript Jest 转换
-supertest 7.2.2         # HTTP 集成测试
-@types/supertest 7.2.0  # Supertest 类型
-```
-
-### 开发工具
-
-```
-ts-node 10.9.2          # TypeScript 执行器
-```
+| 技术 | 用途 |
+|------|------|
+| **OpenAI API** | GPT 模型调用 |
+| **Anthropic API** | Claude 模型调用 |
+| **DeepSeek API** | 国产大模型 |
 
 ---
 
-## 基础设施技术栈
+## 安全与认证
+
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **Helmet** | 8.1.0 | HTTP 安全头 |
+| **JWT** | - | 认证令牌 |
+| **bcrypt** | - | 密码加密 |
+| **express-rate-limit** | - | API 限流 |
+
+---
+
+## 测试技术栈
+
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **Vitest** | 4.1.0 | 单元测试框架 |
+| **@testing-library/react** | 16.3.2 | React 组件测试 |
+| **@testing-library/jest-dom** | 6.9.1 | DOM 断言 |
+| **jsdom** | 29.0.0 | 浏览器环境模拟 |
+| **Supertest** | 7.2.2 | HTTP 测试 |
+
+---
+
+## 部署与运维
 
 ### 容器化
 
-```
-Docker                   # 容器化引擎
-Docker Compose 3.9       # 多容器编排
-```
-
-### 数据存储
-
-```
-PostgreSQL 16-alpine     # 关系型数据库（主数据库）
-Redis 7-alpine           # 内存数据库（缓存/Session/队列）
-ChromaDB (latest)        # 向量数据库（语义检索）
-```
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **Docker** | 20.10+ | 容器化 |
+| **Docker Compose** | 2.0+ | 多服务编排 |
 
 ### 进程管理
 
-```
-PM2 5.x                  # Node.js 生产进程守护
-```
-
-### 前端托管
-
-```
-Vercel                   # Next.js 前端托管平台
-Nginx (alpine)           # 反向代理 / 负载均衡
-```
-
----
-
-## 开发环境工具链
-
-```
-Node.js >= 18.0.0        # JavaScript 运行时
-npm >= 9.0               # 包管理器
-Git >= 2.30              # 版本控制
-Docker >= 20.10          # 容器化（可选，生产必须）
-```
-
----
-
-## 端口占用总览
-
-| 端口 | 服务 | 环境 |
+| 技术 | 版本 | 用途 |
 |------|------|------|
-| 3000 | Next.js 前端 | 开发 / 生产 |
-| 9700 | Express 后端 API | 开发 / 生产 |
-| 5432 | PostgreSQL | 开发（Docker）/ 生产 |
-| 6379 | Redis | 开发（Docker）/ 生产 |
-| 8000 | ChromaDB | 开发（Docker）/ 生产 |
-| 80 | Nginx HTTP | 生产（Docker） |
-| 443 | Nginx HTTPS | 生产（Docker） |
+| **PM2** | - | Node.js 进程管理 |
+
+### 反向代理
+
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **Nginx** | Alpine | 反向代理和负载均衡 |
 
 ---
 
-## 环境对照表
+## 开发工具
 
-| 环境 | 说明 | 启动方式 |
-|------|------|---------|
-| `development` | 本地开发 | `./scripts/dev.sh` |
-| `test` | 单元测试 | `npm run test` |
-| `production` | 生产部署 | Docker Compose / PM2 |
+### 代码规范
+
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **ESLint** | 8.x | 代码检查 |
+| **Prettier** | 3.8.1 | 代码格式化 |
+| **Husky** | 9.1.7 | Git hooks |
+| **lint-staged** | 16.4.0 | 暂存文件检查 |
+
+### 构建工具
+
+| 技术 | 用途 |
+|------|------|
+| **SWC** | 快速编译（Next.js 内置） |
+| **PostCSS** | CSS 处理 |
+| **Autoprefixer** | CSS 前缀自动添加 |
+
+---
+
+## 第三方集成
+
+### 协作工具
+
+| 技术 | 用途 |
+|------|------|
+| **飞书 OpenAPI** | 消息同步和通知 |
+
+### 文件处理
+
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **xlsx** | 0.18.5 | Excel 文件处理 |
+
+---
+
+## 技术架构图
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        前端层                                │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                  │
+│  │ Next.js  │  │ Tailwind │  │ Zustand  │                  │
+│  │  React   │  │   CSS    │  │   Query  │                  │
+│  └──────────┘  └──────────┘  └──────────┘                  │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                        后端层                                │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                  │
+│  │ Express  │  │  Zod     │  │ Helmet   │                  │
+│  │   JWT    │  │ RateLimit│  │          │                  │
+│  └──────────┘  └──────────┘  └──────────┘                  │
+└─────────────────────────────────────────────────────────────┘
+                              │
+           ┌──────────────────┼──────────────────┐
+           ▼                  ▼                  ▼
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│  PostgreSQL  │    │    Redis     │    │   ChromaDB   │
+│   (主数据)    │    │   (缓存)      │    │  (向量存储)   │
+└──────────────┘    └──────────────┘    └──────────────┘
+           │                  │                  │
+           └──────────────────┼──────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      外部服务                                │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                  │
+│  │  OpenAI  │  │Anthropic │  │ DeepSeek │                  │
+│  └──────────┘  └──────────┘  └──────────┘                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 版本要求
+
+### 开发环境
+
+```
+Node.js     >= 20.0.0
+npm         >= 10.0.0
+Git         >= 2.30.0
+```
+
+### 生产环境
+
+```
+Node.js     >= 20.0.0 (LTS)
+PostgreSQL  >= 14.0
+Redis       >= 7.0
+Docker      >= 20.10.0
+```
+
+---
+
+## 技术选型理由
+
+### 为什么选择 Next.js？
+
+- **全栈能力**: 前后端代码同构，降低维护成本
+- **App Router**: 新一代路由系统，支持嵌套布局
+- **性能优化**: 自动代码分割、图片优化
+- **生态丰富**: 大量插件和集成方案
+
+### 为什么选择 PostgreSQL？
+
+- **JSON 支持**: 原生 JSONB 存储灵活数据
+- **全文搜索**: pg_trgm 扩展支持高效搜索
+- **可靠性**: ACID 事务保证数据一致性
+- **扩展性**: 支持分区、复制等高级特性
+
+### 为什么选择 Zustand？
+
+- **简洁**: 相比 Redux 更轻量
+- **TypeScript**: 完美的类型支持
+- **性能**: 细粒度订阅，避免不必要渲染
+
+---
+
+## 学习资源
+
+### 官方文档
+
+- [Next.js 文档](https://nextjs.org/docs)
+- [React 文档](https://react.dev)
+- [Tailwind CSS 文档](https://tailwindcss.com/docs)
+- [Express.js 文档](https://expressjs.com)
+- [PostgreSQL 文档](https://www.postgresql.org/docs/)
+
+### 社区资源
+
+- [shadcn/ui 组件库](https://ui.shadcn.com)
+- [TanStack Query 文档](https://tanstack.com/query/latest)
+- [Zustand GitHub](https://github.com/pmndrs/zustand)
