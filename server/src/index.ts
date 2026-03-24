@@ -30,6 +30,7 @@ import demoRouter from './routes/demo.js';
 import webhookRouter from './routes/webhook.js';
 import apiTokenRouter from './routes/apiToken.js';
 import agentTokenBindingRouter from './routes/agentTokenBinding.js';
+import agentToolBindingRouter from './routes/agentToolBinding.js';
 import tokenUsageRouter from './routes/tokenUsage.js';
 import tagRouter from './routes/tag.js';
 import buildRouter from './routes/build.js';
@@ -212,6 +213,7 @@ adminRouter.use('/webhooks', webhookRouter);
 adminRouter.use('/api-tokens', apiTokenRouter);
 adminRouter.use('/', tokenUsageRouter); // api-tokens/usage/*, agents/token-usage, llm-calls
 adminRouter.use('/', agentTokenBindingRouter);
+app.use('/', agentToolBindingRouter);
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/tags', tagRouter);
 app.use('/api/v1/builds', buildRouter);

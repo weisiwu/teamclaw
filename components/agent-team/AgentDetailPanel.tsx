@@ -4,9 +4,10 @@ import { useState } from "react";
 import { Agent } from "@/lib/api/agents";
 import { AgentStatusBadge } from "./AgentStatusBadge";
 import { AgentTokenConfigTab } from "./AgentTokenConfigTab";
+import { AgentToolPermissionTab } from "./AgentToolPermissionTab";
 import { useUpdateAgentConfig } from "@/hooks/useAgents";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { X, Settings, Clock, Activity, Loader2, CheckCircle, Key } from "lucide-react";
+import { X, Settings, Clock, Activity, Loader2, CheckCircle, Key, Shield } from "lucide-react";
 
 interface AgentDetailPanelProps {
   agent: Agent;
@@ -78,6 +79,10 @@ export function AgentDetailPanel({ agent, onClose }: AgentDetailPanelProps) {
             <TabsTrigger value="token-config">
               <Key className="w-4 h-4 mr-1.5" />
               Token 配置
+            </TabsTrigger>
+            <TabsTrigger value="tool-permissions">
+              <Shield className="w-4 h-4 mr-1.5" />
+              工具权限
             </TabsTrigger>
           </TabsList>
 
@@ -180,6 +185,10 @@ export function AgentDetailPanel({ agent, onClose }: AgentDetailPanelProps) {
 
             <TabsContent value="token-config">
               <AgentTokenConfigTab agentName={agent.name} />
+            </TabsContent>
+
+            <TabsContent value="tool-permissions">
+              <AgentToolPermissionTab agentName={agent.name} />
             </TabsContent>
           </div>
         </Tabs>
