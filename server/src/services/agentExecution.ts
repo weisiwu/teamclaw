@@ -3,32 +3,31 @@
  * 负责实际触发 Agent 执行任务、管理执行上下文、处理执行结果
  */
 
-import { getAgent, releaseAgent, updateAgentStatus, updateLoadScore } from "./agentService.js";
-import { canDispatch } from "../constants/agents.js";
-import { buildSystemPrompt, getUserPromptPrefix } from "../prompts/agentPrompts.js";
-import { taskMemory } from "./taskMemory.js";
-import { llmCostTracker } from "./llmCostTracker.js";
+import { getAgent, releaseAgent, updateAgentStatus, updateLoadScore } from './agentService.js';
+import { canDispatch } from '../constants/agents.js';
+import { buildSystemPrompt, getUserPromptPrefix } from '../prompts/agentPrompts.js';
+import { taskMemory } from './taskMemory.js';
+import { llmCostTracker } from './llmCostTracker.js';
 import {
   LLMMessages,
   llmAutoRoute,
   estimateComplexity,
   selectTierByComplexity,
-  type LLMResponse,
-} from "./agentExecution.js";
+} from './llmService.js';
 
 export interface ExecutionContext {
   executionId: string;
   taskId: string;
-  dispatcher: string;      // 谁发起的
-  targetAgent: string;     // 执行者
-  prompt: string;          // 任务描述
+  dispatcher: string; // 谁发起的
+  targetAgent: string; // 执行者
+  prompt: string; // 任务描述
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
-  status: "pending" | "running" | "completed" | "failed" | "timeout";
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'timeout';
   result?: string;
   error?: string;
-  model?: string;          // 使用的模型
+  model?: string; // 使用的模型
   durationMs?: number;
   usage?: {
     inputTokens: number;
@@ -39,12 +38,12 @@ export interface ExecutionContext {
 }
 
 export interface DispatchRequest {
-  dispatcher: string;      // 发起者 (main/pm/...)
-  targetAgent: string;    // 目标 Agent
-  taskId: string;         // 关联任务 ID
-  prompt: string;         // 任务描述
-  timeoutMs?: number;     // 超时时间，默认 5 分钟
-  model?: string;         // 可选指定模型
+  dispatcher: string; // 发起者 (main/pm/...)
+  targetAgent: string; // 目标 Agent
+  taskId: string; // 关联任务 ID
+  prompt: string; // 任务描述
+  timeoutMs?: number; // 超时时间，默认 5 分钟
+  model?: string; // 可选指定模型
 }
 
 // ============ 内存存储 ============
@@ -75,7 +74,7 @@ export function dispatchToAgent(req: DispatchRequest): ExecutionContext | { erro
   const currentState = agentExecStates.get(targetAgent);
   if (currentState) {
     const existing = executionLogs.get(currentState.executionId);
-    if (existing && existing.status === "running") {
+    if (existing && existing.status === 'running') {
       return { error: `Agent ${targetAgent} 正忙（executionId: ${currentState.executionId}）` };
     }
   }
@@ -91,7 +90,7 @@ export function dispatchToAgent(req: DispatchRequest): ExecutionContext | { erro
     prompt,
     createdAt: now,
     startedAt: now,
-    status: "pending",
+    status: 'pending',
     model: model || agent.defaultModel,
   };
 
@@ -99,12 +98,12 @@ export function dispatchToAgent(req: DispatchRequest): ExecutionContext | { erro
   agentExecStates.set(targetAgent, { executionId, startedAt: now });
 
   // 更新 Agent 运行时状态
-  updateAgentStatus(targetAgent, "running", taskId);
+  updateAgentStatus(targetAgent, 'running', taskId);
   updateLoadScore(targetAgent, 15);
 
   // 异步执行 LLM（不阻塞 HTTP 响应）
   const timeoutMs = req.timeoutMs ?? 5 * 60 * 1000; // 默认 5 分钟
-  executeAgentTask(context, timeoutMs).catch((err) => {
+  executeAgentTask(context, timeoutMs).catch(err => {
     console.error(`[agentExecution] Async execution error for ${executionId}:`, err.message);
   });
 
@@ -118,7 +117,7 @@ async function executeAgentTask(context: ExecutionContext, timeoutMs: number): P
   const { executionId, targetAgent, taskId, prompt } = context;
 
   // 标记为 running
-  updateExecution(executionId, { status: "running" });
+  updateExecution(executionId, { status: 'running' });
 
   // 构建 system + user messages
   const messages = buildAgentMessages(targetAgent, taskId, prompt);
@@ -126,9 +125,9 @@ async function executeAgentTask(context: ExecutionContext, timeoutMs: number): P
   // 设置超时
   const timeoutHandle = setTimeout(() => {
     const ctx = executionLogs.get(executionId);
-    if (ctx && ctx.status === "running") {
+    if (ctx && ctx.status === 'running') {
       updateExecution(executionId, {
-        status: "timeout",
+        status: 'timeout',
         error: `执行超时（${Math.round(timeoutMs / 1000)}s）`,
       });
     }
@@ -146,7 +145,11 @@ async function executeAgentTask(context: ExecutionContext, timeoutMs: number): P
 
     // 记录 token 用量
     context.usage = response.usage;
-    context.costUsd = estimateCost(response.provider, response.usage.inputTokens, response.usage.outputTokens);
+    context.costUsd = estimateCost(
+      response.provider,
+      response.usage.inputTokens,
+      response.usage.outputTokens
+    );
     context.model = response.model;
 
     // 记录到成本追踪器
@@ -155,24 +158,24 @@ async function executeAgentTask(context: ExecutionContext, timeoutMs: number): P
     llmCostTracker.record(response, durationMs, tier);
 
     // 记录到任务记忆
-    taskMemory.addMessage(taskId, targetAgent, "user", prompt);
-    taskMemory.addMessage(taskId, targetAgent, "assistant", response.content);
+    taskMemory.addMessage(taskId, targetAgent, 'user', prompt);
+    taskMemory.addMessage(taskId, targetAgent, 'assistant', response.content);
 
     // 更新执行结果
     updateExecution(executionId, {
-      status: "completed",
+      status: 'completed',
       result: response.content,
     });
 
     // main Agent 完成后自动派发子任务给 coder（如果需要）
-    if (targetAgent === "main") {
+    if (targetAgent === 'main') {
       maybeDispatchSubtasks(context, response.content);
     }
   } catch (err) {
     clearTimeout(timeoutHandle);
     const message = err instanceof Error ? err.message : String(err);
     updateExecution(executionId, {
-      status: "failed",
+      status: 'failed',
       error: message,
     });
   }
@@ -194,8 +197,8 @@ function buildAgentMessages(agentName: string, taskId: string, prompt: string): 
   const userPrompt = getUserPromptPrefix(agentName) + prompt;
 
   const messages: LLMMessages[] = [
-    { role: "system", content: systemPrompt },
-    { role: "user", content: userPrompt },
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt },
   ];
 
   return messages;
@@ -205,19 +208,22 @@ function buildAgentMessages(agentName: string, taskId: string, prompt: string): 
  * main Agent 响应后，解析结果并自动派发子任务
  * 从 LLM 输出中提取子任务派发指令
  */
-async function maybeDispatchSubtasks(context: ExecutionContext, llmResponse: string): Promise<void> {
+async function maybeDispatchSubtasks(
+  context: ExecutionContext,
+  llmResponse: string
+): Promise<void> {
   // 简单解析：检测 LLM 输出中是否有 [DISPATCH: agentName: taskDescription] 格式
   const dispatchPattern = /\[DISPATCH:\s*(\w+):\s*([^\]]+)\]/g;
   let match;
 
   while ((match = dispatchPattern.exec(llmResponse)) !== null) {
     const [, agentName, taskDescription] = match;
-    const allowedAgents = ["pm", "coder1", "coder2", "reviewer"];
+    const allowedAgents = ['pm', 'coder1', 'coder2', 'reviewer'];
     if (allowedAgents.includes(agentName)) {
       console.log(`[agentExecution] Auto-dispatching to ${agentName}: ${taskDescription.trim()}`);
       // 派发子任务（异步，不阻塞）
       dispatchToAgent({
-        dispatcher: "main",
+        dispatcher: 'main',
         targetAgent: agentName,
         taskId: `sub_${context.taskId}_${Date.now()}`,
         prompt: taskDescription.trim(),
@@ -227,13 +233,12 @@ async function maybeDispatchSubtasks(context: ExecutionContext, llmResponse: str
   }
 }
 
-
 /**
  * 更新执行状态（外部回调）
  */
 export function updateExecution(
   executionId: string,
-  updates: Partial<Pick<ExecutionContext, "status" | "result" | "error" | "usage" | "costUsd">>
+  updates: Partial<Pick<ExecutionContext, 'status' | 'result' | 'error' | 'usage' | 'costUsd'>>
 ): boolean {
   const ctx = executionLogs.get(executionId);
   if (!ctx) return false;
@@ -244,7 +249,7 @@ export function updateExecution(
   if (updates.usage) ctx.usage = updates.usage;
   if (updates.costUsd !== undefined) ctx.costUsd = updates.costUsd;
 
-  if (ctx.status === "completed" || ctx.status === "failed" || ctx.status === "timeout") {
+  if (ctx.status === 'completed' || ctx.status === 'failed' || ctx.status === 'timeout') {
     ctx.completedAt = new Date().toISOString();
     if (ctx.startedAt && ctx.completedAt) {
       ctx.durationMs = new Date(ctx.completedAt).getTime() - new Date(ctx.startedAt).getTime();
@@ -255,7 +260,7 @@ export function updateExecution(
     updateLoadScore(ctx.targetAgent, -10);
 
     // 执行完成回调：触发消息回复
-    onExecutionComplete(ctx).catch((err) => {
+    onExecutionComplete(ctx).catch(err => {
       console.error('[agentExecution] onExecutionComplete error:', err.message);
     });
   }
@@ -275,11 +280,12 @@ async function onExecutionComplete(ctx: ExecutionContext): Promise<void> {
     const task = ctx.taskId ? taskLifecycle.getTask(ctx.taskId) : null;
 
     // 构建回复内容
-    const replyContent = ctx.status === 'completed'
-      ? `✅ 任务已完成\n\n${ctx.result || '（无结果）'}`
-      : ctx.status === 'failed'
-      ? `❌ 任务执行失败\n\n${ctx.error || '（未知错误）'}`
-      : `⏱️ 任务执行超时\n\n${ctx.error || '（超时）'}`;
+    const replyContent =
+      ctx.status === 'completed'
+        ? `✅ 任务已完成\n\n${ctx.result || '（无结果）'}`
+        : ctx.status === 'failed'
+          ? `❌ 任务执行失败\n\n${ctx.error || '（未知错误）'}`
+          : `⏱️ 任务执行超时\n\n${ctx.error || '（超时）'}`;
 
     // 从任务上下文中获取 channel 和 userId（如果有）
     if (task?.contextSnapshot) {
@@ -325,16 +331,16 @@ export function getExecutionHistory(opts: {
   agentName?: string;
   dispatcher?: string;
   taskId?: string;
-  status?: ExecutionContext["status"];
+  status?: ExecutionContext['status'];
   limit?: number;
   offset?: number;
 }): { total: number; items: ExecutionContext[] } {
   let items = Array.from(executionLogs.values());
 
-  if (opts.agentName) items = items.filter((e) => e.targetAgent === opts.agentName);
-  if (opts.dispatcher) items = items.filter((e) => e.dispatcher === opts.dispatcher);
-  if (opts.taskId) items = items.filter((e) => e.taskId === opts.taskId);
-  if (opts.status) items = items.filter((e) => e.status === opts.status);
+  if (opts.agentName) items = items.filter(e => e.targetAgent === opts.agentName);
+  if (opts.dispatcher) items = items.filter(e => e.dispatcher === opts.dispatcher);
+  if (opts.taskId) items = items.filter(e => e.taskId === opts.taskId);
+  if (opts.status) items = items.filter(e => e.status === opts.status);
 
   // 按时间倒序
   items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -355,7 +361,7 @@ export function abortExecution(agentName: string, reason: string): boolean {
   const ctx = executionLogs.get(state.executionId);
   if (!ctx) return false;
 
-  ctx.status = "failed";
+  ctx.status = 'failed';
   ctx.error = `被强制终止: ${reason}`;
   ctx.completedAt = new Date().toISOString();
   ctx.durationMs = new Date(ctx.completedAt).getTime() - new Date(ctx.startedAt!).getTime();
@@ -370,38 +376,45 @@ export function abortExecution(agentName: string, reason: string): boolean {
 /**
  * 获取 Agent 统计信息
  */
-export function getAgentExecutionStats(agentName?: string): Record<string, {
-  total: number;
-  completed: number;
-  failed: number;
-  timeout: number;
-  avgDurationMs: number;
-}> {
-  const agents = agentName ? [agentName] : ["main", "pm", "reviewer", "coder1", "coder2"];
-
-  const stats: Record<string, {
+export function getAgentExecutionStats(agentName?: string): Record<
+  string,
+  {
     total: number;
     completed: number;
     failed: number;
     timeout: number;
     avgDurationMs: number;
-  }> = {};
+  }
+> {
+  const agents = agentName ? [agentName] : ['main', 'pm', 'reviewer', 'coder1', 'coder2'];
+
+  const stats: Record<
+    string,
+    {
+      total: number;
+      completed: number;
+      failed: number;
+      timeout: number;
+      avgDurationMs: number;
+    }
+  > = {};
 
   for (const name of agents) {
-    const items = Array.from(executionLogs.values()).filter((e) => e.targetAgent === name);
-    const completed = items.filter((e) => e.status === "completed");
-    const failed = items.filter((e) => e.status === "failed");
-    const timeout = items.filter((e) => e.status === "timeout");
-    const durations = completed.map((e) => e.durationMs || 0).filter((d) => d > 0);
+    const items = Array.from(executionLogs.values()).filter(e => e.targetAgent === name);
+    const completed = items.filter(e => e.status === 'completed');
+    const failed = items.filter(e => e.status === 'failed');
+    const timeout = items.filter(e => e.status === 'timeout');
+    const durations = completed.map(e => e.durationMs || 0).filter(d => d > 0);
 
     stats[name] = {
       total: items.length,
       completed: completed.length,
       failed: failed.length,
       timeout: timeout.length,
-      avgDurationMs: durations.length > 0
-        ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
-        : 0,
+      avgDurationMs:
+        durations.length > 0
+          ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
+          : 0,
     };
   }
 
