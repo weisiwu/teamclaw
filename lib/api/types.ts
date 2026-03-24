@@ -18,6 +18,12 @@ export interface Task {
   agents: string[];
   tokenCost: number;
   tags: string[];
+  // Extra fields from server Task model
+  sessionId?: string;
+  assignedAgent?: string;
+  result?: string;
+  progress?: number;
+  startedAt?: string;
 }
 
 // 任务评论类型
