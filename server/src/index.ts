@@ -43,6 +43,7 @@ import './services/taskInit.js'; // 初始化任务机制钩子
 import { registerAutoBumpHook } from './hooks/autoBumpOnTaskDone.js';
 import { toolService } from './services/toolService.js';
 import { skillService } from './services/skillService.js';
+import { seedDefaultAgents } from './services/agentService.js';
 import traceRouter from './routes/trace.js';
 // 初始化事件总线串联模块（按依赖顺序导入）
 import './services/messageToTask.js'; // 消息→任务
@@ -229,6 +230,8 @@ const server = app.listen(PORT, async () => {
   console.log(`TeamClaw server running on port ${PORT}`);
   // 运行数据库迁移
   await runMigrations();
+  // Seed 默认 Agent（首次启动时从 AGENT_TEAM 常量填充）
+  await seedDefaultAgents();
   // 注册自动版本升级钩子
   registerAutoBumpHook();
   // 初始化内置 Tools

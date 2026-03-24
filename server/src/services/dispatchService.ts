@@ -3,15 +3,16 @@
  * 负责等级校验、Agent 可用性检查、负载均衡选择
  */
 
-import { canDispatch, getAgentByName, getAvailableAgents } from "../constants/agents.js";
+import { canDispatch, getAgentByNameFromConstants } from "../constants/agents.js";
 import {
   DispatchRequest,
   DispatchResponse,
 } from "../models/agent.js";
 import {
-  updateAgentStatus,
+  updateRuntimeStatus,
   updateLoadScore,
   getAgent,
+  getAvailableAgents,
 } from "./agentService.js";
 
 // 内存存储：活跃任务列表
@@ -23,14 +24,14 @@ const activeTasks: Map<string, DispatchRequest> = new Map();
 export function dispatchTask(req: DispatchRequest): DispatchResponse {
   const { fromAgent, toAgent, taskId, priority } = req;
 
-  // 1. 检查 fromAgent 是否存在
-  const from = getAgentByName(fromAgent);
+  // 1. 检查 fromAgent 是否存在（从常量，指派矩阵依赖）
+  const from = getAgentByNameFromConstants(fromAgent);
   if (!from) {
     return { success: false, message: `Agent '${fromAgent}' 不存在`, rejected: true, reason: "from_not_found" };
   }
 
-  // 2. 检查 toAgent 是否存在
-  const to = getAgentByName(toAgent);
+  // 2. 检查 toAgent 是否存在（从常量，指派矩阵依赖）
+  const to = getAgentByNameFromConstants(toAgent);
   if (!to) {
     return { success: false, message: `Agent '${toAgent}' 不存在`, rejected: true, reason: "to_not_found" };
   }
@@ -70,7 +71,7 @@ export function dispatchTask(req: DispatchRequest): DispatchResponse {
   }
 
   // 6. 通过所有检查，执行指派
-  updateAgentStatus(toAgent, "busy", taskId);
+  updateRuntimeStatus(toAgent, "busy", taskId);
   updateLoadScore(toAgent, getPriorityLoadIncrement(priority));
 
   activeTasks.set(taskId, req);
@@ -133,8 +134,8 @@ export function getAgentCurrentTask(agentName: string): DispatchRequest | null {
 /**
  * 选择最优 coder（负载均衡）
  */
-export function selectBestCoder(): string | null {
-  const available = getAvailableAgents(1); // level 1 = coder
+export async function selectBestCoder(): Promise<string | null> {
+  const available = await getAvailableAgents(1); // level 1 = coder
   if (available.length === 0) return null;
-  return available[0].name; // 已按负载排序，低的在前
+  return available[0]; // 已按负载排序，低的在前
 }

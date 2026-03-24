@@ -36,6 +36,9 @@ import {
   updateAgentConfig,
   getAgentSessions,
   getTeamOverviewData,
+  createAgent,
+  deleteAgent,
+  updateAgentStatus,
 } from '../services/agentService.js';
 import { dispatchTask, completeTask, getActiveTasks } from '../services/dispatchService.js';
 import {
@@ -63,25 +66,26 @@ import {
   submitPMAnswer,
 } from '../services/agentPipeline.js';
 import { getClarificationSession } from '../services/pmProtocol.js';
+import { AGENT_TEAM } from '../constants/agents.js';
 
 const router = Router();
 
 // GET /api/v1/agents - 获取所有 Agent
-router.get('/', (req, res) => {
-  const agents = getAllAgents();
+router.get('/', async (req, res) => {
+  const agents = await getAllAgents();
   res.json(success({ list: agents, total: agents.length }));
 });
 
 // GET /api/v1/agents/team - 获取团队编排概览
-router.get('/team', (req, res) => {
-  const overview = getTeamOverviewData();
+router.get('/team', async (req, res) => {
+  const overview = await getTeamOverviewData();
   res.json(success(overview));
 });
 
 // GET /api/v1/agents/:name - 获取单个 Agent 详情
-router.get('/:name', (req, res) => {
+router.get('/:name', async (req, res) => {
   const { name } = req.params;
-  const agent = getAgent(name);
+  const agent = await getAgent(name);
   if (!agent) {
     return res.status(404).json(error(`Agent '${name}' 不存在`));
   }
@@ -89,11 +93,11 @@ router.get('/:name', (req, res) => {
 });
 
 // PUT /api/v1/agents/:name/config - 更新 Agent 配置
-router.put('/:name/config', (req, res) => {
+router.put('/:name/config', async (req, res) => {
   const { name } = req.params;
   const { defaultModel, capabilities } = req.body;
 
-  const updated = updateAgentConfig(name, { defaultModel, capabilities });
+  const updated = await updateAgentConfig(name, { defaultModel, capabilities });
   if (!updated) {
     return res.status(404).json(error(`Agent '${name}' 不存在`));
   }
@@ -101,10 +105,134 @@ router.put('/:name/config', (req, res) => {
 });
 
 // GET /api/v1/agents/:name/sessions - 获取 Agent 历史会话
-router.get('/:name/sessions', (req, res) => {
+router.get('/:name/sessions', async (req, res) => {
   const { name } = req.params;
-  const sessions = getAgentSessions(name);
+  const sessions = await getAgentSessions(name);
   res.json(success({ list: sessions, total: sessions.length }));
+});
+
+// ============ CRUD 路由 ============
+
+// POST /api/v1/agents - 创建新 Agent
+router.post('/', async (req, res) => {
+  const { name, role, level, description, inGroup, defaultModel, capabilities, workspace } = req.body;
+
+  if (!name || !role || !level) {
+    return res.status(400).json(error('缺少必填字段：name, role, level'));
+  }
+
+  // Validate level
+  if (![1, 2, 3].includes(level)) {
+    return res.status(400).json(error('level 必须是 1、2 或 3'));
+  }
+
+  // Validate role
+  const validRoles = AGENT_TEAM.map(a => a.role);
+  if (!validRoles.includes(role)) {
+    return res.status(400).json(error(`role 必须是以下之一：${validRoles.join(', ')}`));
+  }
+
+  try {
+    const agent = await createAgent({
+      name,
+      role,
+      level,
+      description: description || '',
+      inGroup: inGroup ?? false,
+      defaultModel: defaultModel || 'claude-sonnet-3.5',
+      capabilities: capabilities || [],
+      workspace: workspace || `~/.openclaw/agents/${name}`,
+    });
+    res.status(201).json(success(agent));
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(400).json(error(msg));
+  }
+});
+
+// PUT /api/v1/agents/:name - 更新 Agent 完整配置
+router.put('/:name', async (req, res) => {
+  const { name } = req.params;
+  const { role, level, description, inGroup, defaultModel, capabilities, workspace } = req.body;
+
+  // Validate level if provided
+  if (level !== undefined && ![1, 2, 3].includes(level)) {
+    return res.status(400).json(error('level 必须是 1、2 或 3'));
+  }
+
+  const existing = await getAgent(name);
+  if (!existing) {
+    return res.status(404).json(error(`Agent '${name}' 不存在`));
+  }
+
+  const updated = await updateAgentConfig(name, {
+    defaultModel: defaultModel ?? existing.defaultModel,
+    capabilities: capabilities ?? existing.capabilities,
+  });
+
+  // Also update non-config fields via direct DB update
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  let idx = 1;
+
+  if (role !== undefined) { sets.push(`role = $${idx++}`); vals.push(role); }
+  if (level !== undefined) { sets.push(`level = $${idx++}`); vals.push(level); }
+  if (description !== undefined) { sets.push(`description = $${idx++}`); vals.push(description); }
+  if (inGroup !== undefined) { sets.push(`in_group = $${idx++}`); vals.push(inGroup); }
+  if (workspace !== undefined) { sets.push(`workspace = $${idx++}`); vals.push(workspace); }
+  sets.push(`updated_at = NOW()`);
+  vals.push(name);
+
+  if (sets.length > 1) {
+    const { execute } = await import('../db/pg.js');
+    await execute(
+      `UPDATE agents SET ${sets.join(', ')} WHERE name = $${idx}`,
+      vals
+    );
+  }
+
+  const result = await getAgent(name);
+  res.json(success(result));
+});
+
+// DELETE /api/v1/agents/:name - 删除 Agent
+router.delete('/:name', async (req, res) => {
+  const { name } = req.params;
+
+  const existing = await getAgent(name);
+  if (!existing) {
+    return res.status(404).json(error(`Agent '${name}' 不存在`));
+  }
+
+  // Check if agent has active task
+  if (existing.statusRuntime === 'busy' && existing.currentTask) {
+    return res.status(409).json(error(`Agent '${name}' 正有进行中任务（${existing.currentTask}），无法删除`));
+  }
+
+  const deleted = await deleteAgent(name);
+  if (!deleted) {
+    return res.status(404).json(error(`Agent '${name}' 不存在`));
+  }
+
+  res.json(success({ deleted: true, name }));
+});
+
+// PUT /api/v1/agents/:name/status - 启用/禁用 Agent
+router.put('/:name/status', async (req, res) => {
+  const { name } = req.params;
+  const { status } = req.body;
+
+  if (!status || !['active', 'disabled'].includes(status)) {
+    return res.status(400).json(error('status 必须是 active 或 disabled'));
+  }
+
+  const existing = await getAgent(name);
+  if (!existing) {
+    return res.status(404).json(error(`Agent '${name}' 不存在`));
+  }
+
+  const updated = await updateAgentStatus(name, status);
+  res.json(success(updated));
 });
 
 // POST /api/v1/agents/:name/dispatch - 向指定 Agent 分发任务

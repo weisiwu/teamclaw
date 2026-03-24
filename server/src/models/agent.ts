@@ -18,6 +18,8 @@ export interface AgentRuntime {
 
 // ============ Agent 详情（配置 + 运行时）===========
 export interface AgentDetail extends Record<string, unknown> {
+  // 持久化字段
+  id?: string;
   // 静态配置
   name: string;
   role: AgentRole;
@@ -27,8 +29,13 @@ export interface AgentDetail extends Record<string, unknown> {
   defaultModel: string;
   capabilities: string[];
   workspace: string;
+  sessionKey?: string;
+  // 持久化状态
+  status?: 'active' | 'disabled';
+  createdAt?: string;
+  updatedAt?: string;
   // 运行时状态
-  status: AgentStatus;
+  statusRuntime?: AgentStatus;
   currentTask: string | null;
   currentTaskStartedAt: string | null;
   lastHeartbeat: string | null;

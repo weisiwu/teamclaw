@@ -111,30 +111,31 @@ export function isReverseDispatch(from: string, to: string): boolean {
   return !allowed.includes(to);
 }
 
-// ============ 辅助函数 ============
-export function getAgentByName(name: string): AgentConfig | undefined {
+// ============ 辅助函数（已迁移到 agentService，保留用于常量层） ============
+// 注意：这些函数查询的是 AGENT_TEAM 原始常量，不反映数据库状态
+// agentService 提供了对应的数据库版本
+export function getAgentByNameFromConstants(name: string): AgentConfig | undefined {
   return AGENT_TEAM.find((a) => a.name === name);
 }
 
-export function getAgentsByLevel(level: AgentLevel): AgentConfig[] {
+export function getAgentsByLevelFromConstants(level: AgentLevel): AgentConfig[] {
   return AGENT_TEAM.filter((a) => a.level === level);
 }
 
-export function getSubordinates(name: string): AgentConfig[] {
+export function getSubordinatesFromConstants(name: string): AgentConfig[] {
   const allowed = DISPATCH_MATRIX[name] || [];
   return AGENT_TEAM.filter((a) => allowed.includes(a.name));
 }
 
-export function getTeamOverview(): { level: AgentLevel; agents: AgentConfig[] }[] {
+export function getTeamOverviewFromConstants(): { level: AgentLevel; agents: AgentConfig[] }[] {
   return [3, 2, 1].map((level) => ({
     level: level as AgentLevel,
-    agents: getAgentsByLevel(level as AgentLevel),
+    agents: getAgentsByLevelFromConstants(level as AgentLevel),
   }));
 }
 
-export function getAvailableAgents(level?: AgentLevel): AgentConfig[] {
-  const agents = level != null ? getAgentsByLevel(level) : AGENT_TEAM;
-  // For now all agents are available (extend with status tracking later)
+export function getAvailableAgentsFromConstants(level?: AgentLevel): AgentConfig[] {
+  const agents = level != null ? getAgentsByLevelFromConstants(level) : AGENT_TEAM;
   return agents;
 }
 

@@ -20,8 +20,10 @@ export class DashboardService {
     const cancelled = tasks.filter((t) => t.status === 'cancelled').length;
 
     // Agent stats
-    const teamOverview = getTeamOverviewData();
-    const busy = teamOverview.agents.filter((a) => a.status === 'busy').length;
+    const teamOverview = await getTeamOverviewData();
+    const busy = teamOverview.levels.reduce((sum, lv) => {
+      return sum + lv.agents.filter((a) => a.statusRuntime === 'busy').length;
+    }, 0);
 
     // Token stats (simplified - last 30 days from tokenStatsService)
     const { tokenStatsService } = await import('./tokenStatsService.js');
