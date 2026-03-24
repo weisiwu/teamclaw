@@ -1,121 +1,213 @@
 /**
  * API Token 路由
- * 所有接口均需 requireAdmin 保护
+ * /api/v1/admin/api-tokens
  */
 
-import { Router } from 'express';
-import { apiTokenService } from '../services/apiTokenService.js';
+import { Router, Request, Response } from 'express';
 import { success, error } from '../utils/response.js';
-import { requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { requireAdmin } from '../middleware/auth.js';
+import { auditService } from '../services/auditService.js';
+import { apiTokenService } from '../services/apiTokenService.js';
+import type { AuthRequest } from '../middleware/auth.js';
+import type { CreateApiTokenParams, UpdateApiTokenParams } from '../models/apiToken.js';
 
 const router = Router();
 
-// 所有路由需要管理员权限
-router.use(requireAdmin as never);
-
-// GET /api/v1/admin/api-tokens — 获取所有 Token 列表
-router.get('/', async (req: AuthRequest, res) => {
+/**
+ * GET /api/v1/admin/api-tokens
+ * 获取所有 Token 列表（脱敏）
+ */
+router.get('/', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
-    const list = await apiTokenService.list();
-    res.json(success({ list }));
+    const includeDisabled = req.query.includeDisabled === 'true';
+    const tokens = await apiTokenService.getAllTokens(includeDisabled);
+    res.json(success(tokens));
   } catch (err) {
-    console.error('[apiToken] list error:', err);
-    res.status(500).json(error(500, '获取 Token 列表失败', 'INTERNAL_ERROR'));
+    console.error('[apiToken] Failed to list tokens:', err);
+    res.status(500).json(error(500, 'Failed to list tokens'));
   }
 });
 
-// GET /api/v1/admin/api-tokens/:id — 获取单个 Token 详情
-router.get('/:id', async (req: AuthRequest, res) => {
+/**
+ * GET /api/v1/admin/api-tokens/:id
+ * 获取单个 Token 详情
+ */
+router.get('/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
-    const token = await apiTokenService.getById(req.params.id);
+    const { id } = req.params;
+    const token = await apiTokenService.getTokenById(id);
+    
     if (!token) {
-      return res.status(404).json(error(404, 'Token 不存在', 'NOT_FOUND'));
+      res.status(404).json(error(404, 'Token not found'));
+      return;
     }
+    
     res.json(success(token));
   } catch (err) {
-    console.error('[apiToken] get error:', err);
-    res.status(500).json(error(500, '获取 Token 失败', 'INTERNAL_ERROR'));
+    console.error('[apiToken] Failed to get token:', err);
+    res.status(500).json(error(500, 'Failed to get token'));
   }
 });
 
-// POST /api/v1/admin/api-tokens — 创建新 Token
-router.post('/', async (req: AuthRequest, res) => {
+/**
+ * POST /api/v1/admin/api-tokens
+ * 创建新 Token
+ */
+router.post('/', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
-    const { alias, provider, apiKey, baseUrl, models, status, monthlyBudgetUsd, note } = req.body;
-
-    if (!alias || typeof alias !== 'string') {
-      return res.status(400).json(error(400, 'alias 为必填项', 'INVALID_PARAMS'));
+    const params = req.body as CreateApiTokenParams;
+    const createdBy = req.user?.id || 'unknown';
+    
+    // 验证必填字段
+    if (!params.alias || !params.provider || !params.apiKey) {
+      res.status(400).json(error(400, 'Missing required fields: alias, provider, apiKey'));
+      return;
     }
-    if (!provider || typeof provider !== 'string') {
-      return res.status(400).json(error(400, 'provider 为必填项', 'INVALID_PARAMS'));
+    
+    // 验证 provider
+    const supportedProviders = apiTokenService.getSupportedProviders();
+    if (!supportedProviders.includes(params.provider)) {
+      res.status(400).json(error(400, `Invalid provider. Supported: ${supportedProviders.join(', ')}`));
+      return;
     }
-    if (!apiKey || typeof apiKey !== 'string') {
-      return res.status(400).json(error(400, 'apiKey 为必填项', 'INVALID_PARAMS'));
-    }
-
-    const actor = req.user?.id ?? 'unknown';
-    const ipAddress = req.ip ?? req.socket?.remoteAddress;
-
-    const created = await apiTokenService.create(
-      { alias, provider, apiKey, baseUrl, models, status, monthlyBudgetUsd, note },
-      actor,
-      ipAddress
-    );
-    res.status(201).json(success(created));
+    
+    const token = await apiTokenService.createToken(params, createdBy);
+    
+    // 记录审计日志
+    auditService.log({
+      action: 'api_token_create',
+      actor: createdBy,
+      target: token.id,
+      details: {
+        alias: token.alias,
+        provider: token.provider,
+        maskedKey: token.apiKey,
+      },
+      ipAddress: (req.ip || req.socket.remoteAddress) as string | undefined,
+      userAgent: req.headers['user-agent'] as string | undefined,
+    });
+    
+    res.status(201).json(success(token));
   } catch (err) {
-    console.error('[apiToken] create error:', err);
-    res.status(500).json(error(500, '创建 Token 失败', 'INTERNAL_ERROR'));
+    console.error('[apiToken] Failed to create token:', err);
+    res.status(500).json(error(500, 'Failed to create token'));
   }
 });
 
-// PUT /api/v1/admin/api-tokens/:id — 更新 Token 配置
-router.put('/:id', async (req: AuthRequest, res) => {
+/**
+ * PUT /api/v1/admin/api-tokens/:id
+ * 更新 Token 配置
+ */
+router.put('/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
-    const { alias, provider, apiKey, baseUrl, models, status, monthlyBudgetUsd, note } = req.body;
-    const actor = req.user?.id ?? 'unknown';
-    const ipAddress = req.ip ?? req.socket?.remoteAddress;
-
-    const updated = await apiTokenService.update(
-      req.params.id,
-      { alias, provider, apiKey, baseUrl, models, status, monthlyBudgetUsd, note },
-      actor,
-      ipAddress
-    );
-    if (!updated) {
-      return res.status(404).json(error(404, 'Token 不存在', 'NOT_FOUND'));
+    const { id } = req.params;
+    const params = req.body as UpdateApiTokenParams;
+    const updatedBy = req.user?.id || 'unknown';
+    
+    // 验证 provider（如果提供）
+    if (params.status && !['active', 'disabled', 'expired'].includes(params.status)) {
+      res.status(400).json(error(400, 'Invalid status. Must be: active, disabled, or expired'));
+      return;
     }
-    res.json(success(updated));
+    
+    const token = await apiTokenService.updateToken(id, params);
+    
+    if (!token) {
+      res.status(404).json(error(404, 'Token not found'));
+      return;
+    }
+    
+    // 记录审计日志
+    auditService.log({
+      action: 'api_token_update',
+      actor: updatedBy,
+      target: id,
+      details: {
+        updatedFields: Object.keys(params),
+        alias: token.alias,
+        provider: token.provider,
+      },
+      ipAddress: (req.ip || req.socket.remoteAddress) as string | undefined,
+      userAgent: req.headers['user-agent'] as string | undefined,
+    });
+    
+    res.json(success(token));
   } catch (err) {
-    console.error('[apiToken] update error:', err);
-    res.status(500).json(error(500, '更新 Token 失败', 'INTERNAL_ERROR'));
+    console.error('[apiToken] Failed to update token:', err);
+    res.status(500).json(error(500, 'Failed to update token'));
   }
 });
 
-// DELETE /api/v1/admin/api-tokens/:id — 删除 Token
-router.delete('/:id', async (req: AuthRequest, res) => {
+/**
+ * DELETE /api/v1/admin/api-tokens/:id
+ * 删除 Token
+ */
+router.delete('/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
-    const actor = req.user?.id ?? 'unknown';
-    const ipAddress = req.ip ?? req.socket?.remoteAddress;
-
-    const deleted = await apiTokenService.delete(req.params.id, actor, ipAddress);
+    const { id } = req.params;
+    const deletedBy = req.user?.id || 'unknown';
+    
+    // 获取 Token 信息用于审计日志
+    const token = await apiTokenService.getTokenById(id);
+    if (!token) {
+      res.status(404).json(error(404, 'Token not found'));
+      return;
+    }
+    
+    const deleted = await apiTokenService.deleteToken(id);
+    
     if (!deleted) {
-      return res.status(404).json(error(404, 'Token 不存在', 'NOT_FOUND'));
+      res.status(500).json(error(500, 'Failed to delete token'));
+      return;
     }
-    res.json(success({ message: 'Token 已删除' }));
+    
+    // 记录审计日志
+    auditService.log({
+      action: 'api_token_delete',
+      actor: deletedBy,
+      target: id,
+      details: {
+        alias: token.alias,
+        provider: token.provider,
+        maskedKey: token.apiKey,
+      },
+      ipAddress: (req.ip || req.socket.remoteAddress) as string | undefined,
+      userAgent: req.headers['user-agent'] as string | undefined,
+    });
+    
+    res.json(success({ deleted: true }));
   } catch (err) {
-    console.error('[apiToken] delete error:', err);
-    res.status(500).json(error(500, '删除 Token 失败', 'INTERNAL_ERROR'));
+    console.error('[apiToken] Failed to delete token:', err);
+    res.status(500).json(error(500, 'Failed to delete token'));
   }
 });
 
-// POST /api/v1/admin/api-tokens/:id/verify — 验证 Token 有效性
-router.post('/:id/verify', async (req: AuthRequest, res) => {
+/**
+ * POST /api/v1/admin/api-tokens/:id/verify
+ * 验证 Token 有效性
+ */
+router.post('/:id/verify', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
-    const result = await apiTokenService.verify(req.params.id);
+    const { id } = req.params;
+    const result = await apiTokenService.verifyToken(id);
     res.json(success(result));
   } catch (err) {
-    console.error('[apiToken] verify error:', err);
-    res.status(500).json(error(500, '验证 Token 失败', 'INTERNAL_ERROR'));
+    console.error('[apiToken] Failed to verify token:', err);
+    res.status(500).json(error(500, 'Failed to verify token'));
+  }
+});
+
+/**
+ * GET /api/v1/admin/api-tokens/providers/supported
+ * 获取支持的 Provider 列表
+ */
+router.get('/providers/supported', requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const providers = apiTokenService.getSupportedProviders();
+    res.json(success({ providers }));
+  } catch (err) {
+    console.error('[apiToken] Failed to get providers:', err);
+    res.status(500).json(error(500, 'Failed to get supported providers'));
   }
 });
 
