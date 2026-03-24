@@ -37,10 +37,16 @@ export function getDb(): DbStub {
 
 ## 修改文件
 
-- `server/src/db/sqlite.ts` — 最终删除
-- 所有引用 `getDb()` 的服务文件 — 迁移到 pg.ts
+- `server/src/db/sqlite.ts` — 已删除
+- 所有引用 `getDb()` 的服务文件 — 已迁移到 pg.ts
 
 ## 依赖关系
 
 - 无前置依赖
 - 修复后版本管理等多个页面恢复正常
+
+## ✅ 已修复
+
+**修复时间**: 2026-03-25 03:59 (Asia/Shanghai)
+**Commit**: 61bbdb8f
+**说明**: 删除 sqlite.ts stub，完成22个文件的 SQLite→PostgreSQL 迁移，npm run build 验证通过

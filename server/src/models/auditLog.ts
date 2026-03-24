@@ -25,6 +25,8 @@ export type AuditAction =
   | 'cron.delete'
   | 'file.upload'
   | 'file.delete'
+  | 'api_token.create'
+  | 'api_token.delete'
   | 'login'
   | 'logout';
 
