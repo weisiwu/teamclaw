@@ -74,7 +74,7 @@ class TaskMemoryService {
     return TaskMemoryService.instance;
   }
 
-  getOrCreateContext(taskId: string, sessionId: string): TaskContext {
+  async getOrCreateContext(taskId: string, sessionId: string): Promise<TaskContext> {
     const key = `${sessionId}:${taskId}`;
     if (!this.contexts.has(key)) {
       const now = new Date().toISOString();
@@ -89,7 +89,7 @@ class TaskMemoryService {
       this.enforceMemoryLimit();
     }
     const ctx = this.contexts.get(key)!;
-    this.persistContext(key, ctx);
+    await this.persistContext(key, ctx);
     return ctx;
   }
 
@@ -123,13 +123,13 @@ class TaskMemoryService {
     return lines.join('\n');
   }
 
-  addMessage(
+  async addMessage(
     taskId: string,
     sessionId: string,
     role: ContextMessage['role'],
     content: string
-  ): void {
-    const ctx = this.getOrCreateContext(taskId, sessionId);
+  ): Promise<void> {
+    const ctx = await this.getOrCreateContext(taskId, sessionId);
     ctx.messages.push({
       id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
       role,
@@ -141,15 +141,16 @@ class TaskMemoryService {
     if (ctx.messages.length > this.MAX_MESSAGES_PER_TASK) {
       ctx.messages = ctx.messages.slice(-this.MAX_MESSAGES_PER_TASK);
     }
+    await this.persistContext(`${sessionId}:${taskId}`, ctx);
   }
 
-  createCheckpoint(
+  async createCheckpoint(
     taskId: string,
     sessionId: string,
     progress: number,
     summary: string
-  ): TaskCheckpoint {
-    const ctx = this.getOrCreateContext(taskId, sessionId);
+  ): Promise<TaskCheckpoint> {
+    const ctx = await this.getOrCreateContext(taskId, sessionId);
     const checkpoint: TaskCheckpoint = {
       id: `cp_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
       progress,
@@ -162,14 +163,16 @@ class TaskMemoryService {
     if (ctx.checkpoints.length > this.MAX_CHECKPOINTS_PER_TASK) {
       ctx.checkpoints = ctx.checkpoints.slice(-this.MAX_CHECKPOINTS_PER_TASK);
     }
+    await this.persistContext(`${sessionId}:${taskId}`, ctx);
 
     return checkpoint;
   }
 
-  updateSummary(taskId: string, sessionId: string, summary: string): void {
-    const ctx = this.getOrCreateContext(taskId, sessionId);
+  async updateSummary(taskId: string, sessionId: string, summary: string): Promise<void> {
+    const ctx = await this.getOrCreateContext(taskId, sessionId);
     ctx.summary = summary;
     ctx.updatedAt = new Date().toISOString();
+    await this.persistContext(`${sessionId}:${taskId}`, ctx);
   }
 
   getTaskMemorySummary(taskId: string): {
@@ -198,12 +201,15 @@ class TaskMemoryService {
   /**
    * 持久化上下文到数据库（非阻塞）
    */
-  private persistContext(key: string, ctx: TaskContext): void {
+  private async persistContext(key: string, ctx: TaskContext): Promise<void> {
     // Strip sessionId from key (key = "${sessionId}:${taskId}")
     const taskId = key.includes(':') ? key.split(':')[1] : key;
-    taskRepo
-      .upsert({
+    try {
+      const existing = await taskRepo.findById(taskId);
+      const title = existing?.title ?? taskId;
+      await taskRepo.upsert({
         taskId,
+        title,
         contextSnapshot: {
           messages: ctx.messages,
           checkpoints: ctx.checkpoints,
@@ -211,13 +217,13 @@ class TaskMemoryService {
           createdAt: ctx.createdAt,
           updatedAt: ctx.updatedAt,
         },
-      })
-      .catch(err => {
-        console.warn(
-          `[taskMemory] Failed to persist context for ${key}:`,
-          err instanceof Error ? err.message : String(err)
-        );
       });
+    } catch (err) {
+      console.warn(
+        `[taskMemory] Failed to persist context for ${key}:`,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
   }
 
   private enforceMemoryLimit(): void {

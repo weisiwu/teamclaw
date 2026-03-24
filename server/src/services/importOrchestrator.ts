@@ -144,6 +144,8 @@ const STEP_EXECUTORS: Record<ImportStepName, StepExecutor> = {
 
   detectTech: async ctx => {
     if (!ctx.projectPath) throw new Error('projectPath not set');
+    // Skip if techStack was already resolved by the caller (e.g. routes/project.ts)
+    if (ctx.techStack) return;
     ctx.techStack = await detectTechStack(ctx.projectPath);
   },
 

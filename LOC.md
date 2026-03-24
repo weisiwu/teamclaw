@@ -49,20 +49,20 @@
 
 ### 2.1 /api/v1/versions
 
-| API 路由                                               | 对应 Server 路由                          | 服务文件                                    |
-| ------------------------------------------------------ | ----------------------------------------- | ------------------------------------------- |
-| `GET/POST /api/v1/versions`                            | `server/src/routes/version.ts`            | `server/src/services/`                      |
-| `GET/PATCH/DELETE /api/v1/versions/[id]`               | `server/src/routes/version.ts`            | `server/src/services/versionBump.ts`        |
-| `POST /api/v1/versions/[id]/changelog/generate`        | `server/src/routes/versionBump.ts`        | `server/src/services/changelogGenerator.ts` |
-| `GET /api/v1/versions/[id]/changelog`                  | `server/src/routes/versionBump.ts`        | `server/src/services/changelogGenerator.ts` |
-| `GET /api/v1/versions/[id]/screenshots`                | `server/src/routes/versionScreenshot.ts`  | `server/src/services/`                      |
-| `POST /api/v1/versions/[id]/screenshots`               | `server/src/routes/versionScreenshot.ts`  | `server/src/services/`                      |
-| `GET /api/v1/versions/[id]/screenshots/[screenshotId]` | `server/src/routes/versionScreenshot.ts`  | `server/src/services/`                      |
-| `GET /api/v1/versions/[id]/timeline`                   | `server/src/routes/version.ts`            | `server/src/services/`                      |
-| `GET /api/v1/versions/[id]/rollback-targets`           | `server/src/routes/versionRollback.ts`    | `server/src/services/rollbackService.ts`    |
-| `POST /api/v1/versions/[id]/rollback-preview`          | `server/src/routes/versionRollback.ts`    | `server/src/services/rollbackService.ts`    |
-| `GET /api/v1/versions/changelog/diff`                  | `server/src/routes/versionDiff.ts`        | `server/src/services/versionDiff.ts`        |
-| `GET /api/v1/versions/change-stats`                    | `server/src/routes/versionChangeStats.ts` | `server/src/services/changeTracker.ts`      |
+| API 路由                                                  | 对应 Server 路由                          | 服务文件                                 |
+| --------------------------------------------------------- | ----------------------------------------- | ---------------------------------------- |
+| `GET/POST /api/v1/versions`                               | `server/src/routes/version.ts`            | `server/src/services/`                   |
+| `GET/PATCH/DELETE /api/v1/versions/[id]`                  | `server/src/routes/version.ts`            | `server/src/services/versionBump.ts`     |
+| `GET /api/v1/versions/[id]/timeline`                      | `server/src/routes/versionSummary.ts`     | `server/src/services/`                   |
+| `GET /api/v1/versions/[id]/rollback-targets`              | `server/src/routes/versionRollback.ts`    | `server/src/services/rollbackService.ts` |
+| `POST /api/v1/versions/[id]/rollback-preview`             | `server/src/routes/versionRollback.ts`    | `server/src/services/rollbackService.ts` |
+| `GET /api/v1/versions/[id]/screenshots`                   | `server/src/routes/versionScreenshot.ts`  | `server/src/services/`                   |
+| `POST /api/v1/versions/[id]/screenshots`                  | `server/src/routes/versionScreenshot.ts`  | `server/src/services/`                   |
+| `GET /api/v1/versions/[id]/screenshots/[screenshotId]`    | `server/src/routes/versionScreenshot.ts`  | `server/src/services/`                   |
+| `DELETE /api/v1/versions/[id]/screenshots/[screenshotId]` | `server/src/routes/versionScreenshot.ts`  | `server/src/services/`                   |
+| `GET /api/v1/versions/[id]/diff`                          | `server/src/routes/versionDiff.ts`        | `server/src/services/versionDiff.ts`     |
+| `GET /api/v1/versions/[id]/diff/commits`                  | `server/src/routes/versionDiff.ts`        | `server/src/services/versionDiff.ts`     |
+| `GET /api/v1/versions/change-stats`                       | `server/src/routes/versionChangeStats.ts` | - (inline in route)                      |
 
 ### 2.2 /api/v1/tasks
 
@@ -111,10 +111,29 @@
 
 ### 2.7 其他 API 路由
 
-| API 路由                 | 对应 Server 路由                | 服务文件                                 |
-| ------------------------ | ------------------------------- | ---------------------------------------- |
-| `GET /api/health`        | `server/src/routes/health.ts`   | -                                        |
-| `GET/POST /api/download` | `server/src/routes/download.ts` | `server/src/services/downloadService.ts` |
+| API 路由                                       | 对应 Server 路由                       | 服务文件                                      |
+| ---------------------------------------------- | -------------------------------------- | --------------------------------------------- |
+| `GET /api/health`                              | `server/src/routes/health.ts`          | -                                             |
+| `GET/POST /api/download`                       | `server/src/routes/download.ts`        | `server/src/services/downloadManager.ts`      |
+| `POST /api/v1/auth/login`                      | `server/src/routes/auth.ts`            | `server/src/services/authService.ts`          |
+| `GET /api/v1/users/me`                         | `server/src/routes/user.ts`            | `server/src/services/userService.ts`          |
+| `GET/POST /api/v1/messages`                    | `server/src/routes/message.ts`         | `server/src/services/messageQueue.ts`         |
+| `GET/POST /api/v1/projects`                    | `server/src/routes/project.ts`         | `server/src/services/`                        |
+| `GET /api/v1/projects/[id]`                    | `server/src/routes/project.ts`         | `server/src/services/`                        |
+| `GET /api/v1/search`                           | `server/src/routes/search.ts`          | `server/src/services/searchService.ts`        |
+| `GET/POST /api/v1/tags`                        | `server/src/routes/tag.ts`             | `server/src/services/tagService.ts`           |
+| `POST /api/v1/webhooks`                        | `server/src/routes/webhook.ts`         | `server/src/services/webhookService.ts`       |
+| `GET /api/v1/wechat/callback`                  | `server/src/routes/wechat.ts`          | `server/src/services/wechatService.ts`        |
+| `GET /api/v1/agents`                           | `server/src/routes/agent.ts`           | `server/src/services/agentService.ts`         |
+| `GET /api/v1/agents/:id/execute`               | `server/src/routes/agent.ts`           | `server/src/services/agentExecution.ts`       |
+| `GET /api/v1/agents/:id/trace`                 | `server/src/routes/trace.ts`           | `server/src/services/`                        |
+| `POST /api/v1/llm/chat`                        | `server/src/routes/llm.ts`             | `server/src/services/llmService.ts`           |
+| `POST /api/v1/cron/trigger`                    | `server/src/routes/cronJob.ts`         | `server/src/services/cronService.ts`          |
+| `GET /api/v1/tokens/stats`                     | `server/src/routes/tokenStats.ts`      | `server/src/services/tokenStatsService.ts`    |
+| `GET/POST /api/v1/versions/tags`               | `server/src/routes/versionTag.ts`      | `server/src/services/tagService.ts`           |
+| `GET/PATCH /api/v1/versions/[id]/settings`     | `server/src/routes/versionSettings.ts` | `server/src/services/versionSettingsStore.ts` |
+| `GET /api/v1/versions/[id]/summary`            | `server/src/routes/versionSummary.ts`  | `server/src/services/`                        |
+| `GET /api/v1/versions/[id]/compare/[targetId]` | `server/src/routes/versionCompare.ts`  | `server/src/services/versionCompare.ts`       |
 
 ---
 
@@ -137,6 +156,7 @@ components/ (可复用 UI 组件)
   ├── tokens/                               ← Token 统计组件
   ├── versions/                             ← 版本管理组件 (大量子组件)
   ├── branch/                               ← 分支管理组件
+  ├── team/                                 ← 团队协作组件
   ├── agent-team/                           ← Agent 团队组件
   ├── providers/                            ← React Query Provider
   └── theme/                                ← 主题 Provider
@@ -144,6 +164,7 @@ components/ (可复用 UI 组件)
 hooks/ (React 自定义 Hooks)
   ├── useAuth.ts                           ← 认证状态
   ├── useAgents.ts                         ← Agent 列表
+  ├── useAgentExecution.ts                 ← Agent 执行状态
   ├── useTasks.ts                          ← 任务管理
   ├── useProjects.ts                       ← 项目管理
   ├── useMembers.ts                        ← 成员管理
@@ -185,7 +206,9 @@ server/src/
   │       ├── versionRepo.ts
   │       ├── messageRepo.ts
   │       ├── userRepo.ts
-  │       └── importRepo.ts
+  │       ├── importRepo.ts
+  │       ├── cronRepo.ts
+  │       └── roleMemoryRepo.ts
   │
   ├── middleware/                           ← Express 中间件
   │   ├── auth.ts                          ← 认证中间件
@@ -261,8 +284,14 @@ API Route (server/src/routes/)
 | -------------- | ------------------------------------------- |
 | 任务创建/流转  | `server/src/services/taskFlow.ts`           |
 | 任务生命周期   | `server/src/services/taskLifecycle.ts`      |
+| 任务初始化     | `server/src/services/taskInit.ts`           |
+| 任务指派       | `server/src/services/taskToAgent.ts`        |
 | 版本自动升级   | `server/src/services/autoBump.ts`           |
 | 版本比对       | `server/src/services/versionCompare.ts`     |
+| 版本差异       | `server/src/services/versionDiff.ts`        |
+| 版本回滚       | `server/src/services/rollbackService.ts`    |
+| 版本历史       | `server/src/services/versionMemory.ts`      |
+| 版本变更追踪   | `server/src/services/changeTracker.ts`      |
 | Changelog 生成 | `server/src/services/changelogGenerator.ts` |
 | 构建触发       | `server/src/services/buildService.ts`       |
 | Git 操作       | `server/src/services/gitService.ts`         |
@@ -270,12 +299,14 @@ API Route (server/src/routes/)
 | 飞书消息       | `server/src/services/feishuService.ts`      |
 | LLM 服务       | `server/src/services/llmService.ts`         |
 | Agent Pipeline | `server/src/services/agentPipeline.ts`      |
+| Agent 执行     | `server/src/services/agentExecution.ts`     |
 | 消息队列       | `server/src/services/messageQueue.ts`       |
 | 权限控制       | `server/src/services/permissionService.ts`  |
 | 向量存储       | `server/src/services/vectorStore.ts`        |
 | 文档服务       | `server/src/services/docService.ts`         |
 | 下载管理       | `server/src/services/downloadManager.ts`    |
 | Cron 调度      | `server/src/services/cronService.ts`        |
+| 标签管理       | `server/src/services/tagService.ts`         |
 | 前端任务状态   | `lib/store/taskStore.ts`                    |
 | API 类型定义   | `lib/api/types.ts`                          |
 | 共享 API 工具  | `lib/api-response.ts`                       |

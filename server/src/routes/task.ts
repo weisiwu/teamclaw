@@ -13,11 +13,7 @@ import { taskScheduler } from '../services/taskScheduler.js';
 import { taskTimeout } from '../services/taskTimeout.js';
 import { taskStats } from '../services/taskStats.js';
 import { taskCancel } from '../services/taskCancel.js';
-import {
-  CreateTaskRequest,
-  UpdateTaskRequest,
-  TaskQuery,
-} from '../models/task.js';
+import { CreateTaskRequest, UpdateTaskRequest, TaskQuery } from '../models/task.js';
 
 const router = Router();
 
@@ -206,7 +202,9 @@ router.patch('/:taskId', requireAuth, async (req, res) => {
             const { getVersionSettings } = await import('../routes/version.js');
             const { getDb } = await import('../db/sqlite.js');
             const db = getDb();
-            const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(task.versionId) as Record<string, unknown> | undefined;
+            const row = db.prepare('SELECT * FROM versions WHERE id = ?').get(task.versionId) as
+              | Record<string, unknown>
+              | undefined;
             if (row) {
               const settings = getVersionSettings();
               if (settings.autoBump) {
@@ -328,20 +326,29 @@ router.post('/bulk/cancel', requireAuth, async (req, res) => {
       await taskFlow.cascadeCancel(taskId);
       results.push({ taskId, success: true });
     } catch (err) {
-      results.push({ taskId, success: false, error: err instanceof Error ? err.message : 'Unknown error' });
+      results.push({
+        taskId,
+        success: false,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
     }
   }
 
   const succeeded = results.filter(r => r.success).length;
   const failed = results.filter(r => !r.success).length;
 
-  res.json(success({
-    total: taskIds.length,
-    succeeded,
-    failed,
-    results,
-    message: failed === 0 ? `All ${succeeded} tasks cancelled` : `${succeeded} succeeded, ${failed} failed`,
-  }));
+  res.json(
+    success({
+      total: taskIds.length,
+      succeeded,
+      failed,
+      results,
+      message:
+        failed === 0
+          ? `All ${succeeded} tasks cancelled`
+          : `${succeeded} succeeded, ${failed} failed`,
+    })
+  );
 });
 
 // POST /api/v1/tasks/:taskId/trigger-bump — 手动触发版本升级
@@ -358,7 +365,9 @@ router.post('/:taskId/trigger-bump', async (req, res) => {
       return;
     }
     const db = await import('../db/sqlite.js');
-    const row = db.getDb().prepare('SELECT * FROM versions WHERE id = ?').get(task.versionId) as Record<string, unknown> | undefined;
+    const row = db.getDb().prepare('SELECT * FROM versions WHERE id = ?').get(task.versionId) as
+      | Record<string, unknown>
+      | undefined;
     if (!row) {
       res.status(404).json(error(404, 'Linked version not found'));
       return;
@@ -393,14 +402,14 @@ router.get('/:taskId/chain', (req, res) => {
 // ============ 记忆化 ============
 
 // POST /api/v1/tasks/:taskId/context - 添加上下文消息
-router.post('/:taskId/context', (req, res) => {
+router.post('/:taskId/context', async (req, res) => {
   try {
     const { sessionId, role, content } = req.body;
     if (!sessionId || !role || !content) {
       res.status(400).json(error(400, 'sessionId, role, content required'));
       return;
     }
-    taskMemory.addMessage(req.params.taskId, sessionId, role, content);
+    await taskMemory.addMessage(req.params.taskId, sessionId, role, content);
     res.json(success(null));
   } catch (err) {
     console.error('[TaskRoutes] context error:', err);
@@ -425,14 +434,19 @@ router.get('/:taskId/prompt', (req, res) => {
 });
 
 // POST /api/v1/tasks/:taskId/checkpoint - 创建检查点
-router.post('/:taskId/checkpoint', (req, res) => {
+router.post('/:taskId/checkpoint', async (req, res) => {
   try {
     const { sessionId, progress, summary } = req.body;
     if (!sessionId || progress === undefined || !summary) {
       res.status(400).json(error(400, 'sessionId, progress, summary required'));
       return;
     }
-    const checkpoint = taskMemory.createCheckpoint(req.params.taskId, sessionId, progress, summary);
+    const checkpoint = await taskMemory.createCheckpoint(
+      req.params.taskId,
+      sessionId,
+      progress,
+      summary
+    );
     res.json(success(checkpoint));
   } catch (err) {
     console.error('[TaskRoutes] checkpoint error:', err);
@@ -450,13 +464,22 @@ router.post('/:taskId/schedule', (req, res) => {
       res.status(400).json(error(400, 'type required (delay|interval|cron)'));
       return;
     }
-    let schedule: any;
+    let schedule: Record<string, unknown>;
     if (type === 'delay') {
-      schedule = taskScheduler.scheduleDelay(req.params.taskId, delayMs ?? 60000, { maxRuns, description });
+      schedule = taskScheduler.scheduleDelay(req.params.taskId, delayMs ?? 60000, {
+        maxRuns,
+        description,
+      });
     } else if (type === 'interval') {
-      schedule = taskScheduler.scheduleInterval(req.params.taskId, intervalMs ?? 60000, { maxRuns, description });
+      schedule = taskScheduler.scheduleInterval(req.params.taskId, intervalMs ?? 60000, {
+        maxRuns,
+        description,
+      });
     } else if (type === 'cron') {
-      schedule = taskScheduler.scheduleCron(req.params.taskId, cronExpr ?? '* * * * *', { maxRuns, description });
+      schedule = taskScheduler.scheduleCron(req.params.taskId, cronExpr ?? '* * * * *', {
+        maxRuns,
+        description,
+      });
     } else {
       res.status(400).json(error(400, 'Invalid type'));
       return;
@@ -482,7 +505,7 @@ router.get('/:taskId/schedules', (_req, res) => {
 // DELETE /api/v1/tasks/:taskId/schedule/:scheduleId - 取消调度
 router.delete('/:taskId/schedule/:scheduleId', (req, res) => {
   try {
-    const ok = taskScheduler.cancelSchedule(req.params.scheduleId);
+    taskScheduler.cancelSchedule(req.params.scheduleId);
     res.json(success(null));
   } catch (err) {
     console.error('[TaskRoutes] cancel schedule error:', err);
@@ -494,9 +517,8 @@ router.delete('/:taskId/schedule/:scheduleId', (req, res) => {
 router.patch('/:taskId/schedule/:scheduleId', (req, res) => {
   try {
     const { action } = req.body; // 'pause' | 'resume'
-    let ok = false;
-    if (action === 'pause') ok = taskScheduler.pauseSchedule(req.params.scheduleId);
-    else if (action === 'resume') ok = taskScheduler.resumeSchedule(req.params.scheduleId);
+    if (action === 'pause') taskScheduler.pauseSchedule(req.params.scheduleId);
+    else if (action === 'resume') taskScheduler.resumeSchedule(req.params.scheduleId);
     res.json(success(null));
   } catch (err) {
     console.error('[TaskRoutes] update schedule error:', err);
@@ -543,7 +565,7 @@ router.post('/:taskId/timeout/heartbeat', (req, res) => {
 // DELETE /api/v1/tasks/:taskId/timeout - 清除超时
 router.delete('/:taskId/timeout', (req, res) => {
   try {
-    const ok = taskTimeout.clearTimeout(req.params.taskId);
+    taskTimeout.clearTimeout(req.params.taskId);
     res.json(success(null));
   } catch (err) {
     console.error('[TaskRoutes] clear timeout error:', err);
@@ -555,7 +577,7 @@ router.delete('/:taskId/timeout', (req, res) => {
 router.get('/:taskId/timeout', (req, res) => {
   try {
     const record = taskTimeout.getTimeoutRecord(req.params.taskId);
-    res.json(success(record ?? null ));
+    res.json(success(record ?? null));
   } catch (err) {
     console.error('[TaskRoutes] get timeout error:', err);
     res.status(500).json(error(500, 'Internal server error'));
@@ -578,7 +600,7 @@ router.get('/timeouts/imminent', (_req, res) => {
 // GET /api/v1/tasks/stats - 获取综合统计
 router.get('/stats', (req, res) => {
   try {
-    const period = (req.query.period as any) ?? '24h';
+    const period = (req.query.period as string) ?? '24h';
     const stats = taskStats.getStats(period);
     res.json(success(stats));
   } catch (err) {
@@ -590,7 +612,7 @@ router.get('/stats', (req, res) => {
 // GET /api/v1/tasks/stats/trend - 获取趋势数据
 router.get('/stats/trend', (req, res) => {
   try {
-    const period = (req.query.period as any) ?? '24h';
+    const period = (req.query.period as string) ?? '24h';
     const interval = parseInt(req.query.interval as string) ?? 60;
     const trend = taskStats.getTrend(period, interval);
     res.json(success(trend));
@@ -617,7 +639,11 @@ router.get('/stats/agents', (_req, res) => {
 router.post('/:taskId/cancel-with-subtasks', async (req, res) => {
   try {
     const { force, reason, notify, cancelledBy } = req.body;
-    const result = await taskCancel.cancelWithSubtasks(req.params.taskId, { force, reason, notify }, cancelledBy ?? 'api');
+    const result = await taskCancel.cancelWithSubtasks(
+      req.params.taskId,
+      { force, reason, notify },
+      cancelledBy ?? 'api'
+    );
     res.json(success(result));
   } catch (err) {
     console.error('[TaskRoutes] cancel-with-subtasks error:', err);
@@ -651,9 +677,36 @@ router.get('/cancel/audit', (req, res) => {
 
 // ============ 任务依赖图（iter-23 新增）============
 
-import { buildDAG, buildSubtaskTree, detectDependencyConflicts } from '../services/taskDependencyGraph.js';
-import { emitTaskEvent, getEventHistory, getFailedDeliveries, listWebhookEndpoints, createWebhookEndpoint, deleteWebhookEndpoint, toggleWebhookEndpoint, listNotificationRules, createNotificationRule, deleteNotificationRule, toggleNotificationRule, TaskEventType } from '../services/taskNotification.js';
-import { getTaskSLA, getAllSLAs, getBreachedSLAs, getAtRiskSLAs, getSLAStats, setTaskDeadline, getSLADefinitions, updateSLADefinitions, SLAStatus } from '../services/taskSLA.js';
+import {
+  buildDAG,
+  buildSubtaskTree,
+  detectDependencyConflicts,
+} from '../services/taskDependencyGraph.js';
+import {
+  emitTaskEvent,
+  getEventHistory,
+  getFailedDeliveries,
+  listWebhookEndpoints,
+  createWebhookEndpoint,
+  deleteWebhookEndpoint,
+  toggleWebhookEndpoint,
+  listNotificationRules,
+  createNotificationRule,
+  deleteNotificationRule,
+  toggleNotificationRule,
+  TaskEventType,
+} from '../services/taskNotification.js';
+import {
+  getTaskSLA,
+  getAllSLAs,
+  getBreachedSLAs,
+  getAtRiskSLAs,
+  getSLAStats,
+  setTaskDeadline,
+  getSLADefinitions,
+  updateSLADefinitions,
+  SLAStatus,
+} from '../services/taskSLA.js';
 
 // GET /api/v1/tasks/graph/:taskId - 获取任务DAG
 router.get('/graph/:taskId', (req, res) => {
@@ -708,7 +761,7 @@ router.get('/events/all', (req, res) => {
 router.get('/events/failed', (req, res) => {
   try {
     const limit = parseInt(req.query.limit as string) || 20;
-    res.json(success(getFailedDeliveries(limit) ));
+    res.json(success(getFailedDeliveries(limit)));
   } catch (err) {
     console.error('[TaskRoutes] failed events error:', err);
     res.status(500).json(error(500, 'Internal server error'));
@@ -717,14 +770,15 @@ router.get('/events/failed', (req, res) => {
 
 // GET /api/v1/tasks/webhooks - 列出webhook端点
 router.get('/webhooks', (_req, res) => {
-  res.json(success(listWebhookEndpoints() ));
+  res.json(success(listWebhookEndpoints()));
 });
 
 // POST /api/v1/tasks/webhooks - 创建webhook端点
 router.post('/webhooks', requireAuth, (req, res) => {
   try {
     const { name, url, secret, events } = req.body;
-    if (!name || !url || !events) return res.status(400).json(error(400, 'name, url, events required'));
+    if (!name || !url || !events)
+      return res.status(400).json(error(400, 'name, url, events required'));
     const endpoint = createWebhookEndpoint({ name, url, secret, events });
     res.status(201).json(success(endpoint));
   } catch (err) {
@@ -735,20 +789,20 @@ router.post('/webhooks', requireAuth, (req, res) => {
 
 // DELETE /api/v1/tasks/webhooks/:id - 删除webhook
 router.delete('/webhooks/:id', requireAuth, (req, res) => {
-  const ok = deleteWebhookEndpoint(req.params.id);
+  deleteWebhookEndpoint(req.params.id);
   res.json(success(null));
 });
 
 // PATCH /api/v1/tasks/webhooks/:id - 启用/禁用webhook
 router.patch('/webhooks/:id', (req, res) => {
   const { enabled } = req.body;
-  const ok = toggleWebhookEndpoint(req.params.id, enabled);
+  toggleWebhookEndpoint(req.params.id, enabled);
   res.json(success(null));
 });
 
 // GET /api/v1/tasks/notifications/rules - 列出通知规则
 router.get('/notifications/rules', (_req, res) => {
-  res.json(success(listNotificationRules() ));
+  res.json(success(listNotificationRules()));
 });
 
 // POST /api/v1/tasks/notifications/rules - 创建通知规则
@@ -802,7 +856,7 @@ router.get('/sla/:taskId', (req, res) => {
 router.get('/sla', (req, res) => {
   try {
     const status = req.query.status as string;
-    res.json(success(getAllSLAs(status as SLAStatus) ));
+    res.json(success(getAllSLAs(status as SLAStatus)));
   } catch (err) {
     console.error('[TaskRoutes] all sla error:', err);
     res.status(500).json(error(500, 'Internal server error'));
@@ -811,19 +865,19 @@ router.get('/sla', (req, res) => {
 
 // GET /api/v1/tasks/sla/breached - 违约SLA列表
 router.get('/sla/breached', (_req, res) => {
-  res.json(success(getBreachedSLAs() ));
+  res.json(success(getBreachedSLAs()));
 });
 
 // GET /api/v1/tasks/sla/at-risk - 风险SLA列表
 router.get('/sla/at-risk', (_req, res) => {
-  res.json(success(getAtRiskSLAs() ));
+  res.json(success(getAtRiskSLAs()));
 });
 
 // GET /api/v1/tasks/sla/stats - SLA统计
 router.get('/sla/stats', (req, res) => {
   try {
     const hours = parseInt(req.query.hours as string) || 24 * 7;
-    res.json(success(getSLAStats(hours) ));
+    res.json(success(getSLAStats(hours)));
   } catch (err) {
     console.error('[TaskRoutes] sla stats error:', err);
     res.status(500).json(error(500, 'Internal server error'));
@@ -835,7 +889,7 @@ router.post('/sla/:taskId/deadline', (req, res) => {
   try {
     const { deadline } = req.body;
     if (!deadline) return res.status(400).json(error(400, 'deadline required'));
-    const ok = setTaskDeadline(req.params.taskId, deadline);
+    setTaskDeadline(req.params.taskId, deadline);
     res.json(success(null));
   } catch (err) {
     console.error('[TaskRoutes] set deadline error:', err);
@@ -845,7 +899,7 @@ router.post('/sla/:taskId/deadline', (req, res) => {
 
 // GET /api/v1/tasks/sla/definitions - 获取SLA定义
 router.get('/sla/definitions', (_req, res) => {
-  res.json(success(getSLADefinitions() ));
+  res.json(success(getSLADefinitions()));
 });
 
 // PUT /api/v1/tasks/sla/definitions - 更新SLA定义

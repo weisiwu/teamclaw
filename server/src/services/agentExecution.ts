@@ -163,8 +163,8 @@ async function executeAgentTask(context: ExecutionContext, timeoutMs: number): P
     llmCostTracker.record(response, durationMs, tier);
 
     // 记录到任务记忆
-    taskMemory.addMessage(taskId, targetAgent, 'user', prompt);
-    taskMemory.addMessage(taskId, targetAgent, 'assistant', response.content);
+    await taskMemory.addMessage(taskId, targetAgent, 'user', prompt);
+    await taskMemory.addMessage(taskId, targetAgent, 'assistant', response.content);
 
     // 更新执行结果
     updateExecution(executionId, {
