@@ -27,6 +27,9 @@ export type AuditAction =
   | 'file.delete'
   | 'api_token.create'
   | 'api_token.delete'
+  | 'agent_token_binding.create'
+  | 'agent_token_binding.update'
+  | 'agent_token_binding.delete'
   | 'login'
   | 'logout';
 

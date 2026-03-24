@@ -1,114 +1,216 @@
-// Tool API 路由
+/**
+ * Tool Routes
+ * /api/v1/tools
+ */
 
-import { Router } from 'express';
-import { toolService } from '../services/toolService.js';
+import { Router, Request, Response } from 'express';
 import { success, error } from '../utils/response.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAdmin } from '../middleware/auth.js';
+import { toolService } from '../services/toolService.js';
+import type { AuthRequest } from '../middleware/auth.js';
+import type { CreateToolParams, UpdateToolParams, ToolCategory } from '../models/tool.js';
 
 const router = Router();
 
-// 获取所有工具
-router.get('/', (req, res) => {
-  const { category, source, q } = req.query;
-  let list = toolService.getTools();
+/**
+ * GET /api/v1/tools
+ * 获取所有 Tools
+ */
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const includeDisabled = req.query.includeDisabled === 'true';
+    const category = req.query.category as ToolCategory | undefined;
 
-  if (category) {
-    list = toolService.getToolsByCategory(category as string);
-  }
-  if (source) {
-    list = toolService.getToolsBySource(source as string);
-  }
-  if (q) {
-    list = toolService.searchTools(q as string);
-  }
+    let tools;
+    if (category) {
+      tools = await toolService.getToolsByCategory(category);
+      if (!includeDisabled) {
+        tools = tools.filter(t => t.enabled);
+      }
+    } else {
+      tools = await toolService.getAllTools(includeDisabled);
+    }
 
-  res.json(success({ list }));
+    res.json(success(tools));
+  } catch (err) {
+    console.error('[tool] Failed to list tools:', err);
+    res.status(500).json(error(500, 'Failed to list tools'));
+  }
 });
 
-// 获取单个工具
-router.get('/:id', (req, res) => {
-  const tool = toolService.getTool(req.params.id);
-  if (!tool) {
-    return res.status(404).json(error(404, '工具不存在', 'TOOL_NOT_FOUND'));
+/**
+ * GET /api/v1/tools/categories
+ * 获取所有 Tool 类别
+ */
+router.get('/categories', async (_req: Request, res: Response) => {
+  try {
+    const categories = ['file', 'git', 'shell', 'api', 'browser', 'custom'];
+    res.json(success(categories));
+  } catch (err) {
+    console.error('[tool] Failed to get categories:', err);
+    res.status(500).json(error(500, 'Failed to get categories'));
   }
-  res.json(success(tool));
 });
 
-// 创建工具（仅管理员）
-router.post('/', requireAuth, (req, res) => {
-  const userRole = req.user?.role;
-  if (userRole !== 'admin' && userRole !== 'vice_admin') {
-    return res.status(403).json(error(403, '只有管理员可以创建工具', 'FORBIDDEN'));
+/**
+ * GET /api/v1/tools/risk-stats
+ * 获取 Tool 风险级别统计
+ */
+router.get('/risk-stats', async (_req: Request, res: Response) => {
+  try {
+    const stats = await toolService.getToolRiskStats();
+    res.json(success(stats));
+  } catch (err) {
+    console.error('[tool] Failed to get risk stats:', err);
+    res.status(500).json(error(500, 'Failed to get risk stats'));
   }
-
-  const { name, displayName, description, category, source, parameters, outputSchema, riskLevel, requiresApproval } = req.body;
-
-  if (!name || !displayName || !description || !category) {
-    return res.status(400).json(error(400, '缺少必填字段', 'INVALID_PARAMS'));
-  }
-
-  const tool = toolService.createTool({
-    name,
-    displayName,
-    description,
-    category,
-    source: 'user',
-    enabled: true,
-    parameters: parameters || [],
-    outputSchema,
-    riskLevel: riskLevel || 'medium',
-    requiresApproval: requiresApproval ?? false,
-    version: '1.0.0',
-  });
-
-  res.json(success(tool));
 });
 
-// 更新工具（仅管理员）
-router.put('/:id', requireAuth, (req, res) => {
-  const userRole = req.user?.role;
-  if (userRole !== 'admin' && userRole !== 'vice_admin') {
-    return res.status(403).json(error(403, '只有管理员可以更新工具', 'FORBIDDEN'));
-  }
+/**
+ * GET /api/v1/tools/:id
+ * 获取单个 Tool 详情
+ */
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const tool = await toolService.getToolById(id);
 
-  const tool = toolService.updateTool(req.params.id, req.body);
-  if (!tool) {
-    return res.status(404).json(error(404, '工具不存在', 'TOOL_NOT_FOUND'));
+    if (!tool) {
+      res.status(404).json(error(404, 'Tool not found'));
+      return;
+    }
+
+    res.json(success(tool));
+  } catch (err) {
+    console.error('[tool] Failed to get tool:', err);
+    res.status(500).json(error(500, 'Failed to get tool'));
   }
-  res.json(success(tool));
 });
 
-// 删除工具（仅管理员）
-router.delete('/:id', requireAuth, (req, res) => {
-  const userRole = req.user?.role;
-  if (userRole !== 'admin' && userRole !== 'vice_admin') {
-    return res.status(403).json(error(403, '只有管理员可以删除工具', 'FORBIDDEN'));
-  }
+/**
+ * POST /api/v1/tools
+ * 创建新 Tool（仅管理员）
+ */
+router.post('/', requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const params = req.body as CreateToolParams;
+    const createdBy = req.user?.id || 'unknown';
 
-  const deleted = toolService.deleteTool(req.params.id);
-  if (!deleted) {
-    return res.status(400).json(error(400, '工具不存在或内置工具不可删除', 'TOOL_DELETE_FAILED'));
+    // 验证必填字段
+    if (!params.name || !params.displayName || !params.description || !params.category) {
+      res.status(400).json(error(400, 'Missing required fields: name, displayName, description, category'));
+      return;
+    }
+
+    // 验证名称格式（只允许字母、数字、下划线、连字符）
+    if (!/^[a-zA-Z0-9_-]+$/.test(params.name)) {
+      res.status(400).json(error(400, 'Invalid name format. Only alphanumeric, underscore, and hyphen allowed'));
+      return;
+    }
+
+    // 验证 category
+    const validCategories = ['file', 'git', 'shell', 'api', 'browser', 'custom'];
+    if (!validCategories.includes(params.category)) {
+      res.status(400).json(error(400, `Invalid category. Must be one of: ${validCategories.join(', ')}`));
+      return;
+    }
+
+    const tool = await toolService.createTool(params, createdBy);
+    res.status(201).json(success(tool));
+  } catch (err) {
+    console.error('[tool] Failed to create tool:', err);
+    if (err instanceof Error && err.message.includes('already exists')) {
+      res.status(409).json(error(409, err.message));
+      return;
+    }
+    res.status(500).json(error(500, 'Failed to create tool'));
   }
-  res.json(success({ message: '工具已删除' }));
 });
 
-// 切换工具启用状态（仅管理员）
-router.put('/:id/toggle', requireAuth, (req, res) => {
-  const userRole = req.user?.role;
-  if (userRole !== 'admin' && userRole !== 'vice_admin') {
-    return res.status(403).json(error(403, '只有管理员可以操作工具', 'FORBIDDEN'));
-  }
+/**
+ * PUT /api/v1/tools/:id
+ * 更新 Tool（仅管理员）
+ */
+router.put('/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const params = req.body as UpdateToolParams;
 
-  const { enabled } = req.body;
-  if (typeof enabled !== 'boolean') {
-    return res.status(400).json(error(400, 'enabled 参数必须为 boolean', 'INVALID_PARAMS'));
-  }
+    // 验证 riskLevel
+    if (params.riskLevel && !['low', 'medium', 'high'].includes(params.riskLevel)) {
+      res.status(400).json(error(400, 'Invalid riskLevel. Must be: low, medium, or high'));
+      return;
+    }
 
-  const tool = toolService.toggleTool(req.params.id, enabled);
-  if (!tool) {
-    return res.status(404).json(error(404, '工具不存在', 'TOOL_NOT_FOUND'));
+    const tool = await toolService.updateTool(id, params);
+
+    if (!tool) {
+      res.status(404).json(error(404, 'Tool not found'));
+      return;
+    }
+
+    res.json(success(tool));
+  } catch (err) {
+    console.error('[tool] Failed to update tool:', err);
+    if (err instanceof Error && err.message.includes('builtin')) {
+      res.status(403).json(error(403, err.message));
+      return;
+    }
+    res.status(500).json(error(500, 'Failed to update tool'));
   }
-  res.json(success(tool));
+});
+
+/**
+ * DELETE /api/v1/tools/:id
+ * 删除 Tool（仅管理员）
+ */
+router.delete('/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const deleted = await toolService.deleteTool(id);
+
+    if (!deleted) {
+      res.status(404).json(error(404, 'Tool not found'));
+      return;
+    }
+
+    res.json(success({ deleted: true }));
+  } catch (err) {
+    console.error('[tool] Failed to delete tool:', err);
+    if (err instanceof Error && err.message.includes('builtin')) {
+      res.status(403).json(error(403, err.message));
+      return;
+    }
+    res.status(500).json(error(500, 'Failed to delete tool'));
+  }
+});
+
+/**
+ * PATCH /api/v1/tools/:id/enable
+ * 启用/禁用 Tool（仅管理员）
+ */
+router.patch('/:id/enable', requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { enabled } = req.body as { enabled: boolean };
+
+    if (typeof enabled !== 'boolean') {
+      res.status(400).json(error(400, 'enabled must be a boolean'));
+      return;
+    }
+
+    const tool = await toolService.toggleToolEnabled(id, enabled);
+
+    if (!tool) {
+      res.status(404).json(error(404, 'Tool not found'));
+      return;
+    }
+
+    res.json(success(tool));
+  } catch (err) {
+    console.error('[tool] Failed to toggle tool:', err);
+    res.status(500).json(error(500, 'Failed to toggle tool'));
+  }
 });
 
 export default router;

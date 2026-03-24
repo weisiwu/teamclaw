@@ -1,8 +1,10 @@
-// Tool 类型定义 + 内置 Tool 清单
+/**
+ * Tool 数据模型
+ * Agent 可调用的外部工具/API
+ */
 
 export type ToolCategory = 'file' | 'git' | 'shell' | 'api' | 'browser' | 'custom';
 export type ToolSource = 'builtin' | 'user' | 'imported';
-export type RiskLevel = 'low' | 'medium' | 'high';
 
 export interface ToolParameter {
   name: string;
@@ -10,32 +12,92 @@ export interface ToolParameter {
   description: string;
   required: boolean;
   defaultValue?: unknown;
+  enum?: unknown[];              // 可选的枚举值
+  min?: number;                  // 数值最小值
+  max?: number;                  // 数值最大值
+  pattern?: string;              // 字符串正则校验
 }
 
 export interface ToolDefinition {
   id: string;
-  name: string;
-  displayName: string;
+  name: string;                  // 英文标识符（如：git_clone）
+  displayName: string;           // 显示名称（如：Git Clone）
   description: string;
   category: ToolCategory;
   source: ToolSource;
   enabled: boolean;
   parameters: ToolParameter[];
-  outputSchema?: string;
-  riskLevel: RiskLevel;
-  requiresApproval: boolean;
+  outputSchema?: string;         // JSON Schema 描述输出格式
+  riskLevel: 'low' | 'medium' | 'high';
+  requiresApproval: boolean;     // 是否需要人工审批
+  timeout?: number;              // 默认超时（毫秒）
+  maxRetries?: number;           // 最大重试次数
   version: string;
   createdAt: string;
   updatedAt: string;
+  createdBy?: string;
 }
 
-// 内置 Tools 清单
-export const BUILTIN_TOOLS: Omit<ToolDefinition, 'createdAt' | 'updatedAt'>[] = [
+// 数据库表结构映射（snake_case）
+export interface ToolRow {
+  id: string;
+  name: string;
+  display_name: string;
+  description: string;
+  category: string;
+  source: string;
+  enabled: number;              // SQLite: 0/1
+  parameters: string;           // JSON
+  output_schema: string | null;
+  risk_level: string;
+  requires_approval: number;    // SQLite: 0/1
+  timeout: number | null;
+  max_retries: number | null;
+  version: string;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+// Tool 创建参数
+export interface CreateToolParams {
+  name: string;
+  displayName: string;
+  description: string;
+  category: ToolCategory;
+  parameters?: ToolParameter[];
+  outputSchema?: string;
+  riskLevel?: 'low' | 'medium' | 'high';
+  requiresApproval?: boolean;
+  timeout?: number;
+  maxRetries?: number;
+  version?: string;
+}
+
+// Tool 更新参数
+export interface UpdateToolParams {
+  displayName?: string;
+  description?: string;
+  category?: ToolCategory;
+  enabled?: boolean;
+  parameters?: ToolParameter[];
+  outputSchema?: string;
+  riskLevel?: 'low' | 'medium' | 'high';
+  requiresApproval?: boolean;
+  timeout?: number;
+  maxRetries?: number;
+  version?: string;
+}
+
+// ========== 内置 Tools ==========
+
+export const BUILTIN_TOOLS: ToolDefinition[] = [
+  // ===== File 类 Tools =====
   {
-    id: 'tool.file.read',
-    name: 'file.read',
-    displayName: '读取文件',
-    description: '读取指定路径的文本文件内容',
+    id: 'builtin_file_read',
+    name: 'file_read',
+    displayName: '文件读取',
+    description: '读取指定路径的文件内容',
     category: 'file',
     source: 'builtin',
     enabled: true,
@@ -43,34 +105,39 @@ export const BUILTIN_TOOLS: Omit<ToolDefinition, 'createdAt' | 'updatedAt'>[] = 
       {
         name: 'path',
         type: 'string',
-        description: '文件路径（绝对路径）',
+        description: '文件路径',
         required: true,
       },
       {
-        name: 'offset',
-        type: 'number',
-        description: '起始行号（1-based，默认为 1）',
+        name: 'encoding',
+        type: 'string',
+        description: '文件编码',
         required: false,
-        defaultValue: 1,
-      },
-      {
-        name: 'limit',
-        type: 'number',
-        description: '最大读取行数（默认 2000）',
-        required: false,
-        defaultValue: 2000,
+        defaultValue: 'utf-8',
+        enum: ['utf-8', 'utf-16', 'latin1', 'base64'],
       },
     ],
-    outputSchema: '{ "content": string, "truncated": boolean, "lineCount": number }',
+    outputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        content: { type: 'string' },
+        size: { type: 'number' },
+        encoding: { type: 'string' },
+      },
+    }),
     riskLevel: 'low',
     requiresApproval: false,
+    timeout: 5000,
+    maxRetries: 0,
     version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   },
   {
-    id: 'tool.file.write',
-    name: 'file.write',
-    displayName: '写入文件',
-    description: '创建或覆盖指定路径的文本文件',
+    id: 'builtin_file_write',
+    name: 'file_write',
+    displayName: '文件写入',
+    description: '写入内容到指定路径的文件',
     category: 'file',
     source: 'builtin',
     enabled: true,
@@ -78,7 +145,7 @@ export const BUILTIN_TOOLS: Omit<ToolDefinition, 'createdAt' | 'updatedAt'>[] = 
       {
         name: 'path',
         type: 'string',
-        description: '文件路径（绝对路径）',
+        description: '文件路径',
         required: true,
       },
       {
@@ -87,17 +154,34 @@ export const BUILTIN_TOOLS: Omit<ToolDefinition, 'createdAt' | 'updatedAt'>[] = 
         description: '文件内容',
         required: true,
       },
+      {
+        name: 'encoding',
+        type: 'string',
+        description: '文件编码',
+        required: false,
+        defaultValue: 'utf-8',
+      },
     ],
-    outputSchema: '{ "path": string, "bytesWritten": number }',
-    riskLevel: 'high',
-    requiresApproval: true,
+    outputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        bytesWritten: { type: 'number' },
+        path: { type: 'string' },
+      },
+    }),
+    riskLevel: 'medium',
+    requiresApproval: false,
+    timeout: 5000,
+    maxRetries: 0,
     version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   },
   {
-    id: 'tool.file.edit',
-    name: 'file.edit',
-    displayName: '编辑文件',
-    description: '对文件进行精确的文本替换编辑',
+    id: 'builtin_file_list',
+    name: 'file_list',
+    displayName: '文件列表',
+    description: '列出指定目录下的文件和文件夹',
     category: 'file',
     source: 'builtin',
     enabled: true,
@@ -105,32 +189,49 @@ export const BUILTIN_TOOLS: Omit<ToolDefinition, 'createdAt' | 'updatedAt'>[] = 
       {
         name: 'path',
         type: 'string',
-        description: '文件路径（绝对路径）',
+        description: '目录路径',
         required: true,
       },
       {
-        name: 'oldText',
-        type: 'string',
-        description: '需要替换的原文本（必须精确匹配）',
-        required: true,
-      },
-      {
-        name: 'newText',
-        type: 'string',
-        description: '替换后的新文本',
-        required: true,
+        name: 'recursive',
+        type: 'boolean',
+        description: '是否递归列出子目录',
+        required: false,
+        defaultValue: false,
       },
     ],
-    outputSchema: '{ "path": string, "success": boolean }',
-    riskLevel: 'high',
-    requiresApproval: true,
+    outputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              type: { type: 'string', enum: ['file', 'directory'] },
+              size: { type: 'number' },
+              modifiedAt: { type: 'string' },
+            },
+          },
+        },
+      },
+    }),
+    riskLevel: 'low',
+    requiresApproval: false,
+    timeout: 5000,
+    maxRetries: 0,
     version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   },
+
+  // ===== Git 类 Tools =====
   {
-    id: 'tool.git.clone',
-    name: 'git.clone',
-    displayName: '克隆仓库',
-    description: '通过 git clone 克隆远程 Git 仓库到本地',
+    id: 'builtin_git_clone',
+    name: 'git_clone',
+    displayName: 'Git 克隆',
+    description: '克隆远程 Git 仓库到本地',
     category: 'git',
     source: 'builtin',
     enabled: true,
@@ -144,31 +245,83 @@ export const BUILTIN_TOOLS: Omit<ToolDefinition, 'createdAt' | 'updatedAt'>[] = 
       {
         name: 'branch',
         type: 'string',
-        description: '分支名（默认为 main）',
+        description: '分支名称',
         required: false,
         defaultValue: 'main',
       },
       {
-        name: 'targetDir',
+        name: 'targetPath',
         type: 'string',
-        description: '目标目录（默认为当前目录）',
-        required: false,
+        description: '本地目标路径',
+        required: true,
       },
     ],
-    outputSchema: '{ "path": string, "branch": string }',
+    outputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        path: { type: 'string' },
+        branch: { type: 'string' },
+      },
+    }),
     riskLevel: 'medium',
-    requiresApproval: true,
+    requiresApproval: false,
+    timeout: 120000,
+    maxRetries: 1,
     version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   },
   {
-    id: 'tool.git.commit',
-    name: 'git.commit',
-    displayName: '提交更改',
-    description: '执行 git add . && git commit -m "..."',
+    id: 'builtin_git_status',
+    name: 'git_status',
+    displayName: 'Git 状态',
+    description: '获取 Git 仓库的当前状态',
     category: 'git',
     source: 'builtin',
     enabled: true,
     parameters: [
+      {
+        name: 'path',
+        type: 'string',
+        description: 'Git 仓库路径',
+        required: true,
+      },
+    ],
+    outputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        branch: { type: 'string' },
+        ahead: { type: 'number' },
+        behind: { type: 'number' },
+        modified: { type: 'array', items: { type: 'string' } },
+        staged: { type: 'array', items: { type: 'string' } },
+        untracked: { type: 'array', items: { type: 'string' } },
+      },
+    }),
+    riskLevel: 'low',
+    requiresApproval: false,
+    timeout: 10000,
+    maxRetries: 0,
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'builtin_git_commit',
+    name: 'git_commit',
+    displayName: 'Git 提交',
+    description: '提交 Git 变更',
+    category: 'git',
+    source: 'builtin',
+    enabled: true,
+    parameters: [
+      {
+        name: 'path',
+        type: 'string',
+        description: 'Git 仓库路径',
+        required: true,
+      },
       {
         name: 'message',
         type: 'string',
@@ -176,22 +329,36 @@ export const BUILTIN_TOOLS: Omit<ToolDefinition, 'createdAt' | 'updatedAt'>[] = 
         required: true,
       },
       {
-        name: 'path',
-        type: 'string',
-        description: '仓库路径（默认为当前工作区）',
+        name: 'files',
+        type: 'array',
+        description: '要提交的文件列表（空数组表示全部）',
         required: false,
+        defaultValue: [],
       },
     ],
-    outputSchema: '{ "commitHash": string, "message": string }',
-    riskLevel: 'medium',
+    outputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        commitHash: { type: 'string' },
+        message: { type: 'string' },
+      },
+    }),
+    riskLevel: 'high',
     requiresApproval: true,
+    timeout: 30000,
+    maxRetries: 0,
     version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   },
+
+  // ===== Shell 类 Tools =====
   {
-    id: 'tool.shell.exec',
-    name: 'shell.exec',
-    displayName: '执行 Shell',
-    description: '在本地系统执行 shell 命令',
+    id: 'builtin_shell_exec',
+    name: 'shell_exec',
+    displayName: 'Shell 执行',
+    description: '执行 Shell 命令',
     category: 'shell',
     source: 'builtin',
     enabled: true,
@@ -199,41 +366,7 @@ export const BUILTIN_TOOLS: Omit<ToolDefinition, 'createdAt' | 'updatedAt'>[] = 
       {
         name: 'command',
         type: 'string',
-        description: '要执行的 shell 命令',
-        required: true,
-      },
-      {
-        name: 'cwd',
-        type: 'string',
-        description: '工作目录（默认为当前目录）',
-        required: false,
-      },
-      {
-        name: 'timeout',
-        type: 'number',
-        description: '超时时间（秒，默认 60）',
-        required: false,
-        defaultValue: 60,
-      },
-    ],
-    outputSchema: '{ "stdout": string, "stderr": string, "exitCode": number }',
-    riskLevel: 'high',
-    requiresApproval: true,
-    version: '1.0.0',
-  },
-  {
-    id: 'tool.shell.batch',
-    name: 'shell.batch',
-    displayName: '批量执行命令',
-    description: '按顺序执行多条 shell 命令',
-    category: 'shell',
-    source: 'builtin',
-    enabled: true,
-    parameters: [
-      {
-        name: 'commands',
-        type: 'array',
-        description: '命令列表',
+        description: 'Shell 命令',
         required: true,
       },
       {
@@ -242,17 +375,46 @@ export const BUILTIN_TOOLS: Omit<ToolDefinition, 'createdAt' | 'updatedAt'>[] = 
         description: '工作目录',
         required: false,
       },
+      {
+        name: 'env',
+        type: 'object',
+        description: '环境变量',
+        required: false,
+        defaultValue: {},
+      },
+      {
+        name: 'timeout',
+        type: 'number',
+        description: '超时时间（毫秒）',
+        required: false,
+        defaultValue: 30000,
+        min: 1000,
+        max: 300000,
+      },
     ],
-    outputSchema: '{ "results": Array<{ "stdout": string, "stderr": string, "exitCode": number }> }',
+    outputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        stdout: { type: 'string' },
+        stderr: { type: 'string' },
+        exitCode: { type: 'number' },
+      },
+    }),
     riskLevel: 'high',
     requiresApproval: true,
+    timeout: 30000,
+    maxRetries: 0,
     version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   },
+
+  // ===== API 类 Tools =====
   {
-    id: 'tool.api.request',
-    name: 'api.request',
-    displayName: 'HTTP 请求',
-    description: '发起 HTTP 请求（GET/POST/PUT/DELETE）',
+    id: 'builtin_api_call',
+    name: 'api_call',
+    displayName: 'API 调用',
+    description: '发送 HTTP 请求调用外部 API',
     category: 'api',
     source: 'builtin',
     enabled: true,
@@ -260,7 +422,7 @@ export const BUILTIN_TOOLS: Omit<ToolDefinition, 'createdAt' | 'updatedAt'>[] = 
       {
         name: 'url',
         type: 'string',
-        description: '请求 URL',
+        description: 'API URL',
         required: true,
       },
       {
@@ -269,30 +431,53 @@ export const BUILTIN_TOOLS: Omit<ToolDefinition, 'createdAt' | 'updatedAt'>[] = 
         description: 'HTTP 方法',
         required: false,
         defaultValue: 'GET',
+        enum: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'],
       },
       {
         name: 'headers',
         type: 'object',
         description: '请求头',
         required: false,
+        defaultValue: {},
       },
       {
         name: 'body',
         type: 'object',
-        description: '请求体（JSON）',
+        description: '请求体（用于 POST/PUT/PATCH）',
         required: false,
       },
+      {
+        name: 'timeout',
+        type: 'number',
+        description: '超时时间（毫秒）',
+        required: false,
+        defaultValue: 30000,
+      },
     ],
-    outputSchema: '{ "status": number, "headers": object, "body": unknown }',
+    outputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        status: { type: 'number' },
+        statusText: { type: 'string' },
+        headers: { type: 'object' },
+        data: {},
+      },
+    }),
     riskLevel: 'medium',
-    requiresApproval: true,
+    requiresApproval: false,
+    timeout: 30000,
+    maxRetries: 2,
     version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   },
+
+  // ===== Browser 类 Tools =====
   {
-    id: 'tool.browser.open',
-    name: 'browser.open',
-    displayName: '打开页面',
-    description: '在浏览器中打开指定 URL',
+    id: 'builtin_browser_screenshot',
+    name: 'browser_screenshot',
+    displayName: '浏览器截图',
+    description: '截取网页或元素的屏幕截图',
     category: 'browser',
     source: 'builtin',
     enabled: true,
@@ -300,47 +485,64 @@ export const BUILTIN_TOOLS: Omit<ToolDefinition, 'createdAt' | 'updatedAt'>[] = 
       {
         name: 'url',
         type: 'string',
-        description: '页面 URL',
+        description: '网页 URL',
         required: true,
       },
       {
-        name: 'profile',
+        name: 'selector',
         type: 'string',
-        description: '浏览器 profile 名称（默认使用默认 profile）',
-        required: false,
-      },
-    ],
-    outputSchema: '{ "tabId": string, "url": string }',
-    riskLevel: 'low',
-    requiresApproval: false,
-    version: '1.0.0',
-  },
-  {
-    id: 'tool.browser.screenshot',
-    name: 'browser.screenshot',
-    displayName: '截图',
-    description: '对当前浏览器 Tab 进行截图',
-    category: 'browser',
-    source: 'builtin',
-    enabled: true,
-    parameters: [
-      {
-        name: 'tabId',
-        type: 'string',
-        description: 'Tab ID（默认当前活动 Tab）',
+        description: 'CSS 选择器（为空则截取整页）',
         required: false,
       },
       {
-        name: 'fullPage',
-        type: 'boolean',
-        description: '是否截取整个页面（默认 false）',
+        name: 'width',
+        type: 'number',
+        description: '视口宽度',
         required: false,
-        defaultValue: false,
+        defaultValue: 1280,
+      },
+      {
+        name: 'height',
+        type: 'number',
+        description: '视口高度',
+        required: false,
+        defaultValue: 720,
       },
     ],
-    outputSchema: '{ "imagePath": string, "width": number, "height": number }',
+    outputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        imageData: { type: 'string', description: 'Base64 encoded image' },
+        mimeType: { type: 'string' },
+      },
+    }),
     riskLevel: 'low',
     requiresApproval: false,
+    timeout: 60000,
+    maxRetries: 1,
     version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   },
 ];
+
+/**
+ * 按类别分组获取 Tools
+ */
+export function getToolsByCategory(): Record<ToolCategory, ToolDefinition[]> {
+  const groups: Record<ToolCategory, ToolDefinition[]> = {
+    file: [],
+    git: [],
+    shell: [],
+    api: [],
+    browser: [],
+    custom: [],
+  };
+
+  for (const tool of BUILTIN_TOOLS) {
+    groups[tool.category].push(tool);
+  }
+
+  return groups;
+}

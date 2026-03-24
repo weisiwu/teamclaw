@@ -28,6 +28,7 @@ import adminConfigRouter from './routes/adminConfig.js';
 import auditLogRouter from './routes/auditLog.js';
 import webhookRouter from './routes/webhook.js';
 import apiTokenRouter from './routes/apiToken.js';
+import agentTokenBindingRouter from './routes/agentTokenBinding.js';
 import tagRouter from './routes/tag.js';
 import buildRouter from './routes/build.js';
 import artifactRouter from './routes/artifact.js';
@@ -40,6 +41,8 @@ import authRouter from './routes/auth.js';
 import { getArtifactsRootDir } from './services/artifactStore.js';
 import './services/taskInit.js'; // 初始化任务机制钩子
 import { registerAutoBumpHook } from './hooks/autoBumpOnTaskDone.js';
+import { toolService } from './services/toolService.js';
+import { skillService } from './services/skillService.js';
 import traceRouter from './routes/trace.js';
 // 初始化事件总线串联模块（按依赖顺序导入）
 import './services/messageToTask.js'; // 消息→任务
@@ -202,6 +205,7 @@ adminRouter.use('/config', adminConfigRouter);
 adminRouter.use('/audit-logs', auditLogRouter);
 adminRouter.use('/webhooks', webhookRouter);
 adminRouter.use('/api-tokens', apiTokenRouter);
+adminRouter.use('/', agentTokenBindingRouter);
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/tags', tagRouter);
 app.use('/api/v1/builds', buildRouter);
@@ -227,6 +231,23 @@ const server = app.listen(PORT, async () => {
   await runMigrations();
   // 注册自动版本升级钩子
   registerAutoBumpHook();
+  // 初始化内置 Tools
+  try {
+    const toolInitResult = await toolService.initializeBuiltinTools();
+    console.log(`[init] Built-in tools initialized: ${toolInitResult.added} added, ${toolInitResult.updated} updated, ${toolInitResult.unchanged} unchanged`);
+  } catch (err) {
+    console.error('[init] Failed to initialize built-in tools:', err);
+  }
+  // 同步磁盘 Skills
+  try {
+    const skillSyncResult = await skillService.syncSkillsFromDisk();
+    console.log(`[init] Skills synchronized from disk: ${skillSyncResult.added.length} added, ${skillSyncResult.updated.length} updated, ${skillSyncResult.removed.length} removed`);
+    if (skillSyncResult.errors.length > 0) {
+      console.warn(`[init] Skill sync errors: ${skillSyncResult.errors.length}`);
+    }
+  } catch (err) {
+    console.error('[init] Failed to sync skills from disk:', err);
+  }
 });
 
 // 注册 HTTP Server 关闭
