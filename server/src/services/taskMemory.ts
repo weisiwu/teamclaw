@@ -10,6 +10,7 @@
 import { Task } from '../models/task.js';
 import { llmService } from './llmService.js';
 import { addDocuments, query } from './vectorStore.js';
+import { taskRepo } from '../db/repositories/taskRepo.js';
 
 const TASK_MEMORY_COLLECTION = 'task_memory';
 
@@ -87,7 +88,9 @@ class TaskMemoryService {
       });
       this.enforceMemoryLimit();
     }
-    return this.contexts.get(key)!;
+    const ctx = this.contexts.get(key)!;
+    this.persistContext(key, ctx);
+    return ctx;
   }
 
   getContext(taskId: string, sessionId: string): TaskContext | undefined {
@@ -100,7 +103,9 @@ class TaskMemoryService {
 
     const lines: string[] = [];
     lines.push(`\n<!-- TaskContext: ${taskId} -->`);
-    lines.push(`<task_progress>${ctx.checkpoints.length > 0 ? ctx.checkpoints[ctx.checkpoints.length - 1].progress : 0}%</task_progress>`);
+    lines.push(
+      `<task_progress>${ctx.checkpoints.length > 0 ? ctx.checkpoints[ctx.checkpoints.length - 1].progress : 0}%</task_progress>`
+    );
 
     if (ctx.summary) {
       lines.push(`<task_summary>${ctx.summary}</task_summary>`);
@@ -118,7 +123,12 @@ class TaskMemoryService {
     return lines.join('\n');
   }
 
-  addMessage(taskId: string, sessionId: string, role: ContextMessage['role'], content: string): void {
+  addMessage(
+    taskId: string,
+    sessionId: string,
+    role: ContextMessage['role'],
+    content: string
+  ): void {
     const ctx = this.getOrCreateContext(taskId, sessionId);
     ctx.messages.push({
       id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
@@ -133,7 +143,12 @@ class TaskMemoryService {
     }
   }
 
-  createCheckpoint(taskId: string, sessionId: string, progress: number, summary: string): TaskCheckpoint {
+  createCheckpoint(
+    taskId: string,
+    sessionId: string,
+    progress: number,
+    summary: string
+  ): TaskCheckpoint {
     const ctx = this.getOrCreateContext(taskId, sessionId);
     const checkpoint: TaskCheckpoint = {
       id: `cp_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
@@ -178,6 +193,31 @@ class TaskMemoryService {
 
   clearContext(taskId: string, sessionId: string): boolean {
     return this.contexts.delete(`${sessionId}:${taskId}`);
+  }
+
+  /**
+   * 持久化上下文到数据库（非阻塞）
+   */
+  private persistContext(key: string, ctx: TaskContext): void {
+    // Strip sessionId from key (key = "${sessionId}:${taskId}")
+    const taskId = key.includes(':') ? key.split(':')[1] : key;
+    taskRepo
+      .upsert({
+        taskId,
+        contextSnapshot: {
+          messages: ctx.messages,
+          checkpoints: ctx.checkpoints,
+          summary: ctx.summary,
+          createdAt: ctx.createdAt,
+          updatedAt: ctx.updatedAt,
+        },
+      })
+      .catch(err => {
+        console.warn(
+          `[taskMemory] Failed to persist context for ${key}:`,
+          err instanceof Error ? err.message : String(err)
+        );
+      });
   }
 
   private enforceMemoryLimit(): void {
@@ -259,15 +299,22 @@ class TaskMemoryService {
         ...parsed.patterns,
       ].join(' | ');
 
-      await addDocuments(TASK_MEMORY_COLLECTION, [docContent], [task.taskId], [{
-        taskId: task.taskId,
-        title: task.title,
-        completedAt: task.completedAt || new Date().toISOString(),
-        tags: task.tags.join(','),
-        filesChanged: parsed.keyChanges.join(','),
-        summary: parsed.summary,
-        techStack: parsed.techStack.join(','),
-      }]);
+      await addDocuments(
+        TASK_MEMORY_COLLECTION,
+        [docContent],
+        [task.taskId],
+        [
+          {
+            taskId: task.taskId,
+            title: task.title,
+            completedAt: task.completedAt || new Date().toISOString(),
+            tags: task.tags.join(','),
+            filesChanged: parsed.keyChanges.join(','),
+            summary: parsed.summary,
+            techStack: parsed.techStack.join(','),
+          },
+        ]
+      );
 
       // 4. 更新内存摘要
       this.updateSummary(task.taskId, sessionId, parsed.summary);
@@ -318,8 +365,9 @@ class TaskMemoryService {
       if (similar.length === 0) return '';
 
       return similar
-        .map((s, i) =>
-          `[参考任务 ${i + 1}] ${s.title}\n摘要：${s.summary}\n相似度：${(s.similarity * 100).toFixed(1)}%`
+        .map(
+          (s, i) =>
+            `[参考任务 ${i + 1}] ${s.title}\n摘要：${s.summary}\n相似度：${(s.similarity * 100).toFixed(1)}%`
         )
         .join('\n\n');
     } catch (err) {
