@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { query, queryOne, execute } from '../db/pg.js';
+import { estimateTokens } from './llmService.js';
 import type {
   SkillDefinition,
   SkillRow,
@@ -615,6 +616,37 @@ export async function getCombinedSkillContentForAgent(agentId: string): Promise<
   return sections.join('\n');
 }
 
+/**
+ * 截断 Skills 内容以控制注入 prompt 的总长度
+ * 按顺序逐个加入 Skill，超出 maxTokens 则截断并添加省略提示
+ * @param skills Skill 列表
+ * @param maxTokens 最大 token 数，默认 8000
+ * @returns 截断后的 Markdown 内容
+ */
+export function truncateSkills(skills: SkillDefinition[], maxTokens: number = 8000): string {
+  if (skills.length === 0) {
+    return '';
+  }
+
+  const included: string[] = [];
+  let totalTokens = 0;
+
+  for (const skill of skills) {
+    const tokens = estimateTokens(skill.content);
+    if (totalTokens + tokens > maxTokens) {
+      // 超出限制，添加省略提示后停止
+      included.push(
+        `### ${skill.displayName}\n（内容过长，已省略。完整内容请查看 Skills 管理页面）`
+      );
+      break;
+    }
+    included.push(`### ${skill.displayName}\n${skill.content}`);
+    totalTokens += tokens;
+  }
+
+  return included.join('\n\n---\n\n');
+}
+
 // ========== 统计 ==========
 
 /**
@@ -689,6 +721,7 @@ export const skillService = {
   // Agent 相关
   getSkillsForAgent,
   getCombinedSkillContentForAgent,
+  truncateSkills,
 
   // 统计
   getSkillStats,

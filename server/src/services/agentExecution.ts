@@ -24,6 +24,7 @@ import {
 } from './llmService.js';
 import { agentToolBindingService } from './agentToolBindingService.js';
 import { toolService } from './toolService.js';
+import { skillService, truncateSkills } from './skillService.js';
 
 export interface ExecutionContext {
   executionId: string;
@@ -256,8 +257,13 @@ async function buildAgentMessages(agentName: string, taskId: string, prompt: str
   // 获取权限上下文：告知 LLM 该 Agent 可用哪些工具
   const permissionContext = await buildPermissionContext(agentName);
 
+  // 从平台 skillService 查询该 Agent 启用的 Skills，并截断至安全长度
+  const skills = await skillService.getSkillsForAgent(agentName);
+  const skillsText = truncateSkills(skills);
+
   // 构建 system prompt
   const systemPrompt = buildSystemPrompt(agentName, {
+    skills: skillsText || '（无可用 Skills）',
     taskContext: taskContext ? `${taskContext}\n\n${permissionContext}` : permissionContext,
   });
 
