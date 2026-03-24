@@ -112,7 +112,7 @@ async function loadFromDb(): Promise<void> {
         status: row.status as ImportTask['status'],
         currentStep: row.current_step,
         totalSteps: row.total_steps ?? ALL_STEPS.length,
-        steps: (row.steps as ImportStep[]) ?? [],
+        steps: Array.isArray(row.steps) ? row.steps.map(s => s as unknown as ImportStep) : [],
         startedAt: new Date(row.started_at).toISOString(),
         completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : undefined,
       };
@@ -165,7 +165,7 @@ const STEP_EXECUTORS: Record<ImportStepName, StepExecutor> = {
   compress: async ctx => {
     if (!ctx.projectPath || !ctx.documents) throw new Error('projectPath or documents not set');
     const compressor = new ContextCompressor(512, 50);
-    const docPaths = (ctx.documents ?? []).map(d => d.source);
+    const docPaths = (ctx.documents ?? []).map(d => d.path);
     ctx.chunks = await compressor.chunkProject(ctx.projectPath, docPaths);
     console.log(
       `[importOrchestrator] Compressed ${docPaths.length} docs into ${ctx.chunks.length} chunks`
