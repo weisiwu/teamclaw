@@ -207,12 +207,12 @@ function TokensContent() {
   const isLoading = summaryLoading || dailyLoading || trendLoading || taskLoading;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="page-container">
       {/* 页面标题 */}
-      <div className="flex items-center justify-between">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Token 消费统计</h1>
-          <p className="text-gray-500 mt-1">查看 Token 消耗明细与趋势</p>
+          <h1 className="page-header-title">Token 消费统计</h1>
+          <p className="page-header-subtitle">查看 Token 消耗明细与趋势</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleExport} disabled={isLoading}>
@@ -322,11 +322,11 @@ function TokensContent() {
 // 加载中占位组件
 function TokensLoading() {
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="page-container">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Token 消费统计</h1>
-          <p className="text-gray-500 mt-1">查看 Token 消耗明细与趋势</p>
+          <h1 className="page-header-title">Token 消费统计</h1>
+          <p className="page-header-subtitle">查看 Token 消耗明细与趋势</p>
         </div>
         <Button variant="outline" disabled>
           <RefreshCw className="w-4 h-4 mr-2 animate-spin" />

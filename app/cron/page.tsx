@@ -457,12 +457,12 @@ export default function CronPage() {
 
   return (
     <>
-      <div className="p-6 space-y-6">
+      <div className="page-container">
         {/* 页面标题 */}
-        <div className="flex items-center justify-between">
+        <div className="page-header">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">定时任务</h1>
-            <p className="text-gray-500 mt-1">管理自动执行的任务</p>
+            <h1 className="page-header-title">定时任务</h1>
+            <p className="page-header-subtitle">管理自动执行的任务</p>
           </div>
           <Button onClick={handleOpenCreateModal}>
             <Plus className="w-4 h-4 mr-2" />

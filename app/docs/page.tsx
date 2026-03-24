@@ -112,10 +112,10 @@ export default function DocsPage() {
   }, []);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-2">文档库</h1>
-        <p className="text-gray-500 dark:text-gray-400">搜索、预览和管理项目文档</p>
+    <div className="page-container max-w-7xl mx-auto">
+      <div className="page-header">
+        <h1 className="page-header-title">文档库</h1>
+        <p className="page-header-subtitle">搜索、预览和管理项目文档</p>
       </div>
 
       {/* Search and filters */}

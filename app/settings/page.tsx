@@ -33,9 +33,9 @@ export default function Settings() {
   if (!mounted) {
     return (
       <div className="page-container">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">设置</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">系统配置与管理</p>
+        <div className="page-header">
+          <h1 className="page-header-title">设置</h1>
+          <p className="page-header-subtitle">系统配置与管理</p>
         </div>
         <div className="animate-pulse space-y-4">
           <div className="h-20 bg-gray-200 dark:bg-gray-800 rounded-lg"></div>
@@ -58,6 +58,7 @@ export default function Settings() {
   ];
 
   return (
+    <div className="page-container">
     <div className="flex gap-6 min-h-[calc(100vh-8rem)]">
       {/* 侧边栏 */}
       <div className="w-48 shrink-0">
@@ -85,9 +86,9 @@ export default function Settings() {
 
       {/* 内容区 */}
       <div className="flex-1 space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">设置</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">系统配置与团队管理</p>
+        <div className="page-header">
+          <h1 className="page-header-title">设置</h1>
+          <p className="page-header-subtitle">系统配置与团队管理</p>
         </div>
 
         {activeSection === 'appearance' && (
@@ -160,6 +161,7 @@ export default function Settings() {
           <DemoDataManagement />
         )}
       </div>
+    </div>
     </div>
   );
 }

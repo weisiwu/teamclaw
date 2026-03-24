@@ -403,10 +403,10 @@ export default function MonitorPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 p-8">
+    <div className="page-container">
       <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">System Monitor</h1>
+        <div className="page-header">
+          <h1 className="page-header-title">System Monitor</h1>
           <div className="flex gap-2">
             <Button
               variant={showTracePanel ? 'default' : 'outline'}

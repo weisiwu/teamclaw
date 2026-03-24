@@ -439,11 +439,11 @@ export default function ImportPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="page-container">
       <div className="max-w-4xl mx-auto px-4">
         {/* 标题 */}
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">TeamClaw 后台 — 项目导入向导</h1>
+        <div className="page-header">
+          <h1 className="page-header-title">TeamClaw 后台 — 项目导入向导</h1>
         </div>
 
         {renderStepIndicator()}
