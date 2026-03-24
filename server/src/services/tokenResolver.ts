@@ -356,10 +356,33 @@ export async function checkTokenHealth(tokenId: string): Promise<{
   };
 }
 
+// ========== 便捷方法：llmService 专用 ==========
+
+/**
+ * 解析 Token（llmService 专用便捷方法）
+ * 根据 Agent 名称和 tier 返回可用的 Token 配置
+ * @param agentName Agent 名称
+ * @param tier 模型层级
+ * @param preferredModel 首选模型（可选）
+ * @returns ResolvedToken 或 null（无绑定时）
+ */
+export async function resolve(
+  agentName: string,
+  tier: 'light' | 'medium' | 'strong',
+  preferredModel?: string
+): Promise<ResolvedToken | null> {
+  const result = await scheduleToken({ agentName, tier, preferredModel });
+  if (result.success && result.token) {
+    return result.token;
+  }
+  return null;
+}
+
 // ========== 导出 ==========
 
 export const tokenResolver = {
   scheduleToken,
+  resolve,
   scheduleMultipleTokens,
   recordTokenUsage,
   isNearBudgetLimit,

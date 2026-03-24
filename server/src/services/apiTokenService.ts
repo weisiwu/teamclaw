@@ -331,6 +331,43 @@ export async function resetMonthlyUsage(): Promise<number> {
   return result.rowCount;
 }
 
+/**
+ * 记录 Token 使用量（由 llmService 调用）
+ * @param tokenId Token ID
+ * @param params 用量参数：inputTokens, outputTokens, costUsd, agentName
+ * @returns 是否记录成功
+ */
+export async function recordUsage(
+  tokenId: string,
+  params: {
+    inputTokens: number;
+    outputTokens: number;
+    costUsd: number;
+    agentName?: string;
+  }
+): Promise<boolean> {
+  const { inputTokens, outputTokens, costUsd, agentName } = params;
+
+  try {
+    // 更新 Token 使用量
+    await updateTokenUsage(tokenId, {
+      costUsd,
+      incrementCalls: 1,
+    });
+
+    console.log(
+      `[apiTokenService] Recorded usage: token=${tokenId}, ` +
+      `input=${inputTokens}, output=${outputTokens}, cost=$${costUsd.toFixed(6)}, ` +
+      `agent=${agentName || 'unknown'}`
+    );
+
+    return true;
+  } catch (error) {
+    console.error(`[apiTokenService] Failed to record usage for token ${tokenId}:`, error);
+    return false;
+  }
+}
+
 // ========== 导出 ==========
 
 export const apiTokenService = {
@@ -345,6 +382,7 @@ export const apiTokenService = {
   verifyToken,
   getSupportedProviders,
   resetMonthlyUsage,
+  recordUsage,
 };
 
 export default apiTokenService;

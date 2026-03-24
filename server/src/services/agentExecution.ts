@@ -141,8 +141,8 @@ async function executeAgentTask(context: ExecutionContext, timeoutMs: number): P
   const startMs = Date.now();
 
   try {
-    // 调用 LLM（自动路由选择模型层级）
-    const response = await llmAutoRoute(messages);
+    // 调用 LLM（自动路由选择模型层级，传入 agentName 以支持动态 Token 解析）
+    const response = await llmAutoRoute(messages, undefined, targetAgent);
 
     clearTimeout(timeoutHandle);
 

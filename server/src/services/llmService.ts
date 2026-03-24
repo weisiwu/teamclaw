@@ -1,6 +1,7 @@
 /**
  * LLM 调用服务 - 统一封装轻量/中等/强力三级模型
  * 支持 DeepSeek / OpenAI / Anthropic 兼容接口
+ * 支持按 Agent 动态选择 Token（依赖 tokenResolver / agentTokenBindingService）
  */
 
 // Inline model config (avoid cross-module import from server/src)
@@ -32,6 +33,7 @@ export interface LLMRequest {
   maxTokens?: number;
   temperature?: number;
   stream?: boolean;
+  agentName?: string; // 调用方 Agent 名称，用于动态 Token 解析
 }
 
 export interface LLMResponse {
@@ -101,12 +103,15 @@ export function estimateCost(provider: string, inputTokens: number, outputTokens
 async function callDeepSeek(
   modelName: string,
   messages: LLMMessages[],
-  opts: { maxTokens?: number; temperature?: number }
+  opts: { maxTokens?: number; temperature?: number },
+  apiKey: string,
+  baseUrl?: string
 ): Promise<LLMResponse> {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) throw new Error('DEEPSEEK_API_KEY not set');
 
-  const res = await fetch('https://api.deepseek.com/chat/completions', {
+  const endpoint = baseUrl ? `${baseUrl}/chat/completions` : 'https://api.deepseek.com/chat/completions';
+
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -144,14 +149,17 @@ async function callDeepSeek(
 async function callOpenAI(
   modelName: string,
   messages: LLMMessages[],
-  opts: { maxTokens?: number; temperature?: number }
+  opts: { maxTokens?: number; temperature?: number },
+  apiKey: string,
+  baseUrl?: string
 ): Promise<LLMResponse> {
-  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY not set');
 
-  const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+  const defaultBaseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+  const resolvedBaseUrl = baseUrl || defaultBaseUrl;
+  const endpoint = `${resolvedBaseUrl.replace(/\/$/, '')}/chat/completions`;
 
-  const res = await fetch(`${baseUrl}/chat/completions`, {
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -189,16 +197,19 @@ async function callOpenAI(
 async function callAnthropic(
   modelName: string,
   messages: LLMMessages[],
-  opts: { maxTokens?: number; temperature?: number }
+  opts: { maxTokens?: number; temperature?: number },
+  apiKey: string,
+  baseUrl?: string
 ): Promise<LLMResponse> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
 
   // Anthropic 使用不同的 API 格式
   const systemMsg = messages.find(m => m.role === 'system');
   const nonSystemMsgs = messages.filter(m => m.role !== 'system');
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const endpoint = baseUrl ? `${baseUrl}/v1/messages` : 'https://api.anthropic.com/v1/messages';
+
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -244,10 +255,14 @@ export async function llmCall(
   request: LLMRequest,
   fallbackTiers: ModelTier[] = []
 ): Promise<LLMResponse> {
-  const { tier, messages, maxTokens, temperature } = request;
+  const { tier, messages, maxTokens, temperature, agentName } = request;
   const allTiers = [tier, ...fallbackTiers].filter((v, i, a) => a.indexOf(v) === i); // 去重
 
   const errors: LLMError[] = [];
+
+  // 动态导入 tokenResolver（避免循环依赖）
+  const { tokenResolver } = await import('./tokenResolver.js');
+  const { apiTokenService } = await import('./apiTokenService.js');
 
   for (const t of allTiers) {
     const cfg = getModelConfig(t);
@@ -256,18 +271,57 @@ export async function llmCall(
       temperature: temperature ?? cfg.temperature,
     };
 
+    // 动态 Token 解析：按 Agent + tier 获取绑定的 Token
+    let resolvedToken: Awaited<ReturnType<typeof tokenResolver.resolve>> = null;
+    if (agentName) {
+      try {
+        resolvedToken = await tokenResolver.resolve(agentName, t, cfg.name);
+      } catch (err) {
+        console.warn(`[llmService] tokenResolver.resolve failed for ${agentName}/${t}:`, err);
+      }
+    }
+
+    // 优先使用绑定的 Token 配置，否则回退到环境变量
+    const apiKey = resolvedToken?.apiKey || process.env[cfg.apiKeyEnv];
+    const baseUrl = resolvedToken?.baseUrl || cfg.baseUrl;
+    const modelName = resolvedToken?.preferredModel || cfg.name;
+
+    if (!apiKey) {
+      errors.push({
+        name: 'LLMError',
+        message: `No API key available for tier ${t} (agentName=${agentName || 'anonymous'})`,
+        tier: t,
+        provider: t === 'light' ? 'deepseek' : t === 'medium' ? 'openai' : 'anthropic',
+        retryable: false,
+      });
+      continue;
+    }
+
     try {
       let response: LLMResponse;
 
       if (t === 'light') {
         // DeepSeek
-        response = await callDeepSeek(cfg.name, messages, opts);
+        response = await callDeepSeek(modelName, messages, opts, apiKey, baseUrl);
       } else if (t === 'medium') {
         // OpenAI compatible
-        response = await callOpenAI(cfg.name, messages, opts);
+        response = await callOpenAI(modelName, messages, opts, apiKey, baseUrl);
       } else {
         // strong - Anthropic
-        response = await callAnthropic(cfg.name, messages, opts);
+        response = await callAnthropic(modelName, messages, opts, apiKey, baseUrl);
+      }
+
+      // 记录 Token 使用量（异步，不阻塞响应）
+      if (resolvedToken) {
+        const costUsd = estimateCost(response.provider, response.usage.inputTokens, response.usage.outputTokens);
+        apiTokenService.recordUsage(resolvedToken.tokenId, {
+          inputTokens: response.usage.inputTokens,
+          outputTokens: response.usage.outputTokens,
+          costUsd,
+          agentName,
+        }).catch(err => {
+          console.warn(`[llmService] recordUsage failed:`, err);
+        });
       }
 
       return response;
@@ -277,8 +331,8 @@ export async function llmCall(
         message: (err instanceof Error ? err.message : String(err)),
         tier: t,
         provider: t === 'light' ? 'deepseek' : t === 'medium' ? 'openai' : 'anthropic',
-        statusCode: err.statusCode,
-        retryable: err.statusCode === 429 || err.statusCode >= 500,
+        statusCode: (err as { statusCode?: number }).statusCode,
+        retryable: ((err as { statusCode?: number }).statusCode === 429 || (err as { statusCode?: number }).statusCode >= 500) ?? false,
       };
       errors.push(error);
       // 只有 retryable 错误才继续尝试下一个 tier
@@ -350,10 +404,12 @@ export function selectTierByComplexity(complexity: TaskComplexity): ModelTier {
 
 /**
  * 自动路由：基于任务复杂度选择模型
+ * @param agentName 可选：调用方 Agent 名称，用于动态 Token 解析
  */
 export async function llmAutoRoute(
   messages: LLMMessages[],
-  overrideTier?: ModelTier
+  overrideTier?: ModelTier,
+  agentName?: string
 ): Promise<LLMResponse> {
   const userText = messages.filter(m => m.role === 'user').map(m => m.content).join('\n');
   const complexity = estimateComplexity(userText);
@@ -365,11 +421,11 @@ export async function llmAutoRoute(
     complex: [],
   };
 
-  return llmCall({ tier, messages }, fallbackMap[complexity]);
+  return llmCall({ tier, messages, agentName }, fallbackMap[complexity]);
 }
 
 // Facade for backward-compatible imports
 export const llmService = {
-  chat: (opts: { tier?: string; messages: LLMMessages[] }) =>
-    llmAutoRoute(opts.messages, opts.tier as ModelTier | undefined),
+  chat: (opts: { tier?: string; messages: LLMMessages[]; agentName?: string }) =>
+    llmAutoRoute(opts.messages, opts.tier as ModelTier | undefined, opts.agentName),
 };
