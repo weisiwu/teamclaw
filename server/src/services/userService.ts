@@ -1,14 +1,18 @@
 /**
  * 人员管理服务
  * 增删改查业务逻辑、角色权重校验
+ *
+ * Persistence: PostgreSQL (via userRepo.ts)
+ * Fixes: BUG-05 内存Map存储重启全丢
  */
 
-import { Role, ROLE_WEIGHTS } from "../constants/roles";
+import { Role, ROLE_WEIGHTS } from '../constants/roles.js';
+import { userRepo, UserRow } from '../db/repositories/userRepo.js';
 
 // ============ 用户数据类型 ============
 export interface User {
   id: string;
-  userId: string;        // 外部ID（微信/飞书）
+  userId: string; // 外部ID（微信/飞书）
   name: string;
   role: Role;
   weight: number;
@@ -35,8 +39,22 @@ export interface UpdateUserRequest {
   remark?: string;
 }
 
-// ============ 内存数据存储（Placeholder，后续替换为真实DB） ============
-const userStore: Map<string, User> = new Map();
+// ============ 内部 Helper ============
+
+function rowToUser(row: UserRow): User {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    name: row.name,
+    role: row.role as Role,
+    weight: row.weight,
+    wechatId: row.wechat_id ?? undefined,
+    feishuId: row.feishu_id ?? undefined,
+    remark: row.remark ?? undefined,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
+  };
+}
 
 function generateId(): string {
   return `u_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -52,35 +70,21 @@ export async function listUsers(options?: {
   pageSize?: number;
   role?: Role;
 }): Promise<{ list: User[]; total: number }> {
-  let users = Array.from(userStore.values());
+  const { page = 1, pageSize = 20, role } = options ?? {};
 
-  // 角色筛选
-  if (options?.role) {
-    users = users.filter((u) => u.role === options.role);
-  }
+  const total = await userRepo.count(role);
+  const offset = (page - 1) * pageSize;
+  const rows = await userRepo.findAll(role, pageSize, offset);
 
-  // 排序（按 createdAt 降序）
-  users.sort(
-    (a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
-
-  const total = users.length;
-
-  // 分页
-  if (options?.page && options?.pageSize) {
-    const start = (options.page - 1) * options.pageSize;
-    users = users.slice(start, start + options.pageSize);
-  }
-
-  return { list: users, total };
+  return { list: rows.map(rowToUser), total };
 }
 
 /**
  * 根据 ID 获取用户详情
  */
 export async function getUserById(id: string): Promise<User | null> {
-  return userStore.get(id) || null;
+  const row = await userRepo.findById(id);
+  return row ? rowToUser(row) : null;
 }
 
 /**
@@ -90,26 +94,21 @@ export async function getUserByExternalId(
   wechatId?: string,
   feishuId?: string
 ): Promise<User | null> {
-  const users = Array.from(userStore.values());
-  return (
-    users.find(
-      (u) =>
-        (wechatId && u.wechatId === wechatId) ||
-        (feishuId && u.feishuId === feishuId)
-    ) || null
-  );
+  const row = await userRepo.findByExternalId(wechatId, feishuId);
+  return row ? rowToUser(row) : null;
 }
 
 /**
  * 创建用户
  */
-export async function createUser(
-  data: CreateUserRequest
-): Promise<User> {
+export async function createUser(data: CreateUserRequest): Promise<User> {
   const now = new Date().toISOString();
+  const id = generateId();
+  const userId = generateId();
+
   const user: User = {
-    id: generateId(),
-    userId: generateId(),
+    id,
+    userId,
     name: data.name,
     role: data.role,
     weight: ROLE_WEIGHTS[data.role] || 0,
@@ -120,40 +119,52 @@ export async function createUser(
     updatedAt: now,
   };
 
-  userStore.set(user.id, user);
+  await userRepo.insert({
+    id: user.id,
+    userId: user.userId,
+    name: user.name,
+    role: user.role,
+    weight: user.weight,
+    wechatId: user.wechatId,
+    feishuId: user.feishuId,
+    remark: user.remark,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  });
+
   return user;
 }
 
 /**
  * 更新用户信息
  */
-export async function updateUser(
-  id: string,
-  data: UpdateUserRequest
-): Promise<User | null> {
-  const user = userStore.get(id);
-  if (!user) return null;
+export async function updateUser(id: string, data: UpdateUserRequest): Promise<User | null> {
+  const existing = await userRepo.findById(id);
+  if (!existing) return null;
 
-  const updated: User = {
-    ...user,
-    name: data.name ?? user.name,
-    role: data.role ?? user.role,
-    weight: data.role ? ROLE_WEIGHTS[data.role] : user.weight,
-    wechatId: data.wechatId ?? user.wechatId,
-    feishuId: data.feishuId ?? user.feishuId,
-    remark: data.remark ?? user.remark,
-    updatedAt: new Date().toISOString(),
-  };
+  const now = new Date().toISOString();
 
-  userStore.set(id, updated);
-  return updated;
+  await userRepo.update(id, {
+    name: data.name,
+    role: data.role,
+    weight: data.role ? ROLE_WEIGHTS[data.role] : undefined,
+    wechatId: data.wechatId,
+    feishuId: data.feishuId,
+    remark: data.remark,
+    updatedAt: now,
+  });
+
+  // Re-fetch to return updated user
+  const updated = await userRepo.findById(id);
+  return updated ? rowToUser(updated) : null;
 }
 
 /**
  * 删除用户
  */
 export async function deleteUser(id: string): Promise<boolean> {
-  return userStore.delete(id);
+  const deleted = await userRepo.delete(id);
+  return deleted > 0;
 }
 
 /**
@@ -161,8 +172,9 @@ export async function deleteUser(id: string): Promise<boolean> {
  */
 export async function batchDeleteUsers(ids: string[]): Promise<number> {
   let deleted = 0;
-  ids.forEach((id) => {
-    if (userStore.delete(id)) deleted++;
-  });
+  for (const id of ids) {
+    const n = await userRepo.delete(id);
+    deleted += n;
+  }
   return deleted;
 }
