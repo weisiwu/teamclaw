@@ -27,7 +27,7 @@ const menuItems = [
   { href: "/versions/panel", label: "版本面板", icon: GitBranch },
   { href: "/branches", label: "分支管理", icon: GitBranch },
   { href: "/agent-team", label: "Agent 团队", icon: Bot },
-  { href: "/capabilities", label: "能力配置", icon: Zap },
+  { href: "/capabilities", label: "Tools & Skills", icon: Zap },
   { href: "/cron", label: "定时任务", icon: Clock },
   { href: "/docs", label: "文档中心", icon: FileText },
   { href: "/tokens", label: "Token 管理", icon: Key },
