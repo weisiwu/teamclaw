@@ -186,6 +186,103 @@ router.delete('/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
 });
 
 /**
+ * GET /api/v1/tools/export
+ * 导出所有 Tools 为 JSON 下载（仅管理员）
+ */
+router.get('/export', requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const tools = await toolService.getAllTools(true);
+    const json = JSON.stringify(tools, null, 2);
+    const filename = `tools-export-${new Date().toISOString().slice(0, 10)}.json`;
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', Buffer.byteLength(json));
+    res.send(json);
+  } catch (err) {
+    console.error('[tool] Failed to export tools:', err);
+    res.status(500).json(error(500, 'Failed to export tools'));
+  }
+});
+
+/**
+ * POST /api/v1/tools/import
+ * 批量导入 Tools（JSON，仅管理员）
+ */
+router.post('/import', requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const body = req.body;
+
+    // 支持两种格式：{ tools: [...] } 或直接数组 [...]
+    const items: unknown[] = Array.isArray(body) ? body : body.tools;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      res.status(400).json(error(400, 'Request body must be a JSON array of tools or { tools: [...] }'));
+      return;
+    }
+
+    const createdBy = req.user?.id || 'import';
+    const results: { name: string; id?: string; error?: string }[] = [];
+
+    for (const item of items) {
+      if (!item || typeof item !== 'object') {
+        results.push({ name: 'unknown', error: 'Invalid item: not an object' });
+        continue;
+      }
+
+      const toolData = item as Record<string, unknown>;
+
+      // 验证必填字段
+      if (!toolData.name || !toolData.displayName || !toolData.description || !toolData.category) {
+        results.push({ name: String(toolData.name || 'unknown'), error: 'Missing required fields' });
+        continue;
+      }
+
+      // 验证名称格式
+      if (!/^[a-zA-Z0-9_-]+$/.test(String(toolData.name))) {
+        results.push({ name: String(toolData.name), error: 'Invalid name format' });
+        continue;
+      }
+
+      try {
+        const created = await toolService.createTool(
+          {
+            name: String(toolData.name),
+            displayName: String(toolData.displayName),
+            description: String(toolData.description),
+            category: String(toolData.category),
+            parameters: toolData.parameters as CreateToolParams['parameters'] || [],
+            outputSchema: toolData.outputSchema as CreateToolParams['outputSchema'],
+            riskLevel: toolData.riskLevel as CreateToolParams['riskLevel'] || 'medium',
+            requiresApproval: Boolean(toolData.requiresApproval),
+            timeout: toolData.timeout as CreateToolParams['timeout'],
+            maxRetries: toolData.maxRetries as CreateToolParams['maxRetries'],
+            version: String(toolData.version || '1.0.0'),
+          },
+          createdBy
+        );
+        results.push({ name: created.name, id: created.id });
+      } catch (err) {
+        results.push({ name: String(toolData.name), error: err instanceof Error ? err.message : 'Unknown error' });
+      }
+    }
+
+    const succeeded = results.filter(r => !r.error).length;
+    const failed = results.filter(r => r.error).length;
+
+    res.json(success({
+      total: items.length,
+      succeeded,
+      failed,
+      results,
+    }));
+  } catch (err) {
+    console.error('[tool] Failed to import tools:', err);
+    res.status(500).json(error(500, 'Failed to import tools'));
+  }
+});
+
+/**
  * PATCH /api/v1/tools/:id/enable
  * 启用/禁用 Tool（仅管理员）
  */

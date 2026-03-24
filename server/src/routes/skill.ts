@@ -279,4 +279,130 @@ router.patch('/:id/enable', requireAdmin, async (req: AuthRequest, res: Response
   }
 });
 
+/**
+ * PUT /api/v1/skills/:id/toggle
+ * 切换 Skill 启用/禁用状态（仅管理员）
+ */
+router.put('/:id/toggle', requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // 获取当前状态再切换
+    const skill = await skillService.getSkillById(id);
+
+    if (!skill) {
+      res.status(404).json(error(404, 'Skill not found'));
+      return;
+    }
+
+    const updated = await skillService.toggleSkillEnabled(id, !skill.enabled);
+
+    if (!updated) {
+      res.status(404).json(error(404, 'Skill not found'));
+      return;
+    }
+
+    res.json(success(updated));
+  } catch (err) {
+    console.error('[skill] Failed to toggle skill:', err);
+    res.status(500).json(error(500, 'Failed to toggle skill'));
+  }
+});
+
+/**
+ * GET /api/v1/skills/export
+ * 导出所有 Skills 为 JSON 下载（仅管理员）
+ */
+router.get('/export', requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const skills = await skillService.getAllSkills();
+    const json = JSON.stringify(skills, null, 2);
+    const filename = `skills-export-${new Date().toISOString().slice(0, 10)}.json`;
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', Buffer.byteLength(json));
+    res.send(json);
+  } catch (err) {
+    console.error('[skill] Failed to export skills:', err);
+    res.status(500).json(error(500, 'Failed to export skills'));
+  }
+});
+
+/**
+ * POST /api/v1/skills/import
+ * 批量导入 Skills（JSON，仅管理员）
+ */
+router.post('/import', requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const body = req.body;
+
+    // 支持两种格式：{ skills: [...] } 或直接数组 [...]
+    const items: unknown[] = Array.isArray(body) ? body : body.skills;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      res.status(400).json(error(400, 'Request body must be a JSON array of skills or { skills: [...] }'));
+      return;
+    }
+
+    const createdBy = req.user?.id || 'import';
+    const results: { name: string; id?: string; error?: string }[] = [];
+
+    for (const item of items) {
+      if (!item || typeof item !== 'object') {
+        results.push({ name: 'unknown', error: 'Invalid item: not an object' });
+        continue;
+      }
+
+      const skillData = item as Record<string, unknown>;
+
+      // 验证必填字段
+      if (!skillData.name || !skillData.displayName || !skillData.description || !skillData.category || !skillData.content) {
+        results.push({ name: String(skillData.name || 'unknown'), error: 'Missing required fields' });
+        continue;
+      }
+
+      // 验证名称格式
+      if (!/^[a-zA-Z0-9_-]+$/.test(String(skillData.name))) {
+        results.push({ name: String(skillData.name), error: 'Invalid name format' });
+        continue;
+      }
+
+      try {
+        const created = await skillService.createSkill(
+          {
+            name: String(skillData.name),
+            displayName: String(skillData.displayName),
+            description: String(skillData.description),
+            category: String(skillData.category),
+            content: String(skillData.content),
+            filePath: skillData.filePath as CreateSkillParams['filePath'],
+            applicableAgents: skillData.applicableAgents as CreateSkillParams['applicableAgents'] || [],
+            tags: skillData.tags as CreateSkillParams['tags'] || [],
+            version: String(skillData.version || '1.0.0'),
+            projectId: skillData.projectId as CreateSkillParams['projectId'],
+          },
+          createdBy
+        );
+        results.push({ name: created.name, id: created.id });
+      } catch (err) {
+        results.push({ name: String(skillData.name), error: err instanceof Error ? err.message : 'Unknown error' });
+      }
+    }
+
+    const succeeded = results.filter(r => !r.error).length;
+    const failed = results.filter(r => r.error).length;
+
+    res.json(success({
+      total: items.length,
+      succeeded,
+      failed,
+      results,
+    }));
+  } catch (err) {
+    console.error('[skill] Failed to import skills:', err);
+    res.status(500).json(error(500, 'Failed to import skills'));
+  }
+});
+
 export default router;
