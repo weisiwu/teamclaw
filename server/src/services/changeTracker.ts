@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 
 const VERSIONS_BASE_DIR = path.join(process.env.HOME || '/root', '.openclaw/versions');
 
@@ -69,14 +69,24 @@ export function parseGitLog(gitLogOutput: string): CommitInfo[] {
 }
 
 /**
+ * Validate git ref name to prevent command injection
+ */
+function validateGitRef(ref: string): void {
+  if (!/^[\w\-\.\/]+$/.test(ref)) {
+    throw new Error(`Invalid git ref: ${ref}`);
+  }
+}
+
+/**
  * Get file changes between commits or for a tag
  */
 export function getFileChanges(repoPath: string, fromRef: string, toRef: string = 'HEAD'): FileChange[] {
   try {
-    const output = execSync(
-      `git diff --numstat ${fromRef}..${toRef}`,
-      { cwd: repoPath, encoding: 'utf-8', timeout: 10000 }
-    );
+    validateGitRef(fromRef);
+    validateGitRef(toRef);
+    const output = execFileSync('git', ['diff', '--numstat', `${fromRef}..${toRef}`], {
+      cwd: repoPath, encoding: 'utf-8', timeout: 10000
+    });
 
     return output.trim().split('\n').filter(Boolean).map(line => {
       const [additions, deletions, ...pathParts] = line.split('\t');
@@ -191,27 +201,30 @@ export async function generateVersionChangelog(
 
   try {
     // Get commits since last tag
-    const lastTagRef = execSync(
-      `git rev-list --tags-order-by-version --max-count=1 --exclude=${versionTag} HEAD~10..HEAD 2>/dev/null | tail -1 || echo ''`,
-      { cwd: repoPath, encoding: 'utf-8', timeout: 10000 }
-    ).trim();
+    validateGitRef(versionTag);
+    const lastTagRef = execFileSync('git', ['rev-list', '--tags-order-by-version', '--max-count=1', `--exclude=${versionTag}`, 'HEAD~10..HEAD'], {
+      cwd: repoPath, encoding: 'utf-8', timeout: 10000
+    }).toString().trim();
 
     const range = lastTagRef ? `${lastTagRef}..${versionTag}` : `${versionTag}~10..${versionTag}`;
 
-    const logOutput = execSync(
-      `git log ${range} --pretty=format:"%H%n%an  %ae  %ad%n%s%n%b" --date=iso`,
-      { cwd: repoPath, encoding: 'utf-8', timeout: 10000 }
-    );
+    // Validate range parts
+    for (const part of range.split('..')) {
+      const refBase = part.replace(/~\d+$/, '');
+      if (refBase) validateGitRef(refBase);
+    }
+    const logOutput = execFileSync('git', ['log', range, '--pretty=format:%H%n%an  %ae  %ad%n%s%n%b', '--date=iso'], {
+      cwd: repoPath, encoding: 'utf-8', timeout: 10000
+    });
     commits = parseGitLog(logOutput as string);
 
     fileChanges = getFileChanges(repoPath, lastTagRef || `${versionTag}~10`, versionTag);
   } catch {
     // Fallback: try to get log for this tag specifically
     try {
-      const logOutput = execSync(
-        `git log ${versionTag}~5..${versionTag} --pretty=format:"%H%n%an  %ae  %ad%n%s%n%b" --date=iso`,
-        { cwd: repoPath, encoding: 'utf-8', timeout: 10000 }
-      );
+      const logOutput = execFileSync('git', ['log', `${versionTag}~5..${versionTag}`, '--pretty=format:%H%n%an  %ae  %ad%n%s%n%b', '--date=iso'], {
+        cwd: repoPath, encoding: 'utf-8', timeout: 10000
+      });
       commits = parseGitLog(logOutput as string);
     } catch {
       // No commits found

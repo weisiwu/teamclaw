@@ -7,6 +7,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync, execFileSync } from 'child_process';
 
+/**
+ * Validate projectPath does not contain shell metacharacters
+ */
+function validateProjectPath(projectPath: string): void {
+  if (/[;&|`$\\<>]/.test(projectPath)) {
+    throw new Error(`Invalid projectPath: contains shell metacharacters`);
+  }
+}
+
 export type CodeChangeAction = 'create' | 'modify' | 'delete';
 
 export interface CodeChange {
@@ -173,9 +182,10 @@ export async function commitChanges(
   authorName?: string,
   authorEmail?: string
 ): Promise<CommitResult> {
+  validateProjectPath(projectPath);
   try {
     // 添加所有变更
-    execSync('git add -A', { cwd: projectPath, encoding: 'utf-8', stdio: 'pipe' });
+    execFileSync('git', ['add', '-A'], { cwd: projectPath, encoding: 'utf-8', stdio: 'pipe' });
 
     // 配置 author（如果提供）
     const env: Record<string, string> = {};
@@ -191,7 +201,7 @@ export async function commitChanges(
     });
 
     // 获取 commit hash
-    const hash = execSync('git rev-parse HEAD', {
+    const hash = execFileSync('git', ['rev-parse', 'HEAD'], {
       cwd: projectPath,
       encoding: 'utf-8',
       stdio: 'pipe',
@@ -200,7 +210,7 @@ export async function commitChanges(
       .trim();
 
     // 获取本次提交涉及的文件
-    const files = execSync('git diff --name-only HEAD~1..HEAD', {
+    const files = execFileSync('git', ['diff', '--name-only', 'HEAD~1..HEAD'], {
       cwd: projectPath,
       encoding: 'utf-8',
       stdio: 'pipe',
@@ -219,8 +229,9 @@ export async function commitChanges(
  * 检查工作目录是否有未提交的变更
  */
 export function hasUncommittedChanges(projectPath: string): boolean {
+  validateProjectPath(projectPath);
   try {
-    const result = execSync('git status --porcelain', {
+    const result = execFileSync('git', ['status', '--porcelain'], {
       cwd: projectPath,
       encoding: 'utf-8',
       stdio: 'pipe',
@@ -235,8 +246,9 @@ export function hasUncommittedChanges(projectPath: string): boolean {
  * 获取当前工作目录的 Git 状态摘要
  */
 export function getGitStatus(projectPath: string): string {
+  validateProjectPath(projectPath);
   try {
-    return execSync('git status --short', {
+    return execFileSync('git', ['status', '--short'], {
       cwd: projectPath,
       encoding: 'utf-8',
       stdio: 'pipe',

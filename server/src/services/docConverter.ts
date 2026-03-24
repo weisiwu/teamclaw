@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { execFileSync } from 'child_process';
 
 export interface ConvertedDoc {
   originalPath: string;
@@ -243,14 +244,13 @@ ${slideHtmls}
  */
 async function extractPptxText(filePath: string): Promise<string[]> {
   const slides: string[] = [];
-  const { execSync } = await import('child_process');
 
   // Unzip to temp dir
   const tmpDir = path.join('/tmp', `pptx_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`);
   fs.mkdirSync(tmpDir, { recursive: true });
 
   try {
-    execSync(`unzip -o "${filePath}" -d "${tmpDir}"`, { stdio: 'pipe' });
+    execFileSync('unzip', ['-o', filePath, '-d', tmpDir], { stdio: 'pipe' });
 
     // Find all slide XMLs
     const pptDir = path.join(tmpDir, 'ppt');
