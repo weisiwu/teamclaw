@@ -192,8 +192,10 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   // 401 时自动跳转登录
   if (res.status === 401 && typeof window !== 'undefined') {
     localStorage.removeItem('teamclaw_token');
-    localStorage.removeItem('teamclaw_user_id');
-    localStorage.removeItem('teamclaw_user_role');
+    localStorage.removeItem('teamclaw_refresh_token');
+    localStorage.removeItem('tc_user_id');
+    localStorage.removeItem('tc_user_role');
+    localStorage.removeItem('tc_user_name');
     window.location.href = '/login';
   }
 

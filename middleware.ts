@@ -114,9 +114,8 @@ export const config = {
    * fixing the previous issue of broad /api/* matching.
    */
   matcher: [
-    // Protected app pages — negative lookahead excludes public prefixes
-    '/((?!login|api|_next|public|favicon\\.ico).*)',
-    // Protected API routes — explicit module list (no catch-all)
+    // Protected API routes only — explicit module list (no catch-all)
+    // Page-level auth is handled client-side by useAuth hook / RequireAuth component
     '/api/v1/(agents|branches|dashboard|doc|llm|message|project|search|tag|tasks|token-stats|audit-log|version-bump|version-change-stats|version-diff|version-rollback|version-settings|version-tag|versions)/',
   ],
 };

@@ -6,8 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2 } from 'lucide-react';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9700';
-
 export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState('');
@@ -21,7 +19,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
+      const res = await fetch('/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -29,7 +27,7 @@ export default function LoginPage() {
 
       const data = await res.json();
 
-      if (!res.ok || data.code !== 0) {
+      if (!res.ok || !data.success) {
         setError(data.message || '登录失败');
         setLoading(false);
         return;
@@ -40,8 +38,9 @@ export default function LoginPage() {
       // Store tokens in localStorage
       localStorage.setItem('teamclaw_token', token);
       localStorage.setItem('teamclaw_refresh_token', refreshToken);
-      localStorage.setItem('teamclaw_user_id', user.id);
-      localStorage.setItem('teamclaw_user_role', user.role);
+      localStorage.setItem('tc_user_id', user.id);
+      localStorage.setItem('tc_user_role', user.role);
+      localStorage.setItem('tc_user_name', user.name || user.username || 'Unknown');
 
       router.push('/');
     } catch {
