@@ -105,7 +105,7 @@ const getStatusIcon = (status: TaskStatus) => {
     case "completed": return <CheckCircle className="w-4 h-4 text-green-500" />;
     case "in_progress": return <PlayCircle className="w-4 h-4 text-blue-500" />;
     case "cancelled": return <XCircle className="w-4 h-4 text-red-500" />;
-    default: return <AlertCircle className="w-4 h-4 text-gray-400 dark:text-gray-500 dark:text-gray-400" />;
+    default: return <AlertCircle className="w-4 h-4 text-gray-400 dark:text-gray-400" />;
   }
 };
 
@@ -273,7 +273,7 @@ const TaskCard = React.memo(function TaskCard({
           <div className="flex items-start gap-3">
             <button
               onClick={() => onSelect(task.id, !isSelected)}
-              className="mt-1 text-gray-400 dark:text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 dark:text-gray-300"
+              className="mt-1 text-gray-400 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 dark:text-gray-300"
             >
               {isSelected ? (
                 <CheckSquare className="w-5 h-5 text-blue-500" />

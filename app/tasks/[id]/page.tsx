@@ -45,7 +45,7 @@ const getStatusIcon = (status: TaskStatus) => {
     case "completed": return <CheckCircle className="w-5 h-5 text-green-500" />;
     case "in_progress": return <PlayCircle className="w-5 h-5 text-blue-500" />;
     case "cancelled": return <XCircle className="w-5 h-5 text-red-500" />;
-    default: return <AlertCircle className="w-5 h-5 text-gray-400 dark:text-gray-500 dark:text-gray-400" />;
+    default: return <AlertCircle className="w-5 h-5 text-gray-400 dark:text-gray-400" />;
   }
 };
 
@@ -452,7 +452,7 @@ export default function TaskDetailPage({
                   <div className="flex justify-between items-start">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm">{comment.author}</span>
-                      <span className="text-xs text-gray-400 dark:text-gray-500 dark:text-gray-400">{comment.createdAt}</span>
+                      <span className="text-xs text-gray-400 dark:text-gray-400">{comment.createdAt}</span>
                     </div>
                     <Button
                       variant="ghost"
