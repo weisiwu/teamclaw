@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from 'next/server';
 
-const SERVER_URL = process.env.SERVER_URL || "http://localhost:9700";
+const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9700';
 
 /**
  * GET /api/v1/build/artifacts/[versionId]
@@ -12,11 +12,11 @@ export async function GET(
 ) {
   const { versionId } = await params;
   const { searchParams } = new URL(request.url);
-  const buildNumber = searchParams.get("buildNumber");
+  const buildNumber = searchParams.get('buildNumber');
 
   if (!versionId) {
     return NextResponse.json(
-      { code: 400, message: "Missing versionId parameter" },
+      { code: 400, message: 'Missing versionId parameter', data: null },
       { status: 400 }
     );
   }
@@ -24,7 +24,7 @@ export async function GET(
   // Validate versionId format to prevent path traversal
   if (!/^[a-zA-Z0-9_.-]+$/.test(versionId)) {
     return NextResponse.json(
-      { code: 400, message: "Invalid versionId format" },
+      { code: 400, message: 'Invalid versionId format', data: null },
       { status: 400 }
     );
   }
@@ -35,13 +35,13 @@ export async function GET(
       : `${SERVER_URL}/api/v1/artifacts/${encodeURIComponent(versionId)}`;
 
     const response = await fetch(url, {
-      headers: { "Content-Type": "application/json" },
+      headers: { 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(5000),
     });
 
     if (!response.ok) {
       return NextResponse.json(
-        { code: response.status, message: "Failed to fetch artifacts from server" },
+        { code: response.status, message: 'Failed to fetch artifacts from server', data: null },
         { status: response.status }
       );
     }
@@ -50,16 +50,16 @@ export async function GET(
     return NextResponse.json({ code: 0, data });
   } catch (error: unknown) {
     const err = error as { name?: string; message?: string };
-    if (err.name === "TimeoutError" || err.message?.includes("timeout")) {
+    if (err.name === 'TimeoutError' || err.message?.includes('timeout')) {
       console.error(`[ArtifactsProxy] Timeout reaching ${SERVER_URL}:`, error);
       return NextResponse.json(
-        { code: 504, message: "Artifact server timeout, please retry later" },
+        { code: 504, message: 'Artifact server timeout, please retry later', data: null },
         { status: 504 }
       );
     }
-    console.error("[ArtifactsProxy] Error:", error);
+    console.error('[ArtifactsProxy] Error:', error);
     return NextResponse.json(
-      { code: 503, message: "Artifact server unreachable" },
+      { code: 503, message: 'Artifact server unreachable', data: null },
       { status: 503 }
     );
   }
@@ -77,7 +77,7 @@ export async function DELETE(
 
   if (!versionId) {
     return NextResponse.json(
-      { code: 400, message: "Missing versionId parameter" },
+      { code: 400, message: 'Missing versionId parameter', data: null },
       { status: 400 }
     );
   }
@@ -85,7 +85,7 @@ export async function DELETE(
   // Only allow alphanumeric, dash, underscore, dot (prevent path traversal)
   if (!/^[a-zA-Z0-9_.-]+$/.test(versionId)) {
     return NextResponse.json(
-      { code: 400, message: "Invalid versionId format" },
+      { code: 400, message: 'Invalid versionId format', data: null },
       { status: 400 }
     );
   }
@@ -93,15 +93,19 @@ export async function DELETE(
   try {
     const url = `${SERVER_URL}/api/v1/artifacts/${encodeURIComponent(versionId)}`;
     const response = await fetch(url, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(5000),
     });
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
       return NextResponse.json(
-        { code: response.status, message: errData.message || "Failed to delete artifacts" },
+        {
+          code: response.status,
+          message: errData.message || 'Failed to delete artifacts',
+          data: null,
+        },
         { status: response.status }
       );
     }
@@ -110,16 +114,16 @@ export async function DELETE(
     return NextResponse.json({ code: 0, data });
   } catch (error: unknown) {
     const err = error as { name?: string; message?: string };
-    if (err.name === "TimeoutError" || err.message?.includes("timeout")) {
+    if (err.name === 'TimeoutError' || err.message?.includes('timeout')) {
       console.error(`[ArtifactsProxy] DELETE timeout reaching ${SERVER_URL}:`, error);
       return NextResponse.json(
-        { code: 504, message: "Artifact server timeout, please retry later" },
+        { code: 504, message: 'Artifact server timeout, please retry later', data: null },
         { status: 504 }
       );
     }
-    console.error("[ArtifactsProxy] DELETE Error:", error);
+    console.error('[ArtifactsProxy] DELETE Error:', error);
     return NextResponse.json(
-      { code: 503, message: "Artifact server unreachable" },
+      { code: 503, message: 'Artifact server unreachable', data: null },
       { status: 503 }
     );
   }

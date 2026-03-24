@@ -1,14 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from 'next/server';
 
 /** Backend server URL — proxy to the Node.js backend on port 9700 */
-const BACKEND_URL = process.env.BACKEND_API_URL || "http://localhost:9700";
+const BACKEND_URL = process.env.BACKEND_API_URL || 'http://localhost:9700';
 
 /** CORS headers for cross-origin API access */
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Request-ID",
-  "Access-Control-Max-Age": "86400",
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Request-ID',
+  'Access-Control-Max-Age': '86400',
 };
 
 /** Generate a short unique request ID */
@@ -29,11 +29,11 @@ async function proxyToBackend(
   const requestId = generateRequestId();
   try {
     const headers: HeadersInit = {
-      "Content-Type": req.headers.get("content-type") || "application/json",
-      "X-Request-ID": requestId,
+      'Content-Type': req.headers.get('content-type') || 'application/json',
+      'X-Request-ID': requestId,
     };
-    const auth = req.headers.get("authorization");
-    if (auth) headers["Authorization"] = auth;
+    const auth = req.headers.get('authorization');
+    if (auth) headers['Authorization'] = auth;
 
     const fetchOptions: RequestInit = {
       method: options.method || req.method,
@@ -41,7 +41,7 @@ async function proxyToBackend(
     };
     if (options.body !== undefined) {
       fetchOptions.body = options.body;
-    } else if (req.method !== "GET" && req.method !== "HEAD") {
+    } else if (req.method !== 'GET' && req.method !== 'HEAD') {
       // Clone body for POST/PUT/DELETE
       const clone = req.clone();
       fetchOptions.body = await clone.text();
@@ -53,13 +53,13 @@ async function proxyToBackend(
       status: resp.status,
       headers: {
         ...corsHeaders,
-        "Content-Type": resp.headers.get("content-type") || "application/json",
+        'Content-Type': resp.headers.get('content-type') || 'application/json',
       },
     });
   } catch (err) {
     console.error(`[timeline proxy] Failed to reach backend at ${url}:`, err);
     return NextResponse.json(
-      { code: 503, message: "Backend server unavailable", requestId },
+      { code: 503, message: 'Backend server unavailable', data: null },
       { status: 503, headers: corsHeaders }
     );
   }
@@ -69,14 +69,11 @@ async function proxyToBackend(
  * GET /api/v1/versions/[id]/timeline
  * Proxy to backend: GET /api/v1/versions/:id/timeline
  */
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!id || id.trim() === "") {
+  if (!id || id.trim() === '') {
     return NextResponse.json(
-      { code: 400, message: "版本 ID 不能为空" },
+      { code: 400, message: '版本 ID 不能为空', data: null },
       { status: 400, headers: corsHeaders }
     );
   }
@@ -87,20 +84,17 @@ export async function GET(
  * POST /api/v1/versions/[id]/timeline
  * Proxy to backend: POST /api/v1/versions/:id/events (add manual note)
  */
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!id || id.trim() === "") {
+  if (!id || id.trim() === '') {
     return NextResponse.json(
-      { code: 400, message: "版本 ID 不能为空" },
+      { code: 400, message: '版本 ID 不能为空', data: null },
       { status: 400, headers: corsHeaders }
     );
   }
   const body = await req.json();
   return proxyToBackend(req, `/api/v1/versions/${id}/events`, {
-    method: "POST",
+    method: 'POST',
     body: JSON.stringify(body),
   });
 }

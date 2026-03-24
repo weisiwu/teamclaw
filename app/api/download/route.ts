@@ -15,27 +15,23 @@ import {
  * Rate limited: 30 req/min per IP (public tier)
  */
 export async function GET(request: NextRequest) {
-  const requestId = request.headers.get("X-Request-ID") || generateRequestId();
+  const requestId = request.headers.get('X-Request-ID') || generateRequestId();
 
   // Apply public rate limiting
-  const { allowed, resetMs } = checkRateLimit(
-    getRateLimitIdentifier(request),
-    "public"
-  );
+  const { allowed, resetMs } = checkRateLimit(getRateLimitIdentifier(request), 'public');
   if (!allowed) {
     return NextResponse.json(
       {
         code: 429,
         message: `请求过于频繁，请 ${Math.ceil(resetMs / 1000)} 秒后重试`,
-        requestId,
-        remaining: 0,
+        data: null,
       },
       {
         status: 429,
         headers: {
           ...corsHeaders,
-          "Retry-After": String(Math.ceil(resetMs / 1000)),
-          "X-RateLimit-Remaining": "0",
+          'Retry-After': String(Math.ceil(resetMs / 1000)),
+          'X-RateLimit-Remaining': '0',
         },
       }
     );
@@ -46,7 +42,7 @@ export async function GET(request: NextRequest) {
 
   if (!slug) {
     return NextResponse.json(
-      { code: 400, message: 'Missing slug parameter', requestId },
+      { code: 400, message: 'Missing slug parameter', data: null },
       { status: 400 }
     );
   }
@@ -54,7 +50,7 @@ export async function GET(request: NextRequest) {
   // 安全检查：只允许字母、数字、连字符、下划线
   if (!/^[a-zA-Z0-9_-]+$/.test(slug)) {
     return NextResponse.json(
-      { code: 400, message: 'Invalid slug format', requestId },
+      { code: 400, message: 'Invalid slug format', data: null },
       { status: 400 }
     );
   }
@@ -67,7 +63,7 @@ export async function GET(request: NextRequest) {
     const stat = await fs.stat(filePath);
     if (!stat.isFile()) {
       return NextResponse.json(
-        { code: 404, message: 'Document not found', requestId },
+        { code: 404, message: 'Document not found', data: null },
         { status: 404 }
       );
     }
@@ -85,13 +81,13 @@ export async function GET(request: NextRequest) {
   } catch (error: unknown) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return NextResponse.json(
-        { code: 404, message: 'Document not found', requestId },
+        { code: 404, message: 'Document not found', data: null },
         { status: 404 }
       );
     }
     console.error('[Download] Error:', error);
     return NextResponse.json(
-      { code: 500, message: 'Failed to read document', requestId },
+      { code: 500, message: 'Failed to read document', data: null },
       { status: 500 }
     );
   }
