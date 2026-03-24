@@ -1,11 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { API_BASE, delay, autoBumpVersion } from "./versionShared";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { API_BASE, delay, autoBumpVersion } from './versionShared';
 import {
   Version,
-  VersionChangelog,
   ChangelogResponse,
   GenerateChangelogRequest,
-  ChangelogChange,
   VersionSummary,
   VersionSummaryVector,
   VectorSearchResult,
@@ -16,41 +14,10 @@ import {
   TimelineEvent,
   TimelineResponse,
   VersionBumpType,
-} from "./types";
+} from './types';
 
-// ========== Mock 变更摘要数据 ==========
-const mockChangelogs: VersionChangelog[] = [
-  {
-    id: "cl-1",
-    versionId: "v1",
-    title: "v1.0.0 变更日志",
-    content: "初始版本发布，包含核心功能",
-    changes: [
-      { type: "feature", description: "任务管理基础功能", files: ["app/tasks/page.tsx", "lib/api/tasks.ts"] },
-      { type: "feature", description: "用户认证系统", files: ["app/auth/page.tsx", "lib/auth.ts"] },
-      { type: "improvement", description: "优化页面加载性能", files: [] },
-    ],
-    generatedAt: "2026-01-15T10:00:00Z",
-    generatedBy: "system",
-  },
-  {
-    id: "cl-2",
-    versionId: "v2",
-    title: "v1.1.0 变更日志",
-    content: "任务管理增强版本",
-    changes: [
-      { type: "feature", description: "新增任务筛选功能", files: ["components/TaskFilter.tsx"] },
-      { type: "feature", description: "新增任务排序功能", files: ["components/TaskSort.tsx"] },
-      { type: "fix", description: "修复任务详情页加载慢的问题", files: ["app/tasks/[id]/page.tsx"] },
-    ],
-    generatedAt: "2026-02-01T14:30:00Z",
-    generatedBy: "system",
-  },
-];
-
-// ========== Mock 升级配置数据 ==========
-const mockUpgradeConfigs: VersionUpgradeConfig[] = [];
-const mockUpgradeHistory: UpgradeHistoryRecord[] = [];
+// NOTE: Mock data has been removed. API calls now properly throw errors instead of
+// silently falling back to fake data, ensuring users see real error states.
 
 // ========== 版本向量搜索 API ==========
 
@@ -130,7 +97,7 @@ function simpleHash(text: string): string {
   let hash = 0;
   for (let i = 0; i < text.length; i++) {
     const char = text.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash;
   }
   return Math.abs(hash).toString(16);
@@ -138,8 +105,18 @@ function simpleHash(text: string): string {
 
 // 文本相似度计算
 function calculateSimilarity(text1: string, text2: string): number {
-  const words1 = new Set(text1.toLowerCase().split(/\s+/).filter(w => w.length > 2));
-  const words2 = new Set(text2.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+  const words1 = new Set(
+    text1
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(w => w.length > 2)
+  );
+  const words2 = new Set(
+    text2
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(w => w.length > 2)
+  );
 
   if (words1.size === 0 || words2.size === 0) return 0;
 
@@ -245,65 +222,28 @@ export function deleteVersionVector(versionId: string): void {
 // ========== 变更摘要 API 函数 ==========
 
 export async function getVersionChangelog(versionId: string): Promise<ChangelogResponse | null> {
-  try {
-    const res = await fetch(`${API_BASE}/versions/${versionId}/summary`);
-    if (res.status === 404) return null;
-    const json = await res.json();
-    if (json.code === 200 || json.code === 0) {
-      return { data: json.data };
-    }
-    throw new Error(json.message || '获取变更摘要失败');
-  } catch (err) {
-    console.warn('[Changelog API] Using fallback:', err);
-    const changelog = mockChangelogs.find((c) => c.versionId === versionId);
-    if (!changelog) return null;
-    return { data: changelog };
+  const res = await fetch(`${API_BASE}/versions/${versionId}/summary`);
+  if (res.status === 404) return null;
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) {
+    return { data: json.data };
   }
+  throw new Error(json.message || '获取变更摘要失败');
 }
 
 export async function generateChangelog(
   request: GenerateChangelogRequest
 ): Promise<ChangelogResponse> {
-  try {
-    const res = await fetch(`${API_BASE}/versions/${request.versionId}/summary/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
-    });
-    const json = await res.json();
-    if (json.code === 200 || json.code === 0) {
-      return { data: json.data };
-    }
-    throw new Error(json.message || '生成变更摘要失败');
-  } catch (err) {
-    console.warn('[Changelog API] Generate failed, using fallback:', err);
-    // Need mockVersions here - this function is called from versionSummary.ts
-    // but needs version data. We'll use a simplified approach.
-    const mockChanges: ChangelogChange[] = [
-      { type: "feature", description: "新增功能模块", files: [] },
-      { type: "improvement", description: "优化用户体验", files: [] },
-      { type: "fix", description: "修复已知问题", files: [] },
-    ];
-
-    const newChangelog: VersionChangelog = {
-      id: `cl-${Date.now()}`,
-      versionId: request.versionId,
-      title: request.title || `版本变更日志`,
-      content: `版本变更日志`,
-      changes: mockChanges,
-      generatedAt: new Date().toISOString(),
-      generatedBy: "system",
-    };
-
-    const existingIndex = mockChangelogs.findIndex((c) => c.versionId === request.versionId);
-    if (existingIndex >= 0) {
-      mockChangelogs[existingIndex] = newChangelog;
-    } else {
-      mockChangelogs.unshift(newChangelog);
-    }
-
-    return { data: newChangelog };
+  const res = await fetch(`${API_BASE}/versions/${request.versionId}/summary/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) {
+    return { data: json.data };
   }
+  throw new Error(json.message || '生成变更摘要失败');
 }
 
 // ========== 版本摘要保存函数 ==========
@@ -319,21 +259,16 @@ export async function saveVersionSummary(
     createdBy?: string;
   }
 ): Promise<VersionSummary | null> {
-  try {
-    const res = await fetch(`${API_BASE}/versions/${versionId}/summary`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    const json = await res.json();
-    if (json.code === 200 || json.code === 0) {
-      return json.data;
-    }
-    throw new Error(json.message || '保存变更摘要失败');
-  } catch (err) {
-    console.warn('[Summary API] Save failed:', err);
-    return null;
+  const res = await fetch(`${API_BASE}/versions/${versionId}/summary`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (json.code === 200 || json.code === 0) {
+    return json.data;
   }
+  throw new Error(json.message || '保存变更摘要失败');
 }
 
 export async function refreshVersionSummary(
@@ -415,7 +350,8 @@ export async function previewUpgrade(versionId: string): Promise<UpgradePreview>
     const config = await getUpgradeConfig(versionId);
     const bumpType = config?.bumpType || 'patch';
     const currentVersion = 'v1.0.0'; // fallback when version data not available
-    const effectiveBumpType: VersionBumpType = bumpType === 'custom' ? 'patch' : (bumpType as VersionBumpType);
+    const effectiveBumpType: VersionBumpType =
+      bumpType === 'custom' ? 'patch' : (bumpType as VersionBumpType);
     const newVersion = autoBumpVersion(currentVersion, effectiveBumpType);
     return {
       currentVersion,
@@ -434,9 +370,7 @@ export async function previewUpgrade(versionId: string): Promise<UpgradePreview>
       currentVersion,
       newVersion,
       bumpType: 'patch',
-      changes: [
-        { field: 'version', oldValue: currentVersion, newValue: newVersion },
-      ],
+      changes: [{ field: 'version', oldValue: currentVersion, newValue: newVersion }],
     };
   }
 }
@@ -446,7 +380,9 @@ export async function getUpgradeHistory(versionId: string): Promise<UpgradeHisto
   return mockUpgradeHistory.filter(h => h.versionId === versionId);
 }
 
-export async function addUpgradeRecord(record: Omit<UpgradeHistoryRecord, 'id' | 'timestamp'>): Promise<UpgradeHistoryRecord> {
+export async function addUpgradeRecord(
+  record: Omit<UpgradeHistoryRecord, 'id' | 'timestamp'>
+): Promise<UpgradeHistoryRecord> {
   await delay(50);
   const newRecord: UpgradeHistoryRecord = {
     ...record,
@@ -552,7 +488,9 @@ export async function searchVersionsInChroma(
   query: string,
   limit: number = 5
 ): Promise<SimilarVersionResult[]> {
-  const res = await fetch(`${API_BASE}/versions/vector/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+  const res = await fetch(
+    `${API_BASE}/versions/vector/search?q=${encodeURIComponent(query)}&limit=${limit}`
+  );
   const json = await res.json();
   if (json.code === 200 || json.code === 0) return json.data.results;
   throw new Error(json.message || '向量搜索失败');
@@ -610,18 +548,25 @@ export function useRefreshVersionSummary() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ versionId, commitLog, branchName }: { versionId: string; commitLog?: string; branchName?: string }) =>
-      refreshVersionSummary(versionId, commitLog, branchName),
+    mutationFn: ({
+      versionId,
+      commitLog,
+      branchName,
+    }: {
+      versionId: string;
+      commitLog?: string;
+      branchName?: string;
+    }) => refreshVersionSummary(versionId, commitLog, branchName),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["versionChangelog", variables.versionId] });
-      queryClient.invalidateQueries({ queryKey: ["versions", variables.versionId] });
+      queryClient.invalidateQueries({ queryKey: ['versionChangelog', variables.versionId] });
+      queryClient.invalidateQueries({ queryKey: ['versions', variables.versionId] });
     },
   });
 }
 
 export function useVersionChangelog(versionId: string) {
   return useQuery({
-    queryKey: ["versionChangelog", versionId],
+    queryKey: ['versionChangelog', versionId],
     queryFn: () => getVersionChangelog(versionId),
     enabled: !!versionId,
   });
@@ -633,14 +578,14 @@ export function useGenerateChangelog() {
   return useMutation({
     mutationFn: (request: GenerateChangelogRequest) => generateChangelog(request),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["versionChangelog", variables.versionId] });
+      queryClient.invalidateQueries({ queryKey: ['versionChangelog', variables.versionId] });
     },
   });
 }
 
 export function useUpgradeConfig(versionId: string) {
   return useQuery({
-    queryKey: ["upgradeConfig", versionId],
+    queryKey: ['upgradeConfig', versionId],
     queryFn: () => getUpgradeConfig(versionId),
     enabled: !!versionId,
   });
@@ -650,10 +595,15 @@ export function useUpdateUpgradeConfig() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ versionId, config }: { versionId: string; config: Partial<VersionUpgradeConfig> }) =>
-      updateUpgradeConfig(versionId, config),
+    mutationFn: ({
+      versionId,
+      config,
+    }: {
+      versionId: string;
+      config: Partial<VersionUpgradeConfig>;
+    }) => updateUpgradeConfig(versionId, config),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["upgradeConfig", variables.versionId] });
+      queryClient.invalidateQueries({ queryKey: ['upgradeConfig', variables.versionId] });
     },
   });
 }
@@ -666,7 +616,7 @@ export function usePreviewUpgrade() {
 
 export function useUpgradeHistory(versionId: string) {
   return useQuery({
-    queryKey: ["upgradeHistory", versionId],
+    queryKey: ['upgradeHistory', versionId],
     queryFn: () => getUpgradeHistory(versionId),
     enabled: !!versionId,
   });
@@ -674,14 +624,14 @@ export function useUpgradeHistory(versionId: string) {
 
 export function useVersionVectors() {
   return useQuery({
-    queryKey: ["versionVectors"],
+    queryKey: ['versionVectors'],
     queryFn: () => getVersionVectors(),
   });
 }
 
 export function useSearchVersions(query: string, enabled: boolean = true) {
   return useQuery({
-    queryKey: ["searchVersions", query],
+    queryKey: ['searchVersions', query],
     queryFn: () => searchVersionsByVector(query),
     enabled: enabled && query.length > 0,
   });
@@ -689,7 +639,7 @@ export function useSearchVersions(query: string, enabled: boolean = true) {
 
 export function useSimilarVersions(versionId: string, limit: number = 5) {
   return useQuery({
-    queryKey: ["similarVersions", versionId, limit],
+    queryKey: ['similarVersions', versionId, limit],
     queryFn: () => findSimilarVersions(versionId, limit),
     enabled: !!versionId,
   });
@@ -738,8 +688,15 @@ export function useDeleteTimelineEvent() {
 export function useUpdateTimelineEvent() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ versionId, eventId, data }: { versionId: string; eventId: string; data: { note: string } }) =>
-      updateTimelineEvent(versionId, eventId, data),
+    mutationFn: ({
+      versionId,
+      eventId,
+      data,
+    }: {
+      versionId: string;
+      eventId: string;
+      data: { note: string };
+    }) => updateTimelineEvent(versionId, eventId, data),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['versionTimeline', variables.versionId] });
     },
