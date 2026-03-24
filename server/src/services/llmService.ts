@@ -5,7 +5,7 @@
  */
 
 // Inline model config (avoid cross-module import from server/src)
-type ModelTier = 'light' | 'medium' | 'strong';
+export type ModelTier = 'light' | 'medium' | 'strong';
 interface ModelConfig {
   name: string;
   apiKeyEnv: string;

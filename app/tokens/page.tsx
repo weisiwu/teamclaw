@@ -100,7 +100,8 @@ function TokensContent() {
 
   // 新增：用量统计 API
   const { data: tokenUsageData, isLoading: tokenUsageLoading } = useTokenUsageSummary();
-  const { data: agentUsageData, isLoading: agentUsageLoading } = useAgentTokenUsage();
+  const [agentFilters, setAgentFilters] = useState<TokenUsageFilters>({});
+  const { data: agentUsageData, isLoading: agentUsageLoading } = useAgentTokenUsage(agentFilters);
   const { data: llmCallsData, isLoading: llmCallsLoading } = useLLMCallLogs(callFilters);
 
   // 刷新数据
@@ -277,6 +278,8 @@ function TokensContent() {
           <TokenUsageByAgent
             data={agentUsageData?.data}
             isLoading={agentUsageLoading}
+            filters={agentFilters}
+            onFiltersChange={setAgentFilters}
           />
         </div>
       )}

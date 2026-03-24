@@ -7,7 +7,7 @@ export const tokenUsageKeys = {
   all: ["tokenUsage"] as const,
   tokenSummary: () => [...tokenUsageKeys.all, "tokenSummary"] as const,
   tokenDetail: (tokenId: string) => [...tokenUsageKeys.all, "tokenDetail", tokenId] as const,
-  agentUsage: (agentName?: string) => [...tokenUsageKeys.all, "agentUsage", agentName] as const,
+  agentUsage: (filters?: TokenUsageFilters) => [...tokenUsageKeys.all, "agentUsage", filters] as const,
   llmCalls: (filters?: TokenUsageFilters) => [...tokenUsageKeys.all, "llmCalls", filters] as const,
 };
 
@@ -37,10 +37,10 @@ export function useTokenUsageDetail(tokenId: string) {
 /**
  * 获取 Agent 维度的用量统计
  */
-export function useAgentTokenUsage(agentName?: string) {
+export function useAgentTokenUsage(filters?: TokenUsageFilters) {
   return useQuery({
-    queryKey: tokenUsageKeys.agentUsage(agentName),
-    queryFn: () => tokenUsageApi.getAgentTokenUsage(agentName),
+    queryKey: tokenUsageKeys.agentUsage(filters?.agent),
+    queryFn: () => tokenUsageApi.getAgentTokenUsage(filters?.agent, filters),
     staleTime: 60000,
   });
 }

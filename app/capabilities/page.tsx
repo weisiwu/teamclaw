@@ -14,6 +14,8 @@ import {
   Zap,
   HardDrive,
   Search,
+  Upload,
+  Download,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
@@ -25,6 +27,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import { ImportDialog } from '@/components/capabilities/ImportDialog';
+import { ExportDialog } from '@/components/capabilities/ExportDialog';
 import { useTools, useCreateTool, useUpdateTool, useDeleteTool, useToggleTool } from '@/hooks/useTools';
 import { useSkills, useCreateSkill, useUpdateSkill, useDeleteSkill, useToggleSkill, useSyncSkills } from '@/hooks/useSkills';
 import type { Tool, CreateToolInput, ToolCategory, ToolSource, RiskLevel, ToolParameter } from '@/lib/api/tools';
@@ -580,6 +584,10 @@ export default function CapabilitiesPage() {
     open: false, type: 'tool', item: null,
   });
 
+  // Import/Export dialogs
+  const [importDialog, setImportDialog] = useState(false);
+  const [exportDialog, setExportDialog] = useState(false);
+
   // Data fetching
   const toolFilters = { category: toolCategory, source: toolSource, search: toolSearch };
   const skillFilters = { category: skillCategory, source: skillSource, search: skillSearch };
@@ -672,6 +680,22 @@ export default function CapabilitiesPage() {
             <p className="page-header-subtitle">管理智能体的工具和技能配置</p>
           </div>
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setImportDialog(true)}
+            >
+              <Upload className="w-4 h-4 mr-1" />
+              导入
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setExportDialog(true)}
+            >
+              <Download className="w-4 h-4 mr-1" />
+              导出
+            </Button>
             {activeTab === 'skills' && (
               <Button
                 variant="outline"
@@ -891,6 +915,20 @@ export default function CapabilitiesPage() {
         loading={deleteTarget.type === 'tool' ? deleteTool.isPending : deleteSkill.isPending}
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteTarget({ open: false, type: 'tool', item: null })}
+      />
+
+      {/* 导入弹窗 */}
+      <ImportDialog
+        open={importDialog}
+        onOpenChange={setImportDialog}
+        importType={activeTab}
+      />
+
+      {/* 导出弹窗 */}
+      <ExportDialog
+        open={exportDialog}
+        onOpenChange={setExportDialog}
+        exportType={activeTab}
       />
     </div>
   );

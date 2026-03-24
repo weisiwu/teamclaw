@@ -1,15 +1,20 @@
 "use client";
 
-import { AgentTokenUsage } from "@/lib/api/types";
+import { AgentTokenUsage, TokenUsageFilters } from "@/lib/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Coins, Clock, Hash, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Bot, Coins, Clock, Hash, TrendingUp, Calendar } from "lucide-react";
 import { useState } from "react";
 
 interface TokenUsageByAgentProps {
   data?: AgentTokenUsage[];
   isLoading?: boolean;
+  filters?: TokenUsageFilters;
+  onFiltersChange?: (filters: TokenUsageFilters) => void;
 }
+
+type TimeRange = "today" | "week" | "month" | "all";
 
 function formatNumber(num: number): string {
   if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + "M";
@@ -36,8 +41,33 @@ function getAgentColor(name: string) {
   return AGENT_COLORS[name.toLowerCase()] || AGENT_COLORS.default;
 }
 
-export function TokenUsageByAgent({ data, isLoading }: TokenUsageByAgentProps) {
+export function TokenUsageByAgent({ data, isLoading, onFiltersChange }: TokenUsageByAgentProps) {
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [timeRange, setTimeRange] = useState<TimeRange>("month");
+
+  const handleTimeRangeChange = (range: TimeRange) => {
+    setTimeRange(range);
+    const today = new Date();
+    let startDate: string | undefined;
+    let endDate: string | undefined;
+
+    if (range === "today") {
+      startDate = today.toISOString().slice(0, 10);
+      endDate = today.toISOString().slice(0, 10);
+    } else if (range === "week") {
+      const weekAgo = new Date(today);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      startDate = weekAgo.toISOString().slice(0, 10);
+      endDate = today.toISOString().slice(0, 10);
+    } else if (range === "month") {
+      const monthAgo = new Date(today.getFullYear(), today.getMonth(), 1);
+      startDate = monthAgo.toISOString().slice(0, 10);
+      endDate = today.toISOString().slice(0, 10);
+    }
+    // "all": no date filter
+
+    onFiltersChange?.({ startDate, endDate, page: 1 });
+  };
 
   if (isLoading) {
     return (
@@ -69,7 +99,67 @@ export function TokenUsageByAgent({ data, isLoading }: TokenUsageByAgentProps) {
 
   const selected = selectedAgent ? data.find((a) => a.agentName === selectedAgent) : null;
 
+  // 计算总览数据
+  const totalCallCount = data.reduce((sum, a) => sum + a.callCount, 0);
+  const totalCost = data.reduce((sum, a) => sum + a.totalCost, 0);
+  const totalTokens = data.reduce((sum, a) => sum + a.totalTokens, 0);
+
   return (
+    <div className="space-y-4">
+      {/* 汇总统计 */}
+      <div className="grid grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-50">
+              <Hash className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">总调用次数</p>
+              <p className="text-lg font-bold">{totalCallCount.toLocaleString()}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-green-50">
+              <Coins className="w-5 h-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">总成本</p>
+              <p className="text-lg font-bold">{formatCost(totalCost)}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-purple-50">
+              <TrendingUp className="w-5 h-5 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">总Token消耗</p>
+              <p className="text-lg font-bold">{formatNumber(totalTokens)}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 时间范围筛选 */}
+      <div className="flex items-center gap-2">
+        <Calendar className="w-4 h-4 text-gray-400" />
+        <span className="text-sm text-gray-500">时间范围:</span>
+        {(["today", "week", "month", "all"] as TimeRange[]).map((range) => (
+          <Button
+            key={range}
+            variant={timeRange === range ? "default" : "outline"}
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => handleTimeRangeChange(range)}
+          >
+            {range === "today" ? "今日" : range === "week" ? "本周" : range === "month" ? "本月" : "全部"}
+          </Button>
+        ))}
+      </div>
+
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Agent 列表 */}
       <div className="space-y-4">
@@ -265,6 +355,8 @@ export function TokenUsageByAgent({ data, isLoading }: TokenUsageByAgentProps) {
           </div>
         </Card>
       )}
+    </div>
+    {/* End of agent grid */}
     </div>
   );
 }

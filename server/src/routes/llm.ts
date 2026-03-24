@@ -30,12 +30,13 @@ const router = Router();
  */
 router.post('/call', async (req, res) => {
   try {
-    const { tier, messages, maxTokens, temperature, fallback } = req.body as {
+    const { tier, messages, maxTokens, temperature, fallback, agentName } = req.body as {
       tier?: ModelTier;
       messages: LLMMessages[];
       maxTokens?: number;
       temperature?: number;
       fallback?: boolean;
+      agentName?: string;
     };
 
     if (!messages || !Array.isArray(messages)) {
@@ -44,12 +45,12 @@ router.post('/call', async (req, res) => {
 
     const { result: response, responseMs } = await withCostTracking(tier || 'medium', async () => {
       return llmCall(
-        { tier: tier || 'medium', messages, maxTokens, temperature },
+        { tier: tier || 'medium', messages, maxTokens, temperature, agentName },
         fallback !== false ? ['strong'] : []
       );
     });
 
-    llmCostTracker.record(response, responseMs, tier || 'medium');
+    llmCostTracker.record(response, responseMs, tier || 'medium', agentName);
 
     res.json(success({
       content: response.content,
@@ -69,13 +70,17 @@ router.post('/call', async (req, res) => {
  */
 router.post('/light', async (req, res) => {
   try {
-    const { messages, fallback } = req.body as { messages: LLMMessages[]; fallback?: boolean };
+    const { messages, fallback, agentName } = req.body as {
+      messages: LLMMessages[];
+      fallback?: boolean;
+      agentName?: string;
+    };
     if (!messages) return res.status(400).json(error(400, 'messages required', 'BAD_REQUEST'));
 
     const { result: response, responseMs } = await withCostTracking('light', async () => {
       return llmCallLight(messages, fallback !== false);
     });
-    llmCostTracker.record(response, responseMs, 'light');
+    llmCostTracker.record(response, responseMs, 'light', agentName);
 
     res.json(success({ content: response.content, usage: response.usage, responseMs }));
   } catch (err: unknown) {
@@ -89,13 +94,17 @@ router.post('/light', async (req, res) => {
  */
 router.post('/medium', async (req, res) => {
   try {
-    const { messages, fallback } = req.body as { messages: LLMMessages[]; fallback?: boolean };
+    const { messages, fallback, agentName } = req.body as {
+      messages: LLMMessages[];
+      fallback?: boolean;
+      agentName?: string;
+    };
     if (!messages) return res.status(400).json(error(400, 'messages required', 'BAD_REQUEST'));
 
     const { result: response, responseMs } = await withCostTracking('medium', async () => {
       return llmCallMedium(messages, fallback !== false);
     });
-    llmCostTracker.record(response, responseMs, 'medium');
+    llmCostTracker.record(response, responseMs, 'medium', agentName);
 
     res.json(success({ content: response.content, usage: response.usage, responseMs }));
   } catch (err: unknown) {
@@ -109,13 +118,16 @@ router.post('/medium', async (req, res) => {
  */
 router.post('/strong', async (req, res) => {
   try {
-    const { messages } = req.body as { messages: LLMMessages[] };
+    const { messages, agentName } = req.body as {
+      messages: LLMMessages[];
+      agentName?: string;
+    };
     if (!messages) return res.status(400).json(error(400, 'messages required', 'BAD_REQUEST'));
 
     const { result: response, responseMs } = await withCostTracking('strong', async () => {
       return llmCallStrong(messages);
     });
-    llmCostTracker.record(response, responseMs, 'strong');
+    llmCostTracker.record(response, responseMs, 'strong', agentName);
 
     res.json(success({ content: response.content, usage: response.usage, responseMs }));
   } catch (err: unknown) {
@@ -129,9 +141,10 @@ router.post('/strong', async (req, res) => {
  */
 router.post('/auto-route', async (req, res) => {
   try {
-    const { messages, overrideTier } = req.body as {
+    const { messages, overrideTier, agentName } = req.body as {
       messages: LLMMessages[];
       overrideTier?: ModelTier;
+      agentName?: string;
     };
     if (!messages) return res.status(400).json(error(400, 'messages required', 'BAD_REQUEST'));
 
@@ -142,7 +155,7 @@ router.post('/auto-route', async (req, res) => {
     const { result: response, responseMs } = await withCostTracking(tier, async () => {
       return llmAutoRoute(messages, overrideTier);
     });
-    llmCostTracker.record(response, responseMs, tier);
+    llmCostTracker.record(response, responseMs, tier, agentName);
 
     res.json(success({
       content: response.content,

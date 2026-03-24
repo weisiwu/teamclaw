@@ -30,12 +30,19 @@ export const tokenUsageApi = {
   },
 
   /**
-   * GET /api/v1/admin/agents/:name/token-usage
+   * GET /api/v1/admin/agents/token-usage
    * 获取 Agent 维度的用量统计
    */
-  async getAgentTokenUsage(agentName?: string): Promise<{ data: AgentTokenUsage[] }> {
-    const params = agentName ? `?agent=${encodeURIComponent(agentName)}` : "";
-    const res = await fetch(`${API_BASE}/admin/agents/token-usage${params}`);
+  async getAgentTokenUsage(
+    agentName?: string,
+    filters?: { startDate?: string; endDate?: string }
+  ): Promise<{ data: AgentTokenUsage[] }> {
+    const params = new URLSearchParams();
+    if (agentName) params.set("agent", agentName);
+    if (filters?.startDate) params.set("startDate", filters.startDate);
+    if (filters?.endDate) params.set("endDate", filters.endDate);
+    const qs = params.toString();
+    const res = await fetch(`${API_BASE}/admin/agents/token-usage${qs ? `?${qs}` : ""}`);
     const json = await res.json();
     return { data: json.data || [] };
   },

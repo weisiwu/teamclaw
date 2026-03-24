@@ -4,6 +4,7 @@
  */
 
 import { estimateCost, type LLMResponse } from './llmService.js';
+import { recordTokenUsage } from './tokenUsageService.js';
 
 // ============ 内存存储 ============
 
@@ -18,6 +19,8 @@ interface CostRecord {
   costUsd: number;
   responseMs: number;
   success: boolean;
+  agentName?: string;
+  apiTokenId?: string;
 }
 
 interface DailyCost {
@@ -41,7 +44,7 @@ class LLMCostTracker {
   /**
    * 记录一次 LLM 调用
    */
-  record(response: LLMResponse, responseMs: number, tier: string): void {
+  record(response: LLMResponse, responseMs: number, tier: string, agentName?: string, apiTokenId?: string): void {
     const costUsd = estimateCost(response.provider, response.usage.inputTokens, response.usage.outputTokens);
     const now = Date.now();
     const date = new Date(now).toISOString().slice(0, 10);
@@ -57,9 +60,26 @@ class LLMCostTracker {
       costUsd,
       responseMs,
       success: true,
+      agentName,
+      apiTokenId,
     };
 
     this.records.push(record);
+
+    // 持久化到数据库（异步，不阻塞响应）
+    recordTokenUsage({
+      apiTokenId: record.apiTokenId,
+      agentName: record.agentName,
+      model: record.model,
+      provider: record.provider,
+      inputTokens: record.inputTokens,
+      outputTokens: record.outputTokens,
+      latencyMs: record.responseMs,
+      status: 'success',
+      costUsd: record.costUsd,
+    }).catch((err) => {
+      console.warn('[llmCostTracker] Failed to record token usage to DB:', err);
+    });
 
     // 维护内存上限
     if (this.records.length > this.maxRecords) {
@@ -94,7 +114,7 @@ class LLMCostTracker {
   /**
    * 记录失败调用
    */
-  recordFailure(provider: string, tier: string, responseMs: number): void {
+  recordFailure(provider: string, tier: string, responseMs: number, agentName?: string, apiTokenId?: string): void {
     const now = Date.now();
     const record: CostRecord = {
       timestamp: now,
@@ -107,8 +127,26 @@ class LLMCostTracker {
       costUsd: 0,
       responseMs,
       success: false,
+      agentName,
+      apiTokenId,
     };
     this.records.push(record);
+
+    // 持久化失败记录到数据库
+    recordTokenUsage({
+      apiTokenId,
+      agentName,
+      model: '',
+      provider,
+      inputTokens: 0,
+      outputTokens: 0,
+      latencyMs: responseMs,
+      status: 'error',
+      errorMessage: 'LLM call failed',
+      costUsd: 0,
+    }).catch((err) => {
+      console.warn('[llmCostTracker] Failed to record failure to DB:', err);
+    });
   }
 
   /**
