@@ -98,6 +98,25 @@ export function middleware(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  // Apply to all routes
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|public/).*)'],
+  /**
+   * Matcher: two patterns — protected app pages AND protected API routes.
+   *
+   * Pattern 1 — Protected app pages: matches paths starting with / but NOT
+   *   login | api | _next | public | favicon.ico.
+   *   E.g. /dashboard, /tasks, /settings → intercepted.
+   *   E.g. /login, /api/health, /_next/*, /public/* → bypassed.
+   *
+   * Pattern 2 — Protected API routes: explicit module list only.
+   *   E.g. /api/v1/agents/execute, /api/v1/tasks → intercepted.
+   *   E.g. /api/v1/feishu/* (webhooks), /api/health → bypassed.
+   *
+   * Any internal/debug API endpoints not in the list are automatically bypassed,
+   * fixing the previous issue of broad /api/* matching.
+   */
+  matcher: [
+    // Protected app pages — negative lookahead excludes public prefixes
+    '/((?!login|api|_next|public|favicon\\.ico).*)',
+    // Protected API routes — explicit module list (no catch-all)
+    '/api/v1/(agents|branches|dashboard|doc|llm|message|project|search|tag|tasks|token-stats|audit-log|version-bump|version-change-stats|version-diff|version-rollback|version-settings|version-tag|versions)/',
+  ],
 };

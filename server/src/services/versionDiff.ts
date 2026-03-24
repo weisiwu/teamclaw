@@ -3,7 +3,7 @@
  * Provides unified diff output and statistics between version tags/refs
  */
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { existsSync } from 'fs';
 import { join } from 'path';
 
@@ -83,7 +83,7 @@ export function getVersionDiffSummary(
   }
 
   try {
-    const output = execSync(`git diff --stat ${fromRef}..${toRef}`, {
+    const output = execFileSync('git', ['diff', '--stat', `${fromRef}..${toRef}`], {
       cwd: projectPath,
       encoding: 'utf-8',
       timeout: 30000,
@@ -156,7 +156,7 @@ export function getVersionFileDiff(
   if (!existsSync(join(projectPath, '.git'))) return [];
 
   try {
-    const output = execSync(`git diff --numstat ${fromRef}..${toRef}`, {
+    const output = execFileSync('git', ['diff', '--numstat', `${fromRef}..${toRef}`], {
       cwd: projectPath,
       encoding: 'utf-8',
       timeout: 30000,
@@ -197,7 +197,7 @@ export function getFileUnifiedDiff(
   if (!existsSync(join(projectPath, '.git'))) return '';
 
   try {
-    const output = execSync(`git diff ${fromRef}..${toRef} -- "${filePath}"`, {
+    const output = execFileSync('git', ['diff', `${fromRef}..${toRef}`, '--', filePath], {
       cwd: projectPath,
       encoding: 'utf-8',
       timeout: 30000,
@@ -246,9 +246,14 @@ export function getCommitsBetween(
   if (!existsSync(join(projectPath, '.git'))) return [];
 
   try {
-    const output = execSync(
-      `git log --format="%H||%h||%s||%an||%ad" --date=iso ${fromRef}..${toRef}`,
-      { cwd: projectPath, encoding: 'utf-8', timeout: 30000 }
+    const output = execFileSync(
+      'git',
+      ['log', '--format=%H||%h||%s||%an||%ad', '--date=iso', `${fromRef}..${toRef}`],
+      {
+        cwd: projectPath,
+        encoding: 'utf-8',
+        timeout: 30000,
+      }
     );
 
     return output

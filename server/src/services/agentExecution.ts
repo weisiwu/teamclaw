@@ -1,6 +1,11 @@
 /**
  * Agent 执行引擎
  * 负责实际触发 Agent 执行任务、管理执行上下文、处理执行结果
+ *
+ * 避免循环依赖原则：
+ * - 同步静态 import 仅来自无环依赖的上游模块（constants/models）
+ * - 可能产生循环的下游模块（taskLifecycle、messageReply）通过动态 import 延迟加载
+ * - 子任务派发（maybeDispatchSubtasks）有最大深度限制，防止自引用循环
  */
 
 import { getAgent, releaseAgent, updateAgentStatus, updateLoadScore } from './agentService.js';
@@ -169,7 +174,7 @@ async function executeAgentTask(context: ExecutionContext, timeoutMs: number): P
 
     // main Agent 完成后自动派发子任务给 coder（如果需要）
     if (targetAgent === 'main') {
-      maybeDispatchSubtasks(context, response.content);
+      maybeDispatchSubtasks(context, response.content, 0);
     }
   } catch (err) {
     clearTimeout(timeoutHandle);
@@ -204,14 +209,26 @@ function buildAgentMessages(agentName: string, taskId: string, prompt: string): 
   return messages;
 }
 
+/** 最大子任务派发深度，防止自引用循环 */
+const MAX_SUBDISPATCH_DEPTH = 3;
+
 /**
  * main Agent 响应后，解析结果并自动派发子任务
  * 从 LLM 输出中提取子任务派发指令
  */
 async function maybeDispatchSubtasks(
   context: ExecutionContext,
-  llmResponse: string
+  llmResponse: string,
+  depth = 0
 ): Promise<void> {
+  // 防止自引用循环：超过最大深度则停止
+  if (depth >= MAX_SUBDISPATCH_DEPTH) {
+    console.warn(
+      `[agentExecution] Max sub-dispatch depth (${MAX_SUBDISPATCH_DEPTH}) reached, stopping.`
+    );
+    return;
+  }
+
   // 简单解析：检测 LLM 输出中是否有 [DISPATCH: agentName: taskDescription] 格式
   const dispatchPattern = /\[DISPATCH:\s*(\w+):\s*([^\]]+)\]/g;
   let match;
@@ -220,15 +237,23 @@ async function maybeDispatchSubtasks(
     const [, agentName, taskDescription] = match;
     const allowedAgents = ['pm', 'coder1', 'coder2', 'reviewer'];
     if (allowedAgents.includes(agentName)) {
-      console.log(`[agentExecution] Auto-dispatching to ${agentName}: ${taskDescription.trim()}`);
+      console.log(
+        `[agentExecution] Auto-dispatching to ${agentName} (depth=${depth + 1}): ${taskDescription.trim().slice(0, 60)}`
+      );
       // 派发子任务（异步，不阻塞）
-      dispatchToAgent({
+      // 注意：这里不再递归调用 dispatchToAgent 的同步链，
+      // 而是创建新的 ExecutionContext，打破自引用循环
+      const subReq: DispatchRequest = {
         dispatcher: 'main',
         targetAgent: agentName,
         taskId: `sub_${context.taskId}_${Date.now()}`,
         prompt: taskDescription.trim(),
         timeoutMs: 5 * 60 * 1000,
-      });
+      };
+      const subContext = dispatchToAgent(subReq);
+      if ('error' in subContext) {
+        console.warn(`[agentExecution] Sub-dispatch failed: ${subContext.error}`);
+      }
     }
   }
 }

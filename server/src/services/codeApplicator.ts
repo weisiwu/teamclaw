@@ -5,7 +5,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 
 export type CodeChangeAction = 'create' | 'modify' | 'delete';
 
@@ -182,8 +182,8 @@ export async function commitChanges(
     if (authorName) env.GIT_AUTHOR_NAME = authorName;
     if (authorEmail) env.GIT_AUTHOR_EMAIL = authorEmail;
 
-    // 执行 commit
-    execSync(`git commit -m "${message.replace(/"/g, '\\"')}"`, {
+    // 执行 commit — 使用 execFileSync 避免 shell 注入
+    execFileSync('git', ['commit', '-m', message], {
       cwd: projectPath,
       encoding: 'utf-8',
       stdio: 'pipe',
