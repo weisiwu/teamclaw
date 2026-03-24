@@ -22,6 +22,8 @@ import {
   estimateComplexity,
   selectTierByComplexity,
 } from './llmService.js';
+import { agentToolBindingService } from './agentToolBindingService.js';
+import { toolService } from './toolService.js';
 
 export interface ExecutionContext {
   executionId: string;
@@ -180,8 +182,8 @@ async function executeAgentTask(context: ExecutionContext, timeoutMs: number): P
   // 标记为 running
   updateExecution(executionId, { status: 'running' });
 
-  // 构建 system + user messages
-  const messages = buildAgentMessages(targetAgent, taskId, prompt);
+  // 构建 system + user messages（含工具权限上下文）
+  const messages = await buildAgentMessages(targetAgent, taskId, prompt);
 
   // 设置超时
   const timeoutHandle = setTimeout(() => {
@@ -244,15 +246,19 @@ async function executeAgentTask(context: ExecutionContext, timeoutMs: number): P
 
 /**
  * 为 Agent 构建 LLM 消息列表
+ * 集成 Agent-Tool 权限上下文，使 LLM 知道该 Agent 可用/不可用哪些工具
  */
-function buildAgentMessages(agentName: string, taskId: string, prompt: string): LLMMessages[] {
+async function buildAgentMessages(agentName: string, taskId: string, prompt: string): Promise<LLMMessages[]> {
   // 构建任务上下文
   const sessionId = `exec_${taskId}`;
   const taskContext = taskMemory.buildContextPrompt(taskId, sessionId);
 
+  // 获取权限上下文：告知 LLM 该 Agent 可用哪些工具
+  const permissionContext = await buildPermissionContext(agentName);
+
   // 构建 system prompt
   const systemPrompt = buildSystemPrompt(agentName, {
-    taskContext: taskContext || undefined,
+    taskContext: taskContext ? `${taskContext}\n\n${permissionContext}` : permissionContext,
   });
 
   const userPrompt = getUserPromptPrefix(agentName) + prompt;
@@ -263,6 +269,55 @@ function buildAgentMessages(agentName: string, taskId: string, prompt: string): 
   ];
 
   return messages;
+}
+
+/**
+ * 为指定 Agent 构建工具权限上下文，注入 system prompt
+ * 根据显式绑定 + 默认策略决定可用工具列表
+ */
+async function buildPermissionContext(agentName: string): Promise<string> {
+  try {
+    const allTools = await toolService.getAllTools(true);
+
+    const allowed: string[] = [];
+    const denied: string[] = [];
+    const needsApproval: string[] = [];
+
+    for (const tool of allTools) {
+      if (!tool.enabled) continue; // 全局禁用的 Tool 跳过
+
+      const canUse = await agentToolBindingService.canUse(agentName, tool.id);
+      const needsApprove = await agentToolBindingService.needsApproval(agentName, tool.id);
+
+      if (canUse) {
+        if (needsApprove) {
+          needsApproval.push(tool.displayName);
+        } else {
+          allowed.push(tool.displayName);
+        }
+      } else {
+        denied.push(tool.displayName);
+      }
+    }
+
+    const lines: string[] = ['\n\n## 🔐 你的工具权限'];
+    if (allowed.length > 0) {
+      lines.push(`**可用工具**：${allowed.join('、')}`);
+    }
+    if (needsApproval.length > 0) {
+      lines.push(`**需审批工具**（执行前需等待人工审批）：${needsApproval.join('、')}`);
+    }
+    if (denied.length > 0) {
+      lines.push(`**禁止使用**：${denied.join('、')}`);
+      lines.push('（如有疑问请联系管理员）');
+    }
+
+    return lines.join('\n');
+  } catch (err) {
+    // 权限获取失败时不影响主流程，仅记录日志
+    console.warn(`[agentExecution] Failed to build permission context for ${agentName}:`, err);
+    return '';
+  }
 }
 
 /** 最大子任务派发深度，防止自引用循环 */
