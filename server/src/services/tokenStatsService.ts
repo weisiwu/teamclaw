@@ -1,6 +1,8 @@
 /**
  * Token Stats Service
  * 后台管理平台 - Token 消费统计服务
+ *
+ * 持久化：PostgreSQL token_usage 表 + 内存缓存
  */
 
 import {
@@ -12,6 +14,7 @@ import {
   TokenTrendPoint,
   TokenLayer,
 } from '../models/tokenStats.js';
+import { tokenStatsRepo, TokenUsageRow } from '../db/repositories/tokenStatsRepo.js';
 
 // Layer cost per 1M tokens (USD)
 const LAYER_COSTS: Record<TokenLayer, number> = {
@@ -20,12 +23,47 @@ const LAYER_COSTS: Record<TokenLayer, number> = {
   strong: 15.0,
 };
 
-// In-memory storage
-const tokenUsage: TokenUsageRecord[] = [];
+// In-memory cache (DB as source of truth)
+const tokenUsageCache: TokenUsageRecord[] = [];
+const CACHE_LOADED_KEY = Symbol('cacheLoaded');
 
 export class TokenStatsService {
+  private cacheLoaded = false;
+
   constructor() {
-    // Token stats are now recorded from real LLM calls only
+    this.loadFromDb().catch(err => {
+      console.warn('[tokenStats] Failed to load from DB on startup:', err);
+    });
+  }
+
+  /**
+   * 从 DB 加载 token 使用记录到内存缓存
+   */
+  private async loadFromDb(): Promise<void> {
+    try {
+      const rows = await tokenStatsRepo.findAll();
+      for (const row of rows) {
+        tokenUsageCache.push(this.rowToRecord(row));
+      }
+      this.cacheLoaded = true;
+      console.log(`[tokenStats] Loaded ${rows.length} token usage records from PostgreSQL`);
+    } catch (err) {
+      console.warn('[tokenStats] Could not load from DB:', err);
+    }
+  }
+
+  private rowToRecord(row: TokenUsageRow): TokenUsageRecord {
+    return {
+      id: row.id,
+      taskId: row.task_id ?? undefined,
+      layer: row.layer as TokenLayer,
+      inputTokens: Number(row.input_tokens),
+      outputTokens: Number(row.output_tokens),
+      totalTokens: Number(row.total_tokens),
+      cost: Number(row.cost),
+      timestamp: row.timestamp.toISOString(),
+      model: row.model ?? undefined,
+    };
   }
 
   /**
@@ -36,7 +74,19 @@ export class TokenStatsService {
       ...record,
       id: `tu_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     };
-    tokenUsage.push(rec);
+    tokenUsageCache.push(rec);
+    // Persist to DB (non-blocking)
+    tokenStatsRepo.upsert({
+      id: rec.id,
+      taskId: rec.taskId,
+      layer: rec.layer,
+      inputTokens: rec.inputTokens,
+      outputTokens: rec.outputTokens,
+      totalTokens: rec.totalTokens,
+      cost: rec.cost,
+      model: rec.model,
+      timestamp: rec.timestamp,
+    }).catch(err => console.error('[tokenStats] Failed to persist record:', err));
     return rec;
   }
 
@@ -44,7 +94,7 @@ export class TokenStatsService {
    * 获取汇总统计
    */
   async getSummary(startDate?: string, endDate?: string): Promise<TokenSummary> {
-    const filtered = this.filterByDate(tokenUsage, startDate, endDate);
+    const filtered = this.filterByDate(tokenUsageCache, startDate, endDate);
     // Single-pass computation: accumulate all stats in one iteration
     let totalTokens = 0;
     let totalCost = 0;
@@ -87,7 +137,7 @@ export class TokenStatsService {
    * 获取按天统计
    */
   async getDailyStats(startDate?: string, endDate?: string): Promise<TokenDailyStats[]> {
-    const filtered = this.filterByDate(tokenUsage, startDate, endDate);
+    const filtered = this.filterByDate(tokenUsageCache, startDate, endDate);
     const byDate = new Map<string, TokenDailyStats>();
 
     filtered.forEach((rec) => {
@@ -117,7 +167,7 @@ export class TokenStatsService {
    * 获取按任务统计
    */
   async getTaskStats(startDate?: string, endDate?: string, limit = 50): Promise<TokenTaskStats[]> {
-    const filtered = this.filterByDate(tokenUsage, startDate, endDate);
+    const filtered = this.filterByDate(tokenUsageCache, startDate, endDate);
     const byTask = new Map<string, number>();
 
     filtered.forEach((rec) => {
@@ -143,7 +193,7 @@ export class TokenStatsService {
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
 
-      const dayRecords = tokenUsage.filter((r) => r.timestamp.startsWith(dateStr));
+      const dayRecords = tokenUsageCache.filter((r) => r.timestamp.startsWith(dateStr));
       const tokens = dayRecords.reduce((s, r) => s + r.totalTokens, 0);
       const cost = dayRecords.reduce((s, r) => s + r.cost, 0);
 

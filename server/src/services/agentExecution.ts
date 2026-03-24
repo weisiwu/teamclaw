@@ -6,6 +6,8 @@
  * - 同步静态 import 仅来自无环依赖的上游模块（constants/models）
  * - 可能产生循环的下游模块（taskLifecycle、messageReply）通过动态 import 延迟加载
  * - 子任务派发（maybeDispatchSubtasks）有最大深度限制，防止自引用循环
+ *
+ * 持久化：PostgreSQL agent_executions 表 + 内存 Map 缓存
  */
 
 import { getAgent, releaseAgent, updateAgentStatus, updateLoadScore } from './agentService.js';
@@ -13,6 +15,7 @@ import { canDispatch } from '../constants/agents.js';
 import { buildSystemPrompt, getUserPromptPrefix } from '../prompts/agentPrompts.js';
 import { taskMemory } from './taskMemory.js';
 import { llmCostTracker } from './llmCostTracker.js';
+import { agentExecutionRepo } from '../db/repositories/agentExecutionRepo.js';
 import {
   LLMMessages,
   llmAutoRoute,
@@ -51,9 +54,49 @@ export interface DispatchRequest {
   model?: string; // 可选指定模型
 }
 
-// ============ 内存存储 ============
+// ============ 内存存储（DB-backed cache） ============
 const executionLogs: Map<string, ExecutionContext> = new Map();
 const agentExecStates: Map<string, { executionId: string; startedAt: string }> = new Map();
+
+// Load from DB on module init
+(async () => {
+  try {
+    const { rows } = await agentExecutionRepo.findByFilters({ limit: 1000 });
+    for (const row of rows) {
+      const ctx: ExecutionContext = {
+        executionId: row.execution_id,
+        taskId: row.task_id ?? '',
+        dispatcher: row.dispatcher,
+        targetAgent: row.target_agent,
+        prompt: row.prompt,
+        createdAt: row.created_at.toISOString(),
+        startedAt: row.started_at?.toISOString(),
+        completedAt: row.completed_at?.toISOString(),
+        status: row.status as ExecutionContext['status'],
+        result: row.result ?? undefined,
+        error: row.error ?? undefined,
+        model: row.model ?? undefined,
+        durationMs: row.duration_ms ? Number(row.duration_ms) : undefined,
+        usage: (row.usage_total_tokens || row.usage_input_tokens || row.usage_output_tokens)
+          ? {
+              inputTokens: Number(row.usage_input_tokens ?? 0),
+              outputTokens: Number(row.usage_output_tokens ?? 0),
+              totalTokens: Number(row.usage_total_tokens ?? 0),
+            }
+          : undefined,
+        costUsd: row.cost_usd ? Number(row.cost_usd) : undefined,
+      };
+      executionLogs.set(ctx.executionId, ctx);
+      // Restore running agent states
+      if (ctx.status === 'running' && ctx.startedAt) {
+        agentExecStates.set(ctx.targetAgent, { executionId: ctx.executionId, startedAt: ctx.startedAt });
+      }
+    }
+    console.log(`[agentExecution] Loaded ${rows.length} execution records from PostgreSQL`);
+  } catch (err) {
+    console.warn('[agentExecution] Failed to load from DB:', err);
+  }
+})();
 
 // ============ 执行引擎核心 ============
 
@@ -101,6 +144,19 @@ export function dispatchToAgent(req: DispatchRequest): ExecutionContext | { erro
 
   executionLogs.set(executionId, context);
   agentExecStates.set(targetAgent, { executionId, startedAt: now });
+
+  // Persist to DB (non-blocking)
+  agentExecutionRepo.upsert({
+    executionId: context.executionId,
+    taskId: context.taskId,
+    dispatcher: context.dispatcher,
+    targetAgent: context.targetAgent,
+    prompt: context.prompt,
+    createdAt: context.createdAt,
+    startedAt: context.startedAt,
+    status: context.status,
+    model: context.model,
+  }).catch(err => console.error('[agentExecution] Failed to persist new execution:', err));
 
   // 更新 Agent 运行时状态
   updateAgentStatus(targetAgent, 'running', taskId);
@@ -284,10 +340,36 @@ export function updateExecution(
     agentExecStates.delete(ctx.targetAgent);
     updateLoadScore(ctx.targetAgent, -10);
 
+    // Persist completion to DB (non-blocking)
+    agentExecutionRepo.upsert({
+      executionId: ctx.executionId,
+      status: ctx.status,
+      result: ctx.result,
+      error: ctx.error,
+      completedAt: ctx.completedAt,
+      durationMs: ctx.durationMs,
+      usageInputTokens: ctx.usage?.inputTokens,
+      usageOutputTokens: ctx.usage?.outputTokens,
+      usageTotalTokens: ctx.usage?.totalTokens,
+      costUsd: ctx.costUsd,
+    }).catch(err => console.error('[agentExecution] Failed to persist completion:', err));
+
     // 执行完成回调：触发消息回复
     onExecutionComplete(ctx).catch(err => {
       console.error('[agentExecution] onExecutionComplete error:', err.message);
     });
+  } else {
+    // Persist status update to DB (non-blocking)
+    agentExecutionRepo.upsert({
+      executionId: ctx.executionId,
+      status: ctx.status,
+      result: ctx.result,
+      error: ctx.error,
+      usageInputTokens: ctx.usage?.inputTokens,
+      usageOutputTokens: ctx.usage?.outputTokens,
+      usageTotalTokens: ctx.usage?.totalTokens,
+      costUsd: ctx.costUsd,
+    }).catch(err => console.error('[agentExecution] Failed to persist status update:', err));
   }
 
   return true;
@@ -394,6 +476,15 @@ export function abortExecution(agentName: string, reason: string): boolean {
   releaseAgent(agentName);
   agentExecStates.delete(agentName);
   updateLoadScore(agentName, -15);
+
+  // Persist abort to DB (non-blocking)
+  agentExecutionRepo.upsert({
+    executionId: ctx.executionId,
+    status: 'failed',
+    error: ctx.error,
+    completedAt: ctx.completedAt,
+    durationMs: ctx.durationMs,
+  }).catch(err => console.error('[agentExecution] Failed to persist abort:', err));
 
   return true;
 }

@@ -64,7 +64,7 @@ function BindingRow({
       draggable={draggable}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      onDragOver={e => { e.preventDefault(); onDragOver?.(); }}
+      onDragOver={onDragOver}
       onDrop={onDrop}
       className={[
         "flex items-center gap-2 p-3 bg-gray-50 rounded-lg transition-all",
@@ -149,7 +149,6 @@ interface BindingFormData {
 }
 
 interface BindingFormProps {
-  agentName: string;
   tokens: ApiToken[];
   editingBinding?: AgentTokenBinding | null;
   defaultPriority: number;
@@ -157,7 +156,7 @@ interface BindingFormProps {
   onCancel: () => void;
 }
 
-function BindingForm({ agentName, tokens, editingBinding, defaultPriority, onSubmit, onCancel }: BindingFormProps) {
+function BindingForm({ tokens, editingBinding, defaultPriority, onSubmit, onCancel }: BindingFormProps) {
   const [tokenId, setTokenId] = useState(editingBinding?.tokenId || "");
   const [priority, setPriority] = useState(editingBinding?.priority ?? defaultPriority);
   const [levels, setLevels] = useState<BindingLevel[]>(editingBinding?.levels || []);
@@ -346,7 +345,8 @@ export function AgentTokenConfigTab({ agentName }: AgentTokenConfigTabProps) {
   };
 
   // Drag-and-drop handlers
-  const handleDragStart = (index: number) => (_e: React.DragEvent) => {
+  const handleDragStart = (index: number) => (e: React.DragEvent) => {
+    e.dataTransfer.effectAllowed = "move";
     setDragIndex(index);
     dragCounter.current = 0;
   };
@@ -357,12 +357,15 @@ export function AgentTokenConfigTab({ agentName }: AgentTokenConfigTabProps) {
     dragCounter.current = 0;
   };
 
-  const handleDragOver = (index: number) => (_e: React.DragEvent) => {
+  const handleDragOver = (index: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
     dragCounter.current++;
     setOverIndex(index);
   };
 
-  const handleDrop = (dropIndex: number) => async (_e: React.DragEvent) => {
+  const handleDrop = (dropIndex: number) => async (e: React.DragEvent) => {
+    e.preventDefault();
     if (dragIndex === null || dragIndex === dropIndex) {
       handleDragEnd();
       return;
@@ -429,7 +432,6 @@ export function AgentTokenConfigTab({ agentName }: AgentTokenConfigTabProps) {
             {editingBinding ? "编辑绑定" : "添加 Token 绑定"}
           </h5>
           <BindingForm
-            agentName={agentName}
             tokens={tokens}
             editingBinding={editingBinding}
             defaultPriority={maxPriority}

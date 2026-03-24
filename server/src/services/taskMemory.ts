@@ -3,7 +3,7 @@
  * 任务机制模块 - 任务上下文/记忆化管理
  *
  * 基于 SessionID 的上下文注入、工作进度持久化
- * 当前为内存存储，预留 DB 接入接口
+ * 持久化：PostgreSQL task_memory 表 + 内存 Map 缓存
  * 新增：LLM 摘要生成、向量化存储、语义检索
  */
 
@@ -11,6 +11,7 @@ import { Task } from '../models/task.js';
 import { llmService } from './llmService.js';
 import { addDocuments, query } from './vectorStore.js';
 import { taskRepo } from '../db/repositories/taskRepo.js';
+import { taskMemoryRepo } from '../db/repositories/taskMemoryRepo.js';
 
 const TASK_MEMORY_COLLECTION = 'task_memory';
 
@@ -65,7 +66,32 @@ class TaskMemoryService {
   private readonly MAX_CHECKPOINTS_PER_TASK = 20;
   private readonly MAX_CONTEXTS = 1000;
 
-  private constructor() {}
+  private constructor() {
+    this.loadFromDb().catch(err => {
+      console.warn('[taskMemory] Failed to load contexts from DB on startup:', err);
+    });
+  }
+
+  private async loadFromDb(): Promise<void> {
+    try {
+      const rows = await taskMemoryRepo.findAll();
+      for (const row of rows) {
+        const ctx: TaskContext = {
+          taskId: row.task_id,
+          sessionId: row.session_id,
+          messages: row.messages as ContextMessage[],
+          checkpoints: row.checkpoints as TaskCheckpoint[],
+          summary: row.summary ?? undefined,
+          createdAt: row.created_at.toISOString(),
+          updatedAt: row.updated_at.toISOString(),
+        };
+        this.contexts.set(row.context_key, ctx);
+      }
+      console.log(`[taskMemory] Loaded ${rows.length} contexts from PostgreSQL`);
+    } catch (err) {
+      console.warn('[taskMemory] Could not load from DB:', err);
+    }
+  }
 
   static getInstance(): TaskMemoryService {
     if (!TaskMemoryService.instance) {
@@ -195,7 +221,11 @@ class TaskMemoryService {
   }
 
   clearContext(taskId: string, sessionId: string): boolean {
-    return this.contexts.delete(`${sessionId}:${taskId}`);
+    const key = `${sessionId}:${taskId}`;
+    taskMemoryRepo.delete(taskId, sessionId).catch(err =>
+      console.warn('[taskMemory] Failed to delete from DB:', err)
+    );
+    return this.contexts.delete(key);
   }
 
   /**
@@ -203,13 +233,22 @@ class TaskMemoryService {
    */
   private async persistContext(key: string, ctx: TaskContext): Promise<void> {
     // Strip sessionId from key (key = "${sessionId}:${taskId}")
-    const taskId = key.includes(':') ? key.split(':')[1] : key;
+    const parts = key.includes(':') ? key.split(':') : [key, key];
+    const sessionId = parts[0];
+    const taskId = parts[1];
     try {
-      const existing = await taskRepo.findById(taskId);
-      const title = existing?.title ?? taskId;
-      await taskRepo.upsert({
+      // Persist to task_memory table
+      await taskMemoryRepo.upsert({
         taskId,
-        title,
+        sessionId,
+        messages: ctx.messages,
+        checkpoints: ctx.checkpoints,
+        summary: ctx.summary,
+      });
+      // Also update contextSnapshot in tasks table for backward compatibility
+      taskRepo.upsert({
+        taskId,
+        title: taskId,
         contextSnapshot: {
           messages: ctx.messages,
           checkpoints: ctx.checkpoints,
@@ -217,7 +256,7 @@ class TaskMemoryService {
           createdAt: ctx.createdAt,
           updatedAt: ctx.updatedAt,
         },
-      });
+      }).catch(err => console.warn('[taskMemory] Failed to update taskRepo contextSnapshot:', err));
     } catch (err) {
       console.warn(
         `[taskMemory] Failed to persist context for ${key}:`,
