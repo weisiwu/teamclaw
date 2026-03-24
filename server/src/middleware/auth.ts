@@ -3,11 +3,11 @@
  * 从 JWT Token 中提取用户身份并验证权限
  */
 
-import { Request, Response, NextFunction } from "express";
-import { checkPermission, PermissionCheckResult } from "../services/permissionService";
-import { AgentName, Role } from "../constants/roles";
-import { verifyToken, JwtPayload } from "../utils/jwt.js";
-import { error } from "../utils/response.js";
+import { Request, Response, NextFunction } from 'express';
+import { checkPermission, PermissionCheckResult } from '../services/permissionService';
+import { AgentName, Role } from '../constants/roles';
+import { verifyToken, JwtPayload } from '../utils/jwt.js';
+import { error } from '../utils/response.js';
 
 // 扩展 Express Request
 export interface AuthRequest extends Request {
@@ -81,7 +81,6 @@ export function optionalAuth(req: AuthRequest, _res: Response, next: NextFunctio
   const user = extractUser(req);
   if (user) {
     req.user = { id: user.id, role: user.role };
-    req.permission = checkPermission(user.role, "pm"); // 默认检查 pm 权限
   }
   next();
 }
@@ -114,7 +113,7 @@ export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction
     return;
   }
 
-  if (user.role !== "admin" && user.role !== "vice_admin") {
+  if (user.role !== 'admin' && user.role !== 'vice_admin') {
     res.status(403).json(error(403, '需要管理员或副管理员权限', 'FORBIDDEN'));
     return;
   }

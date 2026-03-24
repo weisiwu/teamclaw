@@ -63,12 +63,6 @@ export function requireProjectAccess(req: AuthRequest, res: Response, next: Next
       return;
     }
 
-    // （未来扩展）检查项目成员关系
-    if (row.project_id) {
-      // 可以在这里检查 project_members 表
-      // const isMember = checkProjectMember(row.project_id, userId);
-    }
-
     // 没有权限
     res.status(403).json({
       code: 403,
