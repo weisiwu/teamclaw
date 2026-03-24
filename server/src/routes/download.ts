@@ -102,10 +102,9 @@ router.post('/', async (req, res) => {
     }
 
     return res.status(201).json(success({
-        taskId: task.id,
-        status: task.status,
-        estimatedSize,
-      },
+      taskId: task.id,
+      status: task.status,
+      estimatedSize,
     }));
   } catch (err: any) {
     console.error('[DownloadRoutes] Create task error:', err);
@@ -170,8 +169,7 @@ router.get('/:taskId', async (req, res) => {
         createdAt: task.createdAt,
         completedAt: task.completedAt,
         errorMessage: task.errorMessage,
-      },
-    });
+    }));
   } catch (err: any) {
     console.error('[DownloadRoutes] Get task error:', err);
     throw err;
