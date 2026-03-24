@@ -163,6 +163,15 @@ class DownloadQueue {
     const output = fs.createWriteStream(zipPath);
     const archive = archiver('zip', { zlib: { level: 6 } });
 
+    // Resolve file paths before entering the Promise executor
+    const filePaths: { fileId: string; filePath: string }[] = [];
+    for (const fileId of task.fileIds) {
+      const filePath = await this.getFilePath(fileId);
+      if (filePath && fs.existsSync(filePath)) {
+        filePaths.push({ fileId, filePath });
+      }
+    }
+
     return new Promise((resolve, reject) => {
       let lastProgress = 0;
       const startTime = Date.now();
@@ -193,12 +202,8 @@ class DownloadQueue {
       archive.pipe(output);
 
       // Add files to archive
-      for (const fileId of task.fileIds) {
-        // Get file path from docService or artifactStore
-        const filePath = await this.getFilePath(fileId);
-        if (filePath && fs.existsSync(filePath)) {
-          archive.file(filePath, { name: path.basename(filePath) });
-        }
+      for (const { filePath } of filePaths) {
+        archive.file(filePath, { name: path.basename(filePath) });
       }
 
       archive.finalize();

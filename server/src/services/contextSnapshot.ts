@@ -10,7 +10,7 @@
  */
 
 import { taskLifecycle } from './taskLifecycle.js';
-import { gitService } from './gitService.js';
+import { getCurrentBranch, getGitLog } from './gitService.js';
 import { getAllAgents } from './agentService.js';
 
 export interface ContextSnapshot {
@@ -58,8 +58,9 @@ export class ContextSnapshotService {
       let recentCommits: Array<{ hash: string; message: string; author: string; date: string }> = [];
 
       try {
-        gitBranch = gitService.getCurrentBranch();
-        const commits = gitService.getRecentCommits(5);
+        const defaultCwd = process.env.PROJECT_PATH || process.cwd();
+        gitBranch = getCurrentBranch(defaultCwd);
+        const commits = getGitLog(defaultCwd, { maxCount: 5 });
         recentCommits = commits.map(c => ({
           hash: c.shortHash,
           message: c.message.split('\n')[0],

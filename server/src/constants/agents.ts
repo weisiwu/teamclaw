@@ -4,6 +4,7 @@
  */
 
 import * as path from 'path';
+export type { AgentName } from './roles.js';
 
 // ============ Agent 等级定义 ============
 export type AgentLevel = 1 | 2 | 3;

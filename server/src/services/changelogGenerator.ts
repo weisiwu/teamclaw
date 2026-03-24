@@ -296,3 +296,9 @@ export function formatChangelogAsMarkdown(changelog: GeneratedChangelog, version
 
   return lines.join('\n');
 }
+
+// Facade for backward-compatible imports
+export const changelogGenerator = {
+  generateAIChangelog,
+  formatChangelogAsMarkdown,
+};

@@ -53,7 +53,7 @@ export interface UnifiedMessage {
   rawData?: unknown;
 }
 
-function getWeChatConfig(): WeChatWebhookConfig {
+export function getWeChatConfig(): WeChatWebhookConfig {
   return {
     enabled: process.env.WECHAT_ENABLED === 'true',
     token: process.env.WECHAT_VERIFY_TOKEN,
@@ -62,7 +62,7 @@ function getWeChatConfig(): WeChatWebhookConfig {
   };
 }
 
-function parseWeChatMessage(payload: Record<string, unknown>): WeChatMessage | null {
+export function parseWeChatMessage(payload: Record<string, unknown>): WeChatMessage | null {
   try {
     const msg: WeChatMessage = {
       msgId: String(payload.msgid ?? payload.MsgId ?? payload.MsgID ?? Date.now()),

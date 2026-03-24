@@ -461,3 +461,9 @@ export class StreamingBuildService extends EventEmitter {
 
 // Singleton instance for SSE builds
 export const streamingBuildService = new StreamingBuildService();
+
+// Facade for backward-compatible imports
+export const buildService = {
+  build: (projectPath: string, opts: Record<string, unknown>) =>
+    runBuild(projectPath, { buildCommand: opts.buildCommand as string | undefined }),
+};

@@ -367,3 +367,9 @@ export async function llmAutoRoute(
 
   return llmCall({ tier, messages }, fallbackMap[complexity]);
 }
+
+// Facade for backward-compatible imports
+export const llmService = {
+  chat: (opts: { tier?: string; messages: LLMMessages[] }) =>
+    llmAutoRoute(opts.messages, opts.tier as ModelTier | undefined),
+};

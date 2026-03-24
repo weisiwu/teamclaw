@@ -9,7 +9,7 @@ import { performBump, formatBumpSummary } from './versionBump.js';
 import { createTagRecord } from './tagService.js';
 import { createTag } from './gitService.js';
 import { bumpVersion as semverBump, SemverLevel, bumpLevelFromTaskType } from './semver.js';
-import { getVersionSettings } from '../routes/version.js';
+import { getVersionSettings } from './versionSettingsStore.js';
 import path from 'path';
 import os from 'os';
 
