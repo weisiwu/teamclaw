@@ -2,7 +2,7 @@
  * Agent API - 调用真实后端
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9700';
+const API_BASE = '/api/v1';
 
 // ============ 类型定义 ============
 export type AgentStatus = 'idle' | 'busy' | 'error' | 'offline';
@@ -45,16 +45,23 @@ export interface DispatchRequest {
 }
 
 // ============ API 请求工具 ============
+function getAuthHeaders(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  const token = localStorage.getItem('teamclaw_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...getAuthHeaders(),
       ...options?.headers,
     },
   });
   const json = await res.json();
-  if (json.code !== 0) throw new Error(json.message || 'API 请求失败');
+  if (!json.success) throw new Error(json.message || 'API 请求失败');
   return json.data as T;
 }
 
@@ -110,18 +117,18 @@ export interface PMSession {
 export const agentApi = {
   /** 获取所有 Agent 列表 */
   async getAll(): Promise<Agent[]> {
-    const data = await request<{ list: Agent[]; total: number }>('/api/v1/agents');
+    const data = await request<{ list: Agent[]; total: number }>('/agents');
     return data.list;
   },
 
   /** 获取单个 Agent 详情 */
   async getByName(name: string): Promise<Agent> {
-    return request<Agent>(`/api/v1/agents/${name}`);
+    return request<Agent>(`/agents/${name}`);
   },
 
   /** 获取团队编排概览 */
   async getTeamOverview(): Promise<TeamOverview> {
-    return request<TeamOverview>('/api/v1/agents/team');
+    return request<TeamOverview>('/agents/team');
   },
 
   /** 更新 Agent 配置 */
@@ -129,7 +136,7 @@ export const agentApi = {
     name: string,
     updates: { defaultModel?: string; capabilities?: string[] }
   ): Promise<Agent> {
-    return request<Agent>(`/api/v1/agents/${name}/config`, {
+    return request<Agent>(`/agents/${name}/config`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
@@ -142,13 +149,13 @@ export const agentApi = {
     const data = await request<{
       list: { sessionId: string; updatedAt: string; label: string }[];
       total: number;
-    }>(`/api/v1/agents/${name}/sessions`);
+    }>(`/agents/${name}/sessions`);
     return data.list;
   },
 
   /** 向指定 Agent 分发任务 */
   async dispatch(req: DispatchRequest): Promise<{ taskId: string; message: string }> {
-    return request<{ taskId: string; message: string }>(`/api/v1/agents/${req.toAgent}/dispatch`, {
+    return request<{ taskId: string; message: string }>(`/agents/${req.toAgent}/dispatch`, {
       method: 'POST',
       body: JSON.stringify(req),
     });
@@ -160,7 +167,7 @@ export const agentApi = {
     requirement: string
   ): Promise<{ pipelineId: string; status: PipelineStatus }> {
     return request<{ pipelineId: string; status: PipelineStatus }>(
-      '/api/v1/agents/pipeline/start',
+      '/agents/pipeline/start',
       {
         method: 'POST',
         body: JSON.stringify({ taskId, requirement }),
@@ -170,7 +177,7 @@ export const agentApi = {
 
   /** 获取流水线状态 */
   async getPipeline(pipelineId: string): Promise<Pipeline> {
-    return request<Pipeline>(`/api/v1/agents/pipeline/${pipelineId}`);
+    return request<Pipeline>(`/agents/pipeline/${pipelineId}`);
   },
 
   /** 提交 PM 澄清问题回答 */
@@ -180,7 +187,7 @@ export const agentApi = {
     answer: string
   ): Promise<{ remaining: number; isComplete: boolean }> {
     return request<{ remaining: number; isComplete: boolean }>(
-      `/api/v1/agents/pipeline/${pipelineId}/answer`,
+      `/agents/pipeline/${pipelineId}/answer`,
       {
         method: 'POST',
         body: JSON.stringify({ questionIndex, answer }),
@@ -190,7 +197,7 @@ export const agentApi = {
 
   /** 获取 PM 会话状态 */
   async getPMSession(pipelineId: string): Promise<PMSession | null> {
-    return request<PMSession | null>(`/api/v1/agents/pipeline/${pipelineId}/pm-session`);
+    return request<PMSession | null>(`/agents/pipeline/${pipelineId}/pm-session`);
   },
 };
 
