@@ -11,6 +11,7 @@
 | [Vercel 部署](./vercel-deployment.md) | Vercel 前端部署指南 |
 | [PM2 部署](./pm2-deployment.md) | PM2 生产进程守护部署 |
 | [数据库迁移](./database-migration.md) | schema.sql 与迁移工具使用说明 |
+| [飞书机器人配置](./feishu-bot.md) | 飞书开放平台应用创建、权限、事件订阅 |
 | [运维操作指南](./operations.md) | 启动、重启、日志查看、备份恢复等常用操作 |
 | [目录结构说明](./directory-structure.md) | 项目目录结构与关键文件说明 |
 | [package.json 脚本](./package-scripts.md) | 前后端 package.json 所有脚本说明 |
