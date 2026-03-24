@@ -19,7 +19,8 @@ export default function CapabilitiesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
-  const userRole = (typeof window !== 'undefined' ? localStorage.getItem('userRole') : 'user') || 'user';
+  const userRole =
+    (typeof window !== 'undefined' ? localStorage.getItem('userRole') : 'user') || 'user';
 
   const fetchAbilities = async () => {
     try {
@@ -47,14 +48,15 @@ export default function CapabilitiesPage() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-role': userRole,
+          // FIX: 不再通过 x-user-role Header 伪造身份
+          // JWT Bearer Token 由浏览器 cookie 或 apiFetch 机制自动携带
         },
         body: JSON.stringify({ enabled: !ability.enabled }),
       });
       const data = await res.json();
       if (data.code === 0) {
         setAbilities(prev =>
-          prev.map(a => a.id === ability.id ? { ...a, enabled: !a.enabled } : a)
+          prev.map(a => (a.id === ability.id ? { ...a, enabled: !a.enabled } : a))
         );
       }
     } catch (err) {
@@ -65,9 +67,23 @@ export default function CapabilitiesPage() {
   };
 
   const getRoleBadge = (role: string) => {
-    if (role === 'admin') return <span className="px-2 py-0.5 text-xs rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">管理员</span>;
-    if (role === 'sub_admin') return <span className="px-2 py-0.5 text-xs rounded bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">副管理员</span>;
-    return <span className="px-2 py-0.5 text-xs rounded bg-secondary text-muted-foreground">全体成员</span>;
+    if (role === 'admin')
+      return (
+        <span className="px-2 py-0.5 text-xs rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+          管理员
+        </span>
+      );
+    if (role === 'sub_admin')
+      return (
+        <span className="px-2 py-0.5 text-xs rounded bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+          副管理员
+        </span>
+      );
+    return (
+      <span className="px-2 py-0.5 text-xs rounded bg-secondary text-muted-foreground">
+        全体成员
+      </span>
+    );
   };
 
   if (loading) {
@@ -109,12 +125,7 @@ export default function CapabilitiesPage() {
                 <p className="font-medium text-red-700 dark:text-red-400">加载失败</p>
                 <p className="text-sm text-red-600 dark:text-red-500 mt-1">{error}</p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={fetchAbilities}
-                className="gap-2"
-              >
+              <Button variant="outline" size="sm" onClick={fetchAbilities} className="gap-2">
                 <RefreshCw className="w-4 h-4" />
                 重试
               </Button>
@@ -134,53 +145,59 @@ export default function CapabilitiesPage() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {abilities.map(ability => (
-            <div
-              key={ability.id}
-              className={`bg-card rounded-lg shadow p-5 border-l-4 border-border ${
-                ability.enabled ? 'border-green-400 dark:border-green-500' : ''
-              }`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-foreground">{ability.name}</h3>
-                    {getRoleBadge(ability.requiredRole)}
+            {abilities.map(ability => (
+              <div
+                key={ability.id}
+                className={`bg-card rounded-lg shadow p-5 border-l-4 border-border ${
+                  ability.enabled ? 'border-green-400 dark:border-green-500' : ''
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold text-foreground">{ability.name}</h3>
+                      {getRoleBadge(ability.requiredRole)}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{ability.description}</p>
                   </div>
-                  <p className="text-sm text-muted-foreground">{ability.description}</p>
-                </div>
-                <button
-                  onClick={() => toggleAbility(ability)}
-                  disabled={toggling === ability.id || (userRole !== 'admin' && userRole !== 'sub_admin')}
-                  className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    ability.enabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-slate-500'
-                  } ${
-                    (userRole === 'admin' || userRole === 'sub_admin') ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      ability.enabled ? 'translate-x-6' : 'translate-x-1'
+                  <button
+                    onClick={() => toggleAbility(ability)}
+                    disabled={
+                      toggling === ability.id || (userRole !== 'admin' && userRole !== 'sub_admin')
+                    }
+                    className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      ability.enabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-slate-500'
+                    } ${
+                      userRole === 'admin' || userRole === 'sub_admin'
+                        ? 'cursor-pointer'
+                        : 'cursor-not-allowed opacity-50'
                     }`}
-                  />
-                  {toggling === ability.id && (
-                    <span className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-xs text-muted-foreground">...</span>
-                    </span>
-                  )}
-                </button>
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        ability.enabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                    {toggling === ability.id && (
+                      <span className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-xs text-muted-foreground">...</span>
+                      </span>
+                    )}
+                  </button>
+                </div>
+                <div className="mt-2 pt-2 border-t border-border">
+                  <span
+                    className={`text-xs font-mono ${ability.enabled ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}
+                  >
+                    {ability.enabled ? '● 已启用' : '○ 已禁用'}
+                  </span>
+                </div>
               </div>
-              <div className="mt-2 pt-2 border-t border-border">
-                <span className={`text-xs font-mono ${ability.enabled ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
-                  {ability.enabled ? '● 已启用' : '○ 已禁用'}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
         )}
 
-        {(userRole !== 'admin' && userRole !== 'sub_admin') && (
+        {userRole !== 'admin' && userRole !== 'sub_admin' && (
           <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-700 text-sm">
             ⚠️ 只有管理员或副管理员可以修改能力配置
           </div>

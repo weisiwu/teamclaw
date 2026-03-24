@@ -1,7 +1,7 @@
 /**
  * Message Pipeline Service
  * 消息机制模块 - 消息处理主管道
- * 
+ *
  * 串联消息→任务→Agent的全流程：
  * 1. 入队 + 优先级计算
  * 2. @Agent 检测 → 权限校验 → 任务创建 → Agent 派发
@@ -15,12 +15,8 @@ import { enrichMessagePriority } from './priorityCalculator.js';
 import { checkPermission } from './permissionService.js';
 import { taskLifecycle } from './taskLifecycle.js';
 import { dispatchToAgent } from './agentExecution.js';
-import {
-  sendReply,
-  buildAcknowledgmentReply,
-  buildPermissionDeniedReply,
-  buildAgentBusyReply,
-} from './messageReply.js';
+import { eventBus, generateId } from './eventBus.js';
+import { sendReply, buildAcknowledgmentReply, buildPermissionDeniedReply } from './messageReply.js';
 import { AgentName } from '../constants/agents.js';
 
 // ============ 类型定义 ============
@@ -64,7 +60,7 @@ export function detectMentionedAgent(content: string): AgentName | null {
 
 /**
  * 处理消息的完整管道
- * 
+ *
  * 流程：
  * 1. 入队 + 计算优先级
  * 2. 立即回复"已收到"
@@ -92,15 +88,41 @@ export async function processMessage(request: ReceiveMessageRequest): Promise<Pi
   const message = enqueueResult.message;
 
   // 2. 立即回复"已收到"（非阻塞）
-  sendAcknowledgment(message).catch((err) => {
+  sendAcknowledgment(message).catch(err => {
     console.error('[messagePipeline] Acknowledgment failed:', err.message);
   });
 
   // 3. 检测 @agent → 权限校验 → 创建任务 → 派发
-  const mentionedAgent = detectMentionedAgent(request.content) || request.mentionedAgent as AgentName | null;
+  const mentionedAgent =
+    detectMentionedAgent(request.content) || (request.mentionedAgent as AgentName | null);
+
+  // 生成 traceId 用于追踪整个 pipeline
+  const traceId = `trace_${message.messageId}_${Date.now().toString(36)}`;
+
+  // 触发 message:routed 事件，启动事件驱动流水线
+  // messageToTask.ts 监听此事件并自动创建任务 → 触发 task:created → taskToAgent.ts 启动 Agent 流水线
+  eventBus.emit('message:routed', {
+    eventId: generateId('evt'),
+    type: 'message:routed',
+    timestamp: new Date().toISOString(),
+    traceId,
+    data: {
+      messageId: message.messageId,
+      userId: message.userId,
+      userName: message.userName,
+      role: message.role,
+      content: message.content,
+      channel: message.channel,
+      priority: message.priority,
+      mentionedAgent,
+      // 当有 @agent 提及时，handleAgentMention 会直接创建任务并派发 Agent，
+      // messageToTask.ts 监听器检测到 skipTaskCreation=true 会跳过重复创建，仅做上下文丰富
+      skipTaskCreation: !!mentionedAgent,
+    },
+  });
 
   if (mentionedAgent) {
-    return handleAgentMention(message, request, mentionedAgent);
+    return handleAgentMention(message, request, mentionedAgent, traceId);
   }
 
   // 无 @agent：普通消息，仅入队
@@ -115,7 +137,7 @@ export async function processMessage(request: ReceiveMessageRequest): Promise<Pi
 
 /**
  * 处理 @agent 提及
- * 
+ *
  * @main → 权限校验 → 创建任务(pending) → main Agent 开始讨论
  * @pm → 权限校验 → pm Agent 直接响应
  * 无权限 → 回复拒绝
@@ -123,12 +145,13 @@ export async function processMessage(request: ReceiveMessageRequest): Promise<Pi
 async function handleAgentMention(
   message: Message,
   request: ReceiveMessageRequest,
-  agent: AgentName
+  agent: AgentName,
+  traceId: string
 ): Promise<PipelineResult> {
   const { userId, userName, role: userRole } = request;
 
   // 权限校验
-  const permission = checkPermission(userRole as any, agent);
+  const permission = checkPermission(userRole as string, agent);
 
   if (!permission.allowed) {
     // 回复权限拒绝
@@ -180,6 +203,15 @@ async function handleAgentMention(
 
   // 任务变为 running
   await taskLifecycle.transition(task.taskId, 'running');
+
+  // 触发 task:created 事件，启动 taskToAgent.ts 的 Agent 协作流水线
+  eventBus.emit('task:created', {
+    eventId: generateId('evt'),
+    type: 'task:created',
+    timestamp: new Date().toISOString(),
+    traceId,
+    data: { taskId: task.taskId, title: task.title },
+  });
 
   return {
     success: true,

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 
 import { success, error } from '../utils/response.js';
-import { requireAdmin } from '../middleware/auth.js';
+import { requireAdmin, requireAuth } from '../middleware/auth.js';
 import { requireProjectAccess } from '../middleware/projectAccess.js';
 import { validateIdParam } from '../middleware/validation.js';
 import { auditService } from '../services/auditService.js';
@@ -289,9 +289,11 @@ router.put('/:id', validateIdParam(), requireAdmin, (req: Request, res: Response
 });
 
 // DELETE /api/v1/versions/:id — 删除
+// FIX: 添加 requireAuth 确保身份从 JWT Token 验证，不再信任 HTTP Header
 router.delete(
   '/:id',
   validateIdParam(),
+  requireAuth,
   requireProjectAccess,
   (req: AuthRequest, res: Response) => {
     const db = getDb();

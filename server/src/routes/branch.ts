@@ -2,6 +2,7 @@
 // 提供分支的 CRUD、设置主分支、保护等 API
 
 import { Router, Request, Response } from 'express';
+import { AuthRequest } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { auditService } from '../services/auditService.js';
@@ -48,13 +49,15 @@ router.get('/', (req: Request, res: Response) => {
   const start = (p - 1) * ps;
   const data = branches.slice(start, start + ps);
 
-  res.json(success({
-    data,
-    total,
-    page: p,
-    pageSize: ps,
-    totalPages: Math.ceil(total / ps),
-  }));
+  res.json(
+    success({
+      data,
+      total,
+      page: p,
+      pageSize: ps,
+      totalPages: Math.ceil(total / ps),
+    })
+  );
 });
 
 // GET /api/v1/branches/stats — 获取分支统计
@@ -164,9 +167,10 @@ router.delete('/:id', requireAdmin, (req: Request, res: Response) => {
       return;
     }
     // 审计日志
+    // FIX: 从 JWT 验证后的 req.user 获取 actor，不再信任 HTTP Header
     auditService.log({
       action: 'branch_delete',
-      actor: (req.headers['x-user-id'] as string) || 'unknown',
+      actor: ((req as AuthRequest).user?.id as string) || 'unknown',
       target: req.params.id,
       ipAddress: (req.ip || req.socket.remoteAddress) as string | undefined,
       userAgent: req.headers['user-agent'] as string | undefined,

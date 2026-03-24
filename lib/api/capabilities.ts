@@ -14,10 +14,11 @@ export async function getAbilities(): Promise<Ability[]> {
   return data.data?.list || [];
 }
 
-export async function toggleAbility(id: string, enabled: boolean, userRole: string): Promise<Ability> {
+// FIX: 不再通过 x-user-role Header 伪造身份，改为使用 JWT Bearer Token（apiFetch 自动携带）
+export async function toggleAbility(id: string, enabled: boolean): Promise<Ability> {
   const res = await fetch(`${BASE}/abilities/${id}/toggle`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'x-user-role': userRole },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled }),
   });
   const data = await res.json();

@@ -2,26 +2,29 @@
 // 提供标签的 CRUD、归档、保护、配置等 API
 
 import { Router, Request, Response } from 'express';
+import { AuthRequest } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { auditService } from '../services/auditService.js';
-import { getTags as gitGetTags, createTag as gitCreateTag, getTagDetails } from '../services/gitService.js';
+import {
+  getTags as gitGetTags,
+  createTag as gitCreateTag,
+  getTagDetails,
+  deleteTag,
+} from '../services/gitService.js';
 import {
   getAllTagRecords,
   getTagRecord,
   getTagsByVersionId,
   createTagRecord,
   updateTagRecord,
-  deleteTagRecord,
   archiveTag,
   protectTag,
   getTagConfig,
   updateTagConfig,
   getTagByName,
-  deleteTagByName,
   makeTagName,
   shouldAutoTag,
-  autoCreateTagForVersion,
   renameTag,
   removeTag,
 } from '../services/tagService.js';
@@ -37,7 +40,19 @@ const DEFAULT_PROJECT_PATH = process.env.TEAMCLAW_PROJECT_PATH || '';
 
 // GET /api/v1/tags — 获取所有标签记录（从 git + DB 合并）
 router.get('/', (req: Request, res: Response) => {
-  const { versionId, archived, protected: isProtected, source, page, pageSize, projectPath: reqProjectPath } = req.query;
+  const {
+    protected: isProtected,
+    source,
+    page,
+    pageSize,
+    projectPath: reqProjectPath,
+  } = req.query as {
+    protected?: string;
+    source?: string;
+    page?: string;
+    pageSize?: string;
+    projectPath?: string;
+  };
 
   // Get git tags from project path
   const projectPath = (reqProjectPath as string) || DEFAULT_PROJECT_PATH;
@@ -61,7 +76,9 @@ router.get('/', (req: Request, res: Response) => {
     screenshotIndex.add(shot.versionId);
   }
   const db = getDb();
-  const summaryRows = db.prepare('SELECT version_id FROM version_summaries').all() as Array<{ version_id: string }>;
+  const summaryRows = db.prepare('SELECT version_id FROM version_summaries').all() as Array<{
+    version_id: string;
+  }>;
   const summaryIndex = new Set<string>();
   for (const row of summaryRows) {
     summaryIndex.add(row.version_id);
@@ -83,7 +100,7 @@ router.get('/', (req: Request, res: Response) => {
       annotation: t.message,
       hasRecord: protectedMap.has(t.name),
       protected: protectedMap.get(t.name) || false,
-      source: sourceMap.get(t.name) || 'manual' as 'auto' | 'manual',
+      source: sourceMap.get(t.name) || ('manual' as 'auto' | 'manual'),
       hasScreenshot: versionId ? screenshotIndex.has(versionId) : false,
       hasChangelog: versionId ? summaryIndex.has(versionId) : false,
     };
@@ -121,13 +138,15 @@ router.get('/', (req: Request, res: Response) => {
   const start = (p - 1) * ps;
   const data = tags.slice(start, start + ps);
 
-  res.json(success({
-    data,
-    total,
-    page: p,
-    pageSize: ps,
-    totalPages: Math.ceil(total / ps),
-  }));
+  res.json(
+    success({
+      data,
+      total,
+      page: p,
+      pageSize: ps,
+      totalPages: Math.ceil(total / ps),
+    })
+  );
 });
 
 // GET /api/v1/tags/:tagName — 获取单个标签详情
@@ -155,24 +174,34 @@ router.get('/:tagName', (req: Request, res: Response) => {
     return;
   }
 
-  res.json(success({
-    name: tagName,
-    commit: tagInfo?.commit || dbRecord?.commitHash || tagDetails?.commit || '',
-    date: tagInfo?.date || dbRecord?.createdAt || tagDetails?.date || '',
-    message: tagDetails?.message || tagInfo?.message || dbRecord?.message || '',
-    author: tagDetails?.author || null,
-    authorEmail: tagDetails?.authorEmail || null,
-    taggerDate: tagDetails?.taggerDate || null,
-    hasRecord: !!dbRecord,
-    protected: dbRecord?.protected || false,
-    annotation: tagInfo?.message || dbRecord?.annotation || '',
-    source: dbRecord?.source || 'manual',
-  }));
+  res.json(
+    success({
+      name: tagName,
+      commit: tagInfo?.commit || dbRecord?.commitHash || tagDetails?.commit || '',
+      date: tagInfo?.date || dbRecord?.createdAt || tagDetails?.date || '',
+      message: tagDetails?.message || tagInfo?.message || dbRecord?.message || '',
+      author: tagDetails?.author || null,
+      authorEmail: tagDetails?.authorEmail || null,
+      taggerDate: tagDetails?.taggerDate || null,
+      hasRecord: !!dbRecord,
+      protected: dbRecord?.protected || false,
+      annotation: tagInfo?.message || dbRecord?.annotation || '',
+      source: dbRecord?.source || 'manual',
+    })
+  );
 });
 
 // POST /api/v1/tags — 手动创建标签（创建 git tag + DB 记录）
 router.post('/', (req: Request, res: Response) => {
-  const { name, versionId, versionName, message, commitHash, createdBy, projectPath: reqProjectPath } = req.body as {
+  const {
+    name,
+    versionId,
+    versionName,
+    message,
+    commitHash,
+    createdBy,
+    projectPath: reqProjectPath,
+  } = req.body as {
     name?: string;
     versionId: string;
     versionName: string;
@@ -188,7 +217,8 @@ router.post('/', (req: Request, res: Response) => {
   }
 
   const projectPath = reqProjectPath || DEFAULT_PROJECT_PATH;
-  const tagName = name || makeTagName(versionName, getTagConfig().tagPrefix, getTagConfig().customPrefix);
+  const tagName =
+    name || makeTagName(versionName, getTagConfig().tagPrefix, getTagConfig().customPrefix);
 
   // 检查是否已存在
   const existing = getTagByName(tagName);
@@ -224,7 +254,7 @@ router.post('/', (req: Request, res: Response) => {
 // DELETE /api/v1/tags/:tagName — 删除标签（同时删除 git tag，仅管理员）
 router.delete('/:tagName', requireAdmin, (req: Request, res: Response) => {
   const { tagName } = req.params;
-  const { projectPath: reqProjectPath } = req.body as { projectPath?: string } || {};
+  const { projectPath: reqProjectPath } = (req.body as { projectPath?: string }) || {};
 
   const projectPath = reqProjectPath || DEFAULT_PROJECT_PATH;
 
@@ -233,7 +263,6 @@ router.delete('/:tagName', requireAdmin, (req: Request, res: Response) => {
     // 如果 DB 没有记录，仍尝试删除 git tag
     if (projectPath) {
       try {
-        const { deleteTag } = require('../services/gitService.js');
         deleteTag(projectPath, tagName);
       } catch (err) {
         console.warn('[tag] Failed to delete git tag:', err);
@@ -251,9 +280,10 @@ router.delete('/:tagName', requireAdmin, (req: Request, res: Response) => {
   const deleted = removeTag(record.id, { projectPath });
 
   // 审计日志
+  // FIX: 从 JWT 验证后的 req.user 获取 actor，不再信任 HTTP Header
   auditService.log({
     action: 'tag_delete',
-    actor: (req.headers['x-user-id'] as string) || 'unknown',
+    actor: ((req as AuthRequest).user?.id as string) || 'unknown',
     target: tagName,
     ipAddress: (req.ip || req.socket.remoteAddress) as string | undefined,
     userAgent: req.headers['user-agent'] as string | undefined,
@@ -265,7 +295,10 @@ router.delete('/:tagName', requireAdmin, (req: Request, res: Response) => {
 // PUT /api/v1/tags/:tagName — 重命名标签（同时更新 git tag + DB，仅管理员）
 router.put('/:tagName', requireAdmin, (req: Request, res: Response) => {
   const { tagName } = req.params;
-  const { name: newName, projectPath: reqProjectPath } = req.body as { name: string; projectPath?: string };
+  const { name: newName, projectPath: reqProjectPath } = req.body as {
+    name: string;
+    projectPath?: string;
+  };
 
   if (!newName) {
     res.status(400).json(error(400, 'name is required'));
@@ -303,7 +336,10 @@ router.put('/:tagName', requireAdmin, (req: Request, res: Response) => {
 // PUT /api/v1/tags/:tagName/rename — 重命名标签（别名路由，仅管理员）
 router.put('/:tagName/rename', requireAdmin, (req: Request, res: Response) => {
   const { tagName } = req.params;
-  const { name: newName, projectPath: reqProjectPath } = req.body as { name: string; projectPath?: string };
+  const { name: newName, projectPath: reqProjectPath } = req.body as {
+    name: string;
+    projectPath?: string;
+  };
 
   if (!newName) {
     res.status(400).json(error(400, 'name is required'));
@@ -416,15 +452,17 @@ router.get('/preview/:version', (req: Request, res: Response) => {
   const tagName = makeTagName(version, config.tagPrefix, config.customPrefix);
   const willAutoTag = shouldAutoTag('published');
 
-  res.json(success({
-    version,
-    tagName,
-    willAutoTag,
-    config: {
-      prefix: config.tagPrefix,
-      customPrefix: config.customPrefix,
-    },
-  }));
+  res.json(
+    success({
+      version,
+      tagName,
+      willAutoTag,
+      config: {
+        prefix: config.tagPrefix,
+        customPrefix: config.customPrefix,
+      },
+    })
+  );
 });
 
 // GET /api/v1/tags/versions/:versionId — 获取某版本的所有 tag
@@ -470,22 +508,29 @@ router.post('/bulk', requireAdmin, (req: Request, res: Response) => {
       }
       results.push({ name: tagName, success: true });
     } catch (err) {
-      results.push({ name: tagName, success: false, error: err instanceof Error ? err.message : 'Unknown error' });
+      results.push({
+        name: tagName,
+        success: false,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
     }
   }
 
   const succeeded = results.filter(r => r.success).length;
   const failed = results.filter(r => !r.success).length;
 
-  res.json(success({
-    total: tagNames.length,
-    succeeded,
-    failed,
-    results,
-    message: failed === 0
-      ? `All ${succeeded} tags ${action}d successfully`
-      : `${succeeded} succeeded, ${failed} failed`,
-  }));
+  res.json(
+    success({
+      total: tagNames.length,
+      succeeded,
+      failed,
+      results,
+      message:
+        failed === 0
+          ? `All ${succeeded} tags ${action}d successfully`
+          : `${succeeded} succeeded, ${failed} failed`,
+    })
+  );
 });
 
 // DELETE /api/v1/tags/bulk — 批量删除标签
@@ -516,34 +561,55 @@ router.delete('/bulk', requireAdmin, (req: Request, res: Response) => {
       }
 
       if (record.protected && !force) {
-        results.push({ name: tagName, success: false, error: 'Tag is protected. Use force=true to override.' });
+        results.push({
+          name: tagName,
+          success: false,
+          error: 'Tag is protected. Use force=true to override.',
+        });
         continue;
       }
 
       removeTag(record.id);
       results.push({ name: tagName, success: true });
     } catch (err) {
-      results.push({ name: tagName, success: false, error: err instanceof Error ? err.message : 'Unknown error' });
+      results.push({
+        name: tagName,
+        success: false,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
     }
   }
 
   const succeeded = results.filter(r => r.success).length;
   const failed = results.filter(r => !r.success).length;
 
-  res.json(success({
-    total: tagNames.length,
-    succeeded,
-    failed,
-    results,
-    message: failed === 0
-      ? `All ${succeeded} tags deleted successfully`
-      : `${succeeded} succeeded, ${failed} failed`,
-  }));
+  res.json(
+    success({
+      total: tagNames.length,
+      succeeded,
+      failed,
+      results,
+      message:
+        failed === 0
+          ? `All ${succeeded} tags deleted successfully`
+          : `${succeeded} succeeded, ${failed} failed`,
+    })
+  );
 });
 
 // GET /api/v1/tags/search — 标签搜索（支持名称/日期范围过滤）
 router.get('/search', (req: Request, res: Response) => {
-  const { q, source, hasScreenshot, hasChangelog, protected: isProtected, dateFrom, dateTo, page, pageSize } = req.query;
+  const {
+    q,
+    source,
+    hasScreenshot,
+    hasChangelog,
+    protected: isProtected,
+    dateFrom,
+    dateTo,
+    page,
+    pageSize,
+  } = req.query;
 
   // Get all DB tag records
   const dbTags = getAllTagRecords();
@@ -562,7 +628,9 @@ router.get('/search', (req: Request, res: Response) => {
   }
 
   const db = getDb();
-  const summaryRows = db.prepare('SELECT version_id FROM version_summaries').all() as Array<{ version_id: string }>;
+  const summaryRows = db.prepare('SELECT version_id FROM version_summaries').all() as Array<{
+    version_id: string;
+  }>;
   const summaryIndex = new Set<string>();
   for (const row of summaryRows) {
     summaryIndex.add(row.version_id);
@@ -583,7 +651,7 @@ router.get('/search', (req: Request, res: Response) => {
       date: t.date,
       annotation: t.message,
       protected: protectedMap.get(t.name) || false,
-      source: sourceMap.get(t.name) || 'manual' as 'auto' | 'manual',
+      source: sourceMap.get(t.name) || ('manual' as 'auto' | 'manual'),
       hasScreenshot: versionId ? screenshotIndex.has(versionId) : false,
       hasChangelog: versionId ? summaryIndex.has(versionId) : false,
     };
@@ -631,13 +699,15 @@ router.get('/search', (req: Request, res: Response) => {
   const start = (p - 1) * ps;
   const data = mergedTags.slice(start, start + ps);
 
-  res.json(success({
-    data,
-    total,
-    page: p,
-    pageSize: ps,
-    totalPages: Math.ceil(total / ps),
-  }));
+  res.json(
+    success({
+      data,
+      total,
+      page: p,
+      pageSize: ps,
+      totalPages: Math.ceil(total / ps),
+    })
+  );
 });
 
 export default router;
