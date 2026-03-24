@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useBindingsByAgent, useCreateBinding, useUpdateBinding, useDeleteBinding } from "@/hooks/useAgentTokenBindings";
 import { useApiTokenList } from "@/hooks/useApiTokens";
 import { AgentTokenBinding, BindingLevel } from "@/lib/api/agentTokenBindings";
 import { ApiToken } from "@/lib/api/apiTokens";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Plus, Trash2, AlertTriangle } from "lucide-react";
+import { Loader2, Plus, Trash2, AlertTriangle, GripVertical } from "lucide-react";
 
 interface AgentTokenConfigTabProps {
   agentName: string;
@@ -25,17 +25,65 @@ const PROVIDER_COLORS: Record<string, string> = {
   custom: "bg-gray-50 text-gray-700 border-gray-200",
 };
 
-function BindingRow({ binding, tokens, onEdit, onDelete }: {
+interface BindingRowProps {
   binding: AgentTokenBinding;
   tokens: ApiToken[];
   onEdit: (b: AgentTokenBinding) => void;
   onDelete: (id: string) => void;
-}) {
+  onToggleEnabled: (id: string, enabled: boolean) => void;
+  draggable?: boolean;
+  isDragging?: boolean;
+  isDragOver?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragEnd?: () => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
+  dragHandle?: boolean;
+}
+
+function BindingRow({
+  binding,
+  tokens,
+  onEdit,
+  onDelete,
+  onToggleEnabled,
+  draggable,
+  isDragging,
+  isDragOver,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
+  dragHandle,
+}: BindingRowProps) {
   const token = tokens.find(t => t.id === binding.tokenId);
   const providerColor = token ? PROVIDER_COLORS[token.provider] || PROVIDER_COLORS.custom : PROVIDER_COLORS.custom;
 
   return (
-    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+    <div
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={e => { e.preventDefault(); onDragOver?.(); }}
+      onDrop={onDrop}
+      className={[
+        "flex items-center gap-2 p-3 bg-gray-50 rounded-lg transition-all",
+        isDragging ? "opacity-40 scale-[0.98]" : "",
+        isDragOver ? "border-2 border-blue-400 bg-blue-50" : "border border-transparent",
+      ].join(" ")}
+    >
+      {/* Drag handle */}
+      {dragHandle && (
+        <div className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 flex-shrink-0">
+          <GripVertical className="w-4 h-4" />
+        </div>
+      )}
+
+      {/* Priority badge */}
+      <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+        <span className="text-xs font-bold text-blue-700">P{binding.priority}</span>
+      </div>
+
       {/* Token info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
@@ -46,8 +94,7 @@ function BindingRow({ binding, tokens, onEdit, onDelete }: {
             {token?.alias || binding.tokenId}
           </span>
         </div>
-        <div className="flex items-center gap-2 mt-1">
-          <span className="text-xs text-gray-400">P{binding.priority}</span>
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
           {binding.levels.length > 0 ? (
             binding.levels.map(lv => {
               const opt = LEVEL_OPTIONS.find(o => o.value === lv);
@@ -69,8 +116,17 @@ function BindingRow({ binding, tokens, onEdit, onDelete }: {
       {/* Enabled switch */}
       <Switch
         checked={binding.enabled}
-        onCheckedChange={() => onEdit(binding)}
+        onCheckedChange={(enabled) => onToggleEnabled(binding.id, enabled)}
       />
+
+      {/* Edit */}
+      <button
+        onClick={() => onEdit(binding)}
+        className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1 hover:bg-blue-50 rounded transition-colors"
+        title="编辑绑定"
+      >
+        编辑
+      </button>
 
       {/* Delete */}
       <button
@@ -101,7 +157,7 @@ interface BindingFormProps {
   onCancel: () => void;
 }
 
-function BindingForm({ tokens, editingBinding, defaultPriority, onSubmit, onCancel }: BindingFormProps) {
+function BindingForm({ agentName, tokens, editingBinding, defaultPriority, onSubmit, onCancel }: BindingFormProps) {
   const [tokenId, setTokenId] = useState(editingBinding?.tokenId || "");
   const [priority, setPriority] = useState(editingBinding?.priority ?? defaultPriority);
   const [levels, setLevels] = useState<BindingLevel[]>(editingBinding?.levels || []);
@@ -248,6 +304,14 @@ export function AgentTokenConfigTab({ agentName }: AgentTokenConfigTabProps) {
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingBinding, setEditingBinding] = useState<AgentTokenBinding | null>(null);
+  const [reordering, setReordering] = useState(false);
+
+  // Drag-and-drop state
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+  const dragCounter = useRef(0);
+
+  const sortedBindings = [...bindings].sort((a, b) => a.priority - b.priority);
 
   const handleSubmit = async (data: BindingFormData) => {
     if (editingBinding) {
@@ -277,6 +341,58 @@ export function AgentTokenConfigTab({ agentName }: AgentTokenConfigTabProps) {
     await deleteBinding.mutateAsync(id);
   };
 
+  const handleToggleEnabled = async (id: string, enabled: boolean) => {
+    await updateBinding.mutateAsync({ id, body: { enabled } });
+  };
+
+  // Drag-and-drop handlers
+  const handleDragStart = (index: number) => (_e: React.DragEvent) => {
+    setDragIndex(index);
+    dragCounter.current = 0;
+  };
+
+  const handleDragEnd = () => {
+    setDragIndex(null);
+    setOverIndex(null);
+    dragCounter.current = 0;
+  };
+
+  const handleDragOver = (index: number) => (_e: React.DragEvent) => {
+    dragCounter.current++;
+    setOverIndex(index);
+  };
+
+  const handleDrop = (dropIndex: number) => async (_e: React.DragEvent) => {
+    if (dragIndex === null || dragIndex === dropIndex) {
+      handleDragEnd();
+      return;
+    }
+
+    setReordering(true);
+    try {
+      // Build new priority order: move item at dragIndex to dropIndex
+      const newOrder = [...sortedBindings];
+      const [moved] = newOrder.splice(dragIndex, 1);
+      newOrder.splice(dropIndex, 0, moved);
+
+      // Update all priorities: new order gets priorities 1, 2, 3...
+      const updates = newOrder.map((binding, i) => ({
+        id: binding.id,
+        priority: i + 1,
+      }));
+
+      // Fire all updates in parallel
+      await Promise.all(
+        updates.map(({ id, priority }) =>
+          updateBinding.mutateAsync({ id, body: { priority } })
+        )
+      );
+    } finally {
+      setReordering(false);
+      handleDragEnd();
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -296,6 +412,12 @@ export function AgentTokenConfigTab({ agentName }: AgentTokenConfigTabProps) {
             <p className="text-xs text-amber-600 mt-1">
               将使用系统全局环境变量中的 API Key。
             </p>
+            <a
+              href="/tokens"
+              className="text-xs text-blue-600 hover:text-blue-700 font-medium mt-2 inline-flex items-center gap-1"
+            >
+              配置 Token →
+            </a>
           </div>
         </div>
       )}
@@ -330,21 +452,42 @@ export function AgentTokenConfigTab({ agentName }: AgentTokenConfigTabProps) {
           </div>
 
           {bindings.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-4">暂无绑定</p>
+            <p className="text-sm text-gray-400 text-center py-4">暂无绑定，拖拽排序功能将在添加后可用</p>
           ) : (
-            <div className="space-y-2">
-              {[...bindings]
-                .sort((a, b) => a.priority - b.priority)
-                .map(binding => (
+            <>
+              {/* Drag hint */}
+              {bindings.length > 1 && (
+                <p className="text-xs text-gray-400 mb-2">↕ 拖拽行首可调整优先级顺序</p>
+              )}
+
+              <div className="space-y-2">
+                {sortedBindings.map((binding, index) => (
                   <BindingRow
                     key={binding.id}
                     binding={binding}
                     tokens={tokens}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
+                    onToggleEnabled={handleToggleEnabled}
+                    draggable={bindings.length > 1}
+                    isDragging={dragIndex === index}
+                    isDragOver={overIndex === index && dragIndex !== index}
+                    onDragStart={handleDragStart(index)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={handleDragOver(index)}
+                    onDrop={handleDrop(index)}
+                    dragHandle
                   />
                 ))}
-            </div>
+              </div>
+
+              {reordering && (
+                <div className="flex items-center justify-center py-3">
+                  <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                  <span className="text-xs text-gray-500 ml-2">正在更新优先级...</span>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
