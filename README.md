@@ -56,6 +56,16 @@ npm run dev
 
 访问 http://localhost:3000 查看应用。
 
+### 默认账号
+
+| 用途 | 用户名 | 密码 |
+|------|--------|------|
+| 前端登录 | `admin` | `admin123` |
+| PostgreSQL 数据库 | `teamclaw` | `password` |
+
+- 数据库连接串：`postgresql://teamclaw:password@localhost:5432/teamclaw`
+- Redis：`redis://localhost:6379`（无密码）
+
 ### Docker 部署
 
 使用 Docker Compose 一键启动：
