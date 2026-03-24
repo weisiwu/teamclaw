@@ -26,6 +26,7 @@ import tokenStatsRouter from './routes/tokenStats.js';
 import dashboardRouter from './routes/dashboard.js';
 import adminConfigRouter from './routes/adminConfig.js';
 import auditLogRouter from './routes/auditLog.js';
+import demoRouter from './routes/demo.js';
 import webhookRouter from './routes/webhook.js';
 import apiTokenRouter from './routes/apiToken.js';
 import agentTokenBindingRouter from './routes/agentTokenBinding.js';
@@ -44,6 +45,7 @@ import { registerAutoBumpHook } from './hooks/autoBumpOnTaskDone.js';
 import { toolService } from './services/toolService.js';
 import { skillService } from './services/skillService.js';
 import { seedDefaultAgents } from './services/agentService.js';
+import { seedDemoData } from './services/demoSeed.js';
 import traceRouter from './routes/trace.js';
 // 初始化事件总线串联模块（按依赖顺序导入）
 import './services/messageToTask.js'; // 消息→任务
@@ -204,6 +206,7 @@ const adminRouter = Router();
 adminRouter.use(requireAdmin);
 adminRouter.use('/config', adminConfigRouter);
 adminRouter.use('/audit-logs', auditLogRouter);
+adminRouter.use('/demo', demoRouter);
 adminRouter.use('/webhooks', webhookRouter);
 adminRouter.use('/api-tokens', apiTokenRouter);
 adminRouter.use('/', agentTokenBindingRouter);
@@ -230,6 +233,8 @@ const server = app.listen(PORT, async () => {
   console.log(`TeamClaw server running on port ${PORT}`);
   // 运行数据库迁移
   await runMigrations();
+  // 自动填充 Demo 数据（首次启动）
+  await seedDemoData();
   // Seed 默认 Agent（首次启动时从 AGENT_TEAM 常量填充）
   await seedDefaultAgents();
   // 注册自动版本升级钩子

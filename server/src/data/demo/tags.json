@@ -1,0 +1,23 @@
+[
+  { "name": "auth", "annotation": "用户认证相关", "source": "manual" },
+  { "name": "backend", "annotation": "后端开发", "source": "manual" },
+  { "name": "frontend", "annotation": "前端开发", "source": "manual" },
+  { "name": "agent", "annotation": "Agent 相关", "source": "manual" },
+  { "name": "llm", "annotation": "大语言模型集成", "source": "manual" },
+  { "name": "feature", "annotation": "新功能", "source": "manual" },
+  { "name": "bugfix", "annotation": "Bug 修复", "source": "manual" },
+  { "name": "version", "annotation": "版本管理", "source": "manual" },
+  { "name": "ui", "annotation": "界面 UI", "source": "manual" },
+  { "name": "performance", "annotation": "性能优化", "source": "manual" },
+  { "name": "security", "annotation": "安全相关", "source": "manual" },
+  { "name": "feishu", "annotation": "飞书集成", "source": "manual" },
+  { "name": "notification", "annotation": "消息通知", "source": "manual" },
+  { "name": "message", "annotation": "消息处理", "source": "manual" },
+  { "name": "devops", "annotation": "DevOps 部署", "source": "manual" },
+  { "name": "docker", "annotation": "Docker 容器化", "source": "manual" },
+  { "name": "mobile", "annotation": "移动端适配", "source": "manual" },
+  { "name": "doc", "annotation": "文档相关", "source": "manual" },
+  { "name": "automation", "annotation": "自动化", "source": "manual" },
+  { "name": "reliability", "annotation": "可靠性保障", "source": "manual" },
+  { "name": "scheduler", "annotation": "任务调度", "source": "manual" }
+]
