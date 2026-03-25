@@ -48,6 +48,7 @@ import { toolService } from './services/toolService.js';
 import { skillService } from './services/skillService.js';
 import { seedDefaultAgents } from './services/agentService.js';
 import { seedDemoData } from './services/demoSeed.js';
+import { migrateEnvTokens } from './services/apiTokenService.js';
 import traceRouter from './routes/trace.js';
 // 初始化事件总线串联模块（按依赖顺序导入）
 import './services/messageToTask.js'; // 消息→任务
@@ -243,6 +244,10 @@ const server = app.listen(PORT, async () => {
   await seedDefaultAgents();
   // 注册自动版本升级钩子
   registerAutoBumpHook();
+  // 迁移环境变量中的 API Key 到平台数据库（异步不阻塞启动）
+  migrateEnvTokens().catch(err => {
+    console.error('[migration] Failed to migrate env tokens:', err);
+  });
   // 初始化内置 Tools
   try {
     const toolInitResult = await toolService.initializeBuiltinTools();

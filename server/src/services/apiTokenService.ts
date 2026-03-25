@@ -326,6 +326,63 @@ export async function resetMonthlyUsage(): Promise<number> {
 }
 
 /**
+ * 根据 Provider 和 Key 前缀查找 Token
+ * 用于检测环境变量中的 Key 是否已导入
+ * @param provider LLM Provider
+ * @param keyPrefix API Key 前缀（取前 8 位）
+ * @returns 匹配的 Token，不存在返回 null
+ */
+export async function findByProviderAndKeyPrefix(
+  provider: string,
+  keyPrefix: string
+): Promise<ApiToken | null> {
+  const rows = await query<ApiTokenRow>(
+    `SELECT * FROM api_tokens WHERE provider = $1 AND status = 'active'`,
+    [provider]
+  );
+  for (const row of rows) {
+    const token = rowToApiToken(row);
+    if (token.apiKey.startsWith(keyPrefix)) {
+      return token;
+    }
+  }
+  return null;
+}
+
+/**
+ * 将环境变量中的 API Key 迁移到平台数据库
+ * 在服务启动时自动调用，幂等操作（重复运行安全）
+ */
+export async function migrateEnvTokens(): Promise<void> {
+  const envKeys = [
+    { env: 'DEEPSEEK_API_KEY', provider: 'deepseek', alias: '环境变量 DeepSeek', models: ['deepseek-chat'] },
+    { env: 'OPENAI_API_KEY', provider: 'openai', alias: '环境变量 OpenAI', models: ['gpt-4o', 'gpt-4o-mini'] },
+    { env: 'ANTHROPIC_API_KEY', provider: 'anthropic', alias: '环境变量 Anthropic', models: ['claude-sonnet-4-20250514'] },
+  ];
+
+  for (const { env, provider, alias, models } of envKeys) {
+    const key = process.env[env];
+    if (!key) continue;
+
+    const existing = await findByProviderAndKeyPrefix(provider, key.slice(0, 8));
+    if (existing) continue;
+
+    await createToken(
+      {
+        alias: `${alias}（自动导入）`,
+        provider: provider as LLMProvider,
+        apiKey: key,
+        models,
+        note: `从环境变量 ${env} 自动导入`,
+      },
+      'system'
+    );
+
+    console.log(`[migration] Auto-imported ${env} as platform token`);
+  }
+}
+
+/**
  * 记录 Token 使用量（由 llmService 调用）
  * @param tokenId Token ID
  * @param params 用量参数：inputTokens, outputTokens, costUsd, agentName
@@ -377,6 +434,8 @@ export const apiTokenService = {
   getSupportedProviders,
   resetMonthlyUsage,
   recordUsage,
+  findByProviderAndKeyPrefix,
+  migrateEnvTokens,
 };
 
 export default apiTokenService;
