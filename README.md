@@ -41,23 +41,7 @@ cd teamclaw
 npm install
 ```
 
-3. 初始化数据库（PostgreSQL）：
-
-```bash
-# 默认：启动 Docker DB → 创建数据库 → 运行迁移
-./scripts/setup-db.sh
-
-# 连接外部已存在的 PostgreSQL（跳过 Docker）
-./scripts/setup-db.sh --external
-
-# 重置数据库（删除重建，适合开发中彻底刷新）
-./scripts/setup-db.sh --reset
-
-# 查看帮助
-./scripts/setup-db.sh --help
-```
-
-4. 配置环境变量：
+3. 配置环境变量：
 
 ```bash
 cp server/.env.example server/.env
@@ -65,9 +49,30 @@ cp server/.env.example server/.env
 ```
 
 **必需变量**（server/.env 中）：
-- `DATABASE_URL` — PostgreSQL 连接字符串（setup-db.sh 后已可用）
-- `REDIS_URL` — Redis 连接地址（默认 `redis://localhost:6379`）
-- `JWT_SECRET` — JWT 签名密钥（生产环境务必更换，默认值仅供开发）
+- `DATABASE_URL` — PostgreSQL 连接字符串（使用外部数据库或 Docker 时由 setup-db.sh 自动配置）
+- `REDIS_URL` — Redis 连接地址（默认 `redis://localhost:6379`，无需修改）
+- `JWT_SECRET` — JWT 签名密钥（生产环境务必更换，开发环境可用默认值）
+
+4. 初始化数据库（PostgreSQL）：
+
+```bash
+# 方式 A（默认）：启动 Docker DB → 创建数据库 → 运行迁移
+# 前提：DATABASE_URL 已配置（Docker 模式会覆盖为本地连接字符串）
+./scripts/setup-db.sh
+
+# 方式 B：使用外部已存在的 PostgreSQL
+# 前提：DATABASE_URL 指向外部数据库
+./scripts/setup-db.sh --external
+
+# 方式 C：重置数据库（删除重建，适合开发中彻底刷新）
+./scripts/setup-db.sh --reset
+
+# 方式 D：预检模式（检查配置，不执行写入）
+./scripts/setup-db.sh --dry-run
+
+# 查看完整帮助
+./scripts/setup-db.sh --help
+```
 
 5. 启动开发服务器：
 

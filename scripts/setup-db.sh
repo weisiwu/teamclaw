@@ -35,11 +35,28 @@ for arg in "$@"; do
     --reset)    MODE="reset" ;;
     --dry-run)  DRY_RUN=true; MODE="dry-run" ;;
     --help|-h)
-      echo "用法: $0 [--external|--reset|--dry-run]"
-      echo "  （无参数）默认：启动 Docker DB 并初始化"
-      echo "  --external  连接外部已存在的数据库（跳过 Docker）"
-      echo "  --reset     重置数据库（删除重建）"
-      echo "  --dry-run  预检模式：检查环境变量、Docker 状态，不执行写入操作"
+      echo ""
+      echo "TeamClaw 数据库初始化脚本"
+      echo ""
+      echo "用法: $0 [选项]"
+      echo ""
+      echo "选项："
+      echo "  （无参数）    启动 Docker PostgreSQL 并初始化数据库（默认）"
+      echo "  --external   连接外部已存在的 PostgreSQL（跳过 Docker启动）"
+      echo "  --reset      重置数据库（删除后重建，慎用！）"
+      echo "  --dry-run    预检模式：检查环境和变量，不执行任何写入操作"
+      echo "  --help, -h   显示本帮助信息"
+      echo ""
+      echo "示例："
+      echo "  $0                    # 默认：启动 Docker DB 并初始化"
+      echo "  $0 --external         # 使用外部 PostgreSQL"
+      echo "  $0 --reset            # 重置数据库"
+      echo "  $0 --dry-run          # 预检（不写入）"
+      echo ""
+      echo "前提条件："
+      echo "  1. Docker 已启动（Docker 模式）"
+      echo "  2. server/.env 已配置（使用外部 DB 时需设置 DATABASE_URL）"
+      echo ""
       exit 0
       ;;
   esac
