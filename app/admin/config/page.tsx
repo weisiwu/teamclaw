@@ -7,6 +7,8 @@ import { PermissionGuard } from '@/components/layout/PermissionGuard';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast';
+import { apiGet, apiPut, apiPost } from '@/lib/api-safe-fetch';
+import { getFriendlyErrorMessage } from '@/lib/api-safe-fetch';
 
 export default function AdminConfigPage() {
   const { success, error: toastError } = useToast();
@@ -19,15 +21,13 @@ export default function AdminConfigPage() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const fetchConfig = useCallback(async () => {
-    try {
-      const res = await fetch('/api/v1/admin/config');
-      const data = await res.json();
-      setConfig(data.data);
-    } catch {
-      toastError('加载配置失败');
-    } finally {
-      setLoading(false);
+    const result = await apiGet<SystemConfig>('/api/v1/admin/config');
+    if (result.success && result.data) {
+      setConfig(result.data);
+    } else {
+      toastError('加载配置失败：' + getFriendlyErrorMessage(result.error));
     }
+    setLoading(false);
   }, [toastError]);
 
   useEffect(() => { fetchConfig(); }, [fetchConfig]);
@@ -35,58 +35,41 @@ export default function AdminConfigPage() {
 
   const fetchAbilities = async () => {
     setAbilitiesLoading(true);
-    try {
-      const res = await fetch('/api/v1/abilities');
-      const data = await res.json();
-      if (data.success && data.data) {
-        setAbilities(Array.isArray(data.data) ? data.data : (data.data as Record<string, unknown>).abilities || []);
-      }
-    } catch {
-      // ignore
-    } finally {
-      setAbilitiesLoading(false);
+    const result = await apiGet<{ abilities?: Array<{ id: string; name: string; description: string; enabled: boolean; requiredRole: string }> }>('/api/v1/abilities');
+    if (result.success && result.data) {
+      const abilitiesData = (result.data as Record<string, unknown>).abilities;
+      setAbilities(Array.isArray(abilitiesData) ? abilitiesData as Array<{ id: string; name: string; description: string; enabled: boolean; requiredRole: string }> : []);
     }
+    setAbilitiesLoading(false);
   };
 
   const saveConfig = async () => {
     if (!config) return;
     setSaving(true);
-    try {
-      const res = await fetch('/api/v1/admin/config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
-      });
-      const data = await res.json();
-      if (data.success) {
-        success('配置已保存');
-      } else {
-        toastError(data.error || '保存失败');
-      }
-    } catch {
-      toastError('保存失败');
-    } finally {
-      setSaving(false);
+    const result = await apiPut('/api/v1/admin/config', config);
+    if (result.success) {
+      success('配置已保存');
+    } else {
+      toastError('保存失败：' + getFriendlyErrorMessage(result.error));
     }
+    setSaving(false);
   };
 
   const resetConfig = async () => {
     setShowResetConfirm(false);
-    try {
-      const res = await fetch('/api/v1/admin/config/reset', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        setConfig(data.data);
-        success('配置已重置');
-      }
-    } catch { toastError('重置失败'); }
+    const result = await apiPost('/api/v1/admin/config/reset', {});
+    if (result.success && result.data) {
+      setConfig((result.data as Record<string, unknown>).config as SystemConfig || null);
+      success('配置已重置');
+    } else {
+      toastError('重置失败：' + getFriendlyErrorMessage(result.error));
+    }
   };
 
   const exportConfig = async () => {
-    try {
-      const res = await fetch('/api/v1/admin/config/export');
-      const data = await res.json();
-      const blob = new Blob([JSON.stringify(data.data?.config || {}, null, 2)], { type: 'application/json' });
+    const result = await apiGet<{ config: Record<string, unknown> }>('/api/v1/admin/config/export');
+    if (result.success && result.data) {
+      const blob = new Blob([JSON.stringify((result.data as Record<string, unknown>).config || {}, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -94,7 +77,9 @@ export default function AdminConfigPage() {
       a.click();
       URL.revokeObjectURL(url);
       success('配置已导出');
-    } catch { toastError('导出失败'); }
+    } else {
+      toastError('导出失败：' + getFriendlyErrorMessage(result.error));
+    }
   };
 
   const importConfig = () => {
@@ -106,18 +91,13 @@ export default function AdminConfigPage() {
       const file = target.files?.[0];
       if (!file) return;
       const text = await file.text();
-      try {
-        const res = await fetch('/api/v1/admin/config/import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ config: text }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          setConfig(data.data);
-          success('配置已导入');
-        }
-      } catch { toastError('导入失败'); }
+      const result = await apiPost('/api/v1/admin/config/import', { config: text });
+      if (result.success && result.data) {
+        setConfig((result.data as Record<string, unknown>).config as SystemConfig || null);
+        success('配置已导入');
+      } else {
+        toastError('导入失败：' + getFriendlyErrorMessage(result.error));
+      }
     };
     input.click();
   };

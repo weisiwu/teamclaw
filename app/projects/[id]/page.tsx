@@ -6,6 +6,8 @@ import { useProject, useProjectTree } from '../../../hooks/useProjects';
 import { FileTreeView } from '../../../components/FileTree';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api-safe-fetch';
+import { getFriendlyErrorMessage } from '@/lib/api-safe-fetch';
 
 // ========== 分支管理面板 ==========
 
@@ -39,13 +41,11 @@ function BranchesPanel() {
 
   const loadBranches = async () => {
     setLoading(true);
-    try {
-      const res = await fetch(`/api/v1/branches?pageSize=100`);
-      const json = await res.json();
-      if (json.code === 0) setBranches(json.data.data || []);
-      else showToast('error', json.message || '加载失败');
-    } catch {
-      showToast('error', '网络错误');
+    const result = await apiGet<{ data: Branch[] }>(`/api/v1/branches?pageSize=100`);
+    if (result.success && result.data) {
+      setBranches((result.data as Record<string, unknown>).data as Branch[] || []);
+    } else {
+      showToast('error', '加载分支失败：' + getFriendlyErrorMessage(result.error));
     }
     setLoading(false);
   };
@@ -53,40 +53,26 @@ function BranchesPanel() {
   const createBranch = async () => {
     if (!newBranchName.trim()) { showToast('error', '分支名不能为空'); return; }
     setCreating(true);
-    try {
-      const res = await fetch('/api/v1/branches', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newBranchName.trim(), baseBranch }),
-      });
-      const json = await res.json();
-      if (json.code === 0) {
-        showToast('success', `分支 ${newBranchName} 创建成功`);
-        setNewBranchName('');
-        setShowCreate(false);
-        loadBranches();
-      } else {
-        showToast('error', json.message || '创建失败');
-      }
-    } catch {
-      showToast('error', '网络错误');
+    const result = await apiPost('/api/v1/branches', { name: newBranchName.trim(), baseBranch });
+    if (result.success) {
+      showToast('success', `分支 ${newBranchName} 创建成功`);
+      setNewBranchName('');
+      setShowCreate(false);
+      loadBranches();
+    } else {
+      showToast('error', '创建失败：' + getFriendlyErrorMessage(result.error));
     }
     setCreating(false);
   };
 
   const setMain = async (branchId: string, branchName: string) => {
     setSettingMain(branchId);
-    try {
-      const res = await fetch(`/api/v1/branches/${branchId}/main`, { method: 'PUT' });
-      const json = await res.json();
-      if (json.code === 0) {
-        showToast('success', `${branchName} 已设为主分支`);
-        loadBranches();
-      } else {
-        showToast('error', json.message || '设置失败');
-      }
-    } catch {
-      showToast('error', '网络错误');
+    const result = await apiPut(`/api/v1/branches/${branchId}/main`, {});
+    if (result.success) {
+      showToast('success', `${branchName} 已设为主分支`);
+      loadBranches();
+    } else {
+      showToast('error', '设置失败：' + getFriendlyErrorMessage(result.error));
     }
     setSettingMain(null);
   };
@@ -95,17 +81,12 @@ function BranchesPanel() {
     if (!deleteTarget) return;
     setDeleting(deleteTarget.id);
     setDeleteTarget(null);
-    try {
-      const res = await fetch(`/api/v1/branches/${deleteTarget.id}`, { method: 'DELETE' });
-      const json = await res.json();
-      if (json.code === 0) {
-        showToast('success', `分支 ${deleteTarget.name} 已删除`);
-        loadBranches();
-      } else {
-        showToast('error', json.message || '删除失败');
-      }
-    } catch {
-      showToast('error', '网络错误');
+    const result = await apiDelete(`/api/v1/branches/${deleteTarget.id}`);
+    if (result.success) {
+      showToast('success', `分支 ${deleteTarget.name} 已删除`);
+      loadBranches();
+    } else {
+      showToast('error', '删除失败：' + getFriendlyErrorMessage(result.error));
     }
     setDeleting(null);
   };
@@ -287,48 +268,41 @@ export default function ProjectDetailPage({ params }: Props) {
 
   const loadFeatures = async () => {
     setLoadingSub(true);
-    try {
-      const res = await fetch(`/api/v1/projects/${id}/feature-map`);
-      const json = await res.json();
-      if (json.code === 0) setFeatureMap(json.data.featureMap);
-    } catch { /* ignore */ }
+    const result = await apiGet<{ featureMap: Record<string, unknown> }>(`/api/v1/projects/${id}/feature-map`);
+    if (result.success && result.data) {
+      setFeatureMap((result.data as Record<string, unknown>).featureMap as Record<string, unknown>);
+    }
     setLoadingSub(false);
   };
 
   const loadDocs = async () => {
     setLoadingSub(true);
-    try {
-      const res = await fetch(`/api/v1/projects/${id}/docs`);
-      const json = await res.json();
-      if (json.code === 0) setDocs(json.data.docs);
-    } catch { /* ignore */ }
+    const result = await apiGet<{ docs: unknown[] }>(`/api/v1/projects/${id}/docs`);
+    if (result.success && result.data) {
+      setDocs((result.data as Record<string, unknown>).docs as unknown[]);
+    }
     setLoadingSub(false);
   };
 
   const loadGitHistory = async () => {
     setLoadingSub(true);
-    try {
-      const res = await fetch(`/api/v1/projects/${id}/git-history`);
-      const json = await res.json();
-      if (json.code === 0) setGitHistory(json.data.commits || []);
-    } catch { /* ignore */ }
+    const result = await apiGet<{ commits: unknown[] }>(`/api/v1/projects/${id}/git-history`);
+    if (result.success && result.data) {
+      setGitHistory((result.data as Record<string, unknown>).commits as unknown[] || []);
+    }
     setLoadingSub(false);
   };
 
   const handleRefresh = async () => {
     setShowRefreshConfirm(false);
     setRefreshing(true);
-    try {
-      const res = await fetch(`/api/v1/projects/${id}/refresh`, { method: 'POST' });
-      const json = await res.json();
-      if (json.code === 0) {
-        showToast('success', `刷新完成！新特性: ${json.data.refresh.newFeatures}，新文档: ${json.data.refresh.newDocs}，新提交: ${json.data.refresh.newCommits}`);
-        window.location.reload();
-      } else {
-        showToast('error', '刷新失败: ' + json.message);
-      }
-    } catch (e) {
-      showToast('error', '刷新失败: ' + (e as Error).message);
+    const result = await apiPost<{ refresh: { newFeatures: number; newDocs: number; newCommits: number } }>(`/api/v1/projects/${id}/refresh`, {});
+    if (result.success && result.data) {
+      const refreshData = (result.data as Record<string, unknown>).refresh as { newFeatures: number; newDocs: number; newCommits: number };
+      showToast('success', `刷新完成！新特性: ${refreshData.newFeatures}，新文档: ${refreshData.newDocs}，新提交: ${refreshData.newCommits}`);
+      window.location.reload();
+    } else {
+      showToast('error', '刷新失败：' + getFriendlyErrorMessage(result.error));
     }
     setRefreshing(false);
   };

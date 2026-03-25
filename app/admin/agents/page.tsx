@@ -18,6 +18,7 @@ import {
   WifiOff,
   Loader2,
 } from "lucide-react";
+import { apiGet, apiPost } from "@/lib/api-safe-fetch";
 
 const AGENT_NAMES = ["main", "pm", "reviewer", "coder1", "coder2"];
 
@@ -145,20 +146,17 @@ export default function AgentMonitorPage() {
   const [isChecking, setIsChecking] = useState(false);
 
   const fetchData = useCallback(async () => {
-    try {
-      const [healthRes, statsRes] = await Promise.all([
-        fetch("/api/v1/agents/health"),
-        fetch("/api/v1/agents/executions/stats"),
-      ]);
-      const healthJson = await healthRes.json();
-      const statsJson = await statsRes.json();
-      setHealthData(healthJson.data);
-      setStatsData(statsJson.data);
-    } catch (err) {
-      console.error("Failed to fetch agent data:", err);
-    } finally {
-      setLoading(false);
+    const [healthResult, statsResult] = await Promise.all([
+      apiGet<HealthReportData>("/api/v1/agents/health"),
+      apiGet<Record<string, AgentStats>>("/api/v1/agents/executions/stats"),
+    ]);
+    if (healthResult.success && healthResult.data) {
+      setHealthData(healthResult.data);
     }
+    if (statsResult.success && statsResult.data) {
+      setStatsData(statsResult.data);
+    }
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -169,12 +167,9 @@ export default function AgentMonitorPage() {
 
   const handleHealthCheck = async () => {
     setIsChecking(true);
-    try {
-      await fetch("/api/v1/agents/health/check", { method: "POST" });
-      await fetchData();
-    } finally {
-      setIsChecking(false);
-    }
+    await apiPost("/api/v1/agents/health/check", {});
+    await fetchData();
+    setIsChecking(false);
   };
 
   const healthReport = healthData;
