@@ -14,6 +14,8 @@ import {
   TokenUsageByToken,
   TokenUsageByAgent,
   LLMCallLogTable,
+  AgentAllocationPanel,
+  ApiKeyManagementPanel,
 } from "@/components/tokens";
 import {
   useTokenSummary,
@@ -394,24 +396,8 @@ export default function TokensPage() {
     <Suspense fallback={<TokensLoading />}>
       <MainTabs active={mainTab} onChange={handleMainTabChange} />
       {mainTab === "usage" && <TokensContent />}
-      {mainTab === "agent" && (
-        <div className="flex items-center justify-center py-20 text-gray-400">
-          <div className="text-center">
-            <p className="text-lg font-medium mb-1">Agent 分配</p>
-            <p className="text-sm">功能入口已迁移至「Token 管理」侧边栏</p>
-            <p className="text-xs mt-2 text-gray-400">跳转中...</p>
-          </div>
-        </div>
-      )}
-      {mainTab === "apikey" && (
-        <div className="flex items-center justify-center py-20 text-gray-400">
-          <div className="text-center">
-            <p className="text-lg font-medium mb-1">API Key 管理</p>
-            <p className="text-sm">功能入口已迁移至「Token 管理」侧边栏</p>
-            <p className="text-xs mt-2 text-gray-400">跳转中...</p>
-          </div>
-        </div>
-      )}
+      {mainTab === "agent" && <AgentAllocationPanel />}
+      {mainTab === "apikey" && <ApiKeyManagementPanel />}
     </Suspense>
   );
 }

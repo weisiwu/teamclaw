@@ -6,3 +6,5 @@ export { TokenFilterBar } from "./TokenFilterBar";
 export { TokenUsageByToken } from "./TokenUsageByToken";
 export { TokenUsageByAgent } from "./TokenUsageByAgent";
 export { LLMCallLogTable } from "./LLMCallLogTable";
+export { AgentAllocationPanel } from "./AgentAllocationPanel";
+export { ApiKeyManagementPanel } from "./ApiKeyManagementPanel";
