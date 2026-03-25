@@ -41,14 +41,26 @@ cd teamclaw
 npm install
 ```
 
-3. 配置环境变量：
+3. 初始化数据库（PostgreSQL）：
 
 ```bash
-cp .env.example .env.local
-# 编辑 .env.local 填入必要的环境变量
+# 一键初始化：启动 Docker DB → 创建数据库 → 运行迁移
+./scripts/setup-db.sh
 ```
 
-4. 启动开发服务器：
+4. 配置环境变量：
+
+```bash
+cp server/.env.example server/.env
+# 编辑 server/.env 填入必要的环境变量
+```
+
+**必需变量**（server/.env 中）：
+- `DATABASE_URL` — PostgreSQL 连接字符串（setup-db.sh 后已可用）
+- `REDIS_URL` — Redis 连接地址（默认 `redis://localhost:6379`）
+- `JWT_SECRET` — JWT 签名密钥（生产环境务必更换，默认值仅供开发）
+
+5. 启动开发服务器：
 
 ```bash
 npm run dev
@@ -148,6 +160,38 @@ npm run prepare          # 安装 Husky hooks
 ## 贡献
 
 我们欢迎所有形式的贡献！请参阅 [CONTRIBUTING.md](./CONTRIBUTING.md) 了解如何参与。
+
+## 故障排查
+
+### 数据库连接失败
+```bash
+# 1. 检查 Docker 是否运行
+docker ps | grep postgres
+
+# 2. 检查 DATABASE_URL 环境变量
+echo $DATABASE_URL
+
+# 3. 重新初始化数据库
+./scripts/setup-db.sh
+
+# 4. 查看详细错误日志
+docker logs teamclaw-postgres
+```
+
+### 迁移失败
+```bash
+# 手动运行迁移
+cd server && npx tsx src/db/migrations/run.ts
+```
+
+### 端口占用
+```bash
+# 检查端口占用
+lsof -i :3000  # 前端
+lsof -i :9700  # 后端
+
+# 停止占用进程或修改 .env 中的 PORT
+```
 
 ## 许可证
 
