@@ -97,7 +97,7 @@ export async function processMessage(request: ReceiveMessageRequest): Promise<Pi
     detectMentionedAgent(request.content) || (request.mentionedAgent as AgentName | null);
 
   // 生成 traceId 用于追踪整个 pipeline
-  const traceId = `trace_${message.messageId}_${Date.now().toString(36)}`;
+  const traceId = generateId('trace');
 
   // 触发 message:routed 事件，启动事件驱动流水线
   // messageToTask.ts 监听此事件并自动创建任务 → 触发 task:created → taskToAgent.ts 启动 Agent 流水线
