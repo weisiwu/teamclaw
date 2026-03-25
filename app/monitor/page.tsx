@@ -22,6 +22,15 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
 
+// ============ Status Labels ============
+
+const STATUS_LABELS: Record<string, string> = {
+  ok: '正常',
+  degraded: '降级',
+  error: '异常',
+  unknown: '未知',
+};
+
 // ============ System Health Types ============
 
 interface ServiceStatus {
@@ -406,7 +415,7 @@ export default function MonitorPage() {
     <div className="page-container">
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="page-header">
-          <h1 className="page-header-title">System Monitor</h1>
+          <h1 className="page-header-title">系统监控</h1>
           <div className="flex gap-2">
             <Button
               variant={showTracePanel ? 'default' : 'outline'}
@@ -429,19 +438,19 @@ export default function MonitorPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-foreground">
-                Overall Status
+                整体状态
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                Last updated: {health?.timestamp}
+                上次更新：{health?.timestamp}
               </p>
             </div>
             <div className={`text-4xl font-bold ${getStatusColor(health?.status || 'unknown')}`}>
-              {getStatusIcon(health?.status || 'unknown')} {health?.status?.toUpperCase()}
+              {getStatusIcon(health?.status || 'unknown')} {STATUS_LABELS[health?.status || 'unknown']}
             </div>
           </div>
           <div className="mt-4 pt-4 border-t dark:border-slate-700">
             <p className="text-sm text-gray-600 dark:text-gray-300">
-              Uptime: <span className="font-mono">{formatUptime(health?.uptime || 0)}</span>
+              运行时长：<span className="font-mono">{formatUptime(health?.uptime || 0)}</span>
             </p>
           </div>
         </div>
@@ -461,14 +470,14 @@ export default function MonitorPage() {
                 </div>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-gray-400">Status:</span>
+                    <span className="text-gray-500 dark:text-gray-400">状态：</span>
                     <span className={`font-medium ${getStatusColor(service.status)}`}>
-                      {service.status.toUpperCase()}
+                      {STATUS_LABELS[service.status] || service.status.toUpperCase()}
                     </span>
                   </div>
                   {service.latency !== undefined && (
                     <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-gray-400">Latency:</span>
+                      <span className="text-gray-500 dark:text-gray-400">延迟：</span>
                       <span className="font-mono">{service.latency}ms</span>
                     </div>
                   )}
