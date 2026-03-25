@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, Suspense, useState } from "react";
+import { useMemo, Suspense, useState, useEffect } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,33 @@ import {
 import { TokenUsageFilters } from "@/lib/api/types";
 import { useToast } from "@/components/ui/toast";
 
+type MainTab = "usage" | "agent" | "apikey";
 type Tab = "overview" | "byToken" | "byAgent" | "calls";
+
+function MainTabs({ active, onChange }: { active: MainTab; onChange: (t: MainTab) => void }) {
+  const tabs: { key: MainTab; label: string }[] = [
+    { key: "usage", label: "用量统计" },
+    { key: "agent", label: "Agent 分配" },
+    { key: "apikey", label: "API Key" },
+  ];
+  return (
+    <div className="flex gap-1 border-b border-border mb-6">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          onClick={() => onChange(t.key)}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            active === t.key
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function Tabs({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   const tabs: { key: Tab; label: string }[] = [
@@ -348,9 +374,44 @@ function TokensLoading() {
 
 // 默认导出组件（带 Suspense）
 export default function TokensPage() {
+  const [mainTab, setMainTab] = useState<MainTab>("usage");
+
+  // 读取 URL hash
+  useEffect(() => {
+    const hash = window.location.hash.replace("#", "");
+    if (hash === "agent") setMainTab("agent");
+    else if (hash === "apikey") setMainTab("apikey");
+    else setMainTab("usage");
+  }, []);
+
+  // 切换 Tab 时同步 hash
+  const handleMainTabChange = (tab: MainTab) => {
+    setMainTab(tab);
+    window.location.hash = tab;
+  };
+
   return (
     <Suspense fallback={<TokensLoading />}>
-      <TokensContent />
+      <MainTabs active={mainTab} onChange={handleMainTabChange} />
+      {mainTab === "usage" && <TokensContent />}
+      {mainTab === "agent" && (
+        <div className="flex items-center justify-center py-20 text-gray-400">
+          <div className="text-center">
+            <p className="text-lg font-medium mb-1">Agent 分配</p>
+            <p className="text-sm">功能入口已迁移至「Token 管理」侧边栏</p>
+            <p className="text-xs mt-2 text-gray-400">跳转中...</p>
+          </div>
+        </div>
+      )}
+      {mainTab === "apikey" && (
+        <div className="flex items-center justify-center py-20 text-gray-400">
+          <div className="text-center">
+            <p className="text-lg font-medium mb-1">API Key 管理</p>
+            <p className="text-sm">功能入口已迁移至「Token 管理」侧边栏</p>
+            <p className="text-xs mt-2 text-gray-400">跳转中...</p>
+          </div>
+        </div>
+      )}
     </Suspense>
   );
 }
