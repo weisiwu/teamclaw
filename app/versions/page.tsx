@@ -347,7 +347,14 @@ function BranchesContent() {
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function VersionsPage() {
-  const [activeTab, setActiveTab] = useState('list');
+  // URL hash 同步：支持分享 tab 状态（#/list, #/panel, #/branches）
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash.replace('#/', '');
+      if (['list', 'panel', 'branches'].includes(hash)) return hash;
+    }
+    return 'list';
+  });
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -379,6 +386,15 @@ export default function VersionsPage() {
       .catch(err => setError(err instanceof Error ? err : new Error(String(err))))
       .finally(() => setIsLoading(false));
   }, [page, statusFilter, pageSize]);
+
+  // URL hash 同步：tab 变化时更新 URL（可分享）
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const newHash = `#/${activeTab}`;
+    if (window.location.hash !== newHash) {
+      window.history.replaceState(null, '', newHash);
+    }
+  }, [activeTab]);
 
   // 自动刷新：每 30 秒重新获取数据（仅列表 Tab 激活时）
   useEffect(() => {
