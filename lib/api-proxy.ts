@@ -59,7 +59,19 @@ export async function proxyNextToBackend(
   options?: { method?: string }
 ): Promise<NextResponse> {
   const response = await proxyToBackend(request, backendPath, options);
+  const contentType = response.headers.get('content-type') || '';
   const data = await response.text();
+
+  // 如果返回的是 HTML（而非 JSON），说明后端路由未匹配或出错
+  // 此时返回 502 错误，避免前端尝试解析 HTML 导致 JSON.parse 崩溃
+  if (!contentType.includes('application/json') && !contentType.includes('text/plain')) {
+    console.error(`[api-proxy] Non-JSON response from ${backendPath}: ${contentType} (${response.status})`);
+    return NextResponse.json(
+      { code: 502, message: `后端返回非 JSON 响应 (${response.status})，路由可能不存在或服务异常` },
+      { status: 502 }
+    );
+  }
+
   return new NextResponse(data, {
     status: response.status,
     statusText: response.statusText,

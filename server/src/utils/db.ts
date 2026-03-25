@@ -18,6 +18,28 @@ pool.on('error', (err) => {
 });
 
 /**
+ * 检查关键数据表是否存在
+ */
+async function checkKeyTables(): Promise<void> {
+  const keyTables = ['tasks', 'projects', 'users', 'agents', 'versions'];
+  try {
+    for (const table of keyTables) {
+      const result = await pool.query(
+        `SELECT 1 FROM information_schema.tables WHERE table_name = $1`,
+        [table]
+      );
+      if (result.rows.length === 0) {
+        console.warn(`⚠️  关键表 '${table}' 不存在，建议运行数据库迁移: npm run migrate`);
+      } else {
+        console.log(`   ✅ 表 '${table}' 存在`);
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️  无法检查数据表，可能需要先运行迁移');
+  }
+}
+
+/**
  * 等待数据库就绪，带指数退避重试
  * 最多重试 MAX_RETRIES 次，首次失败后等待 BASE_DELAY_MS，之后每次翻倍
  */
@@ -28,6 +50,7 @@ export async function waitForDatabase(): Promise<void> {
       await client.query('SELECT 1');
       client.release();
       console.log('✅ 数据库连接成功');
+      await checkKeyTables();
       return;
     } catch (err) {
       const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1);

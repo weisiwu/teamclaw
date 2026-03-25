@@ -114,7 +114,12 @@ export const taskApi = {
     params.set("pageSize", String(filters.pageSize || 10));
 
     const res = await fetch(`${API_BASE}/tasks?${params}`);
+    const contentType = res.headers.get('content-type') || '';
     if (!res.ok) {
+      // 非 JSON 响应（HTML 404/500 等）不尝试 parse，直接抛错
+      if (!contentType.includes('application/json')) {
+        throw new Error(`获取任务列表失败 (HTTP ${res.status})，请检查后端服务状态`);
+      }
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || `获取任务列表失败 (${res.status})`);
     }
@@ -136,7 +141,11 @@ export const taskApi = {
   // 获取任务详情
   async getById(id: string): Promise<Task | null> {
     const res = await fetch(`${API_BASE}/tasks/${encodeURIComponent(id)}`);
+    const contentType = res.headers.get('content-type') || '';
     if (!res.ok) {
+      if (!contentType.includes('application/json')) {
+        throw new Error(`获取任务详情失败 (HTTP ${res.status})，请检查后端服务状态`);
+      }
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || `获取任务详情失败 (${res.status})`);
     }
@@ -155,6 +164,10 @@ export const taskApi = {
       body: JSON.stringify(normalizeCreateRequest(data)),
     });
     if (!res.ok) {
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        throw new Error(`创建任务失败 (HTTP ${res.status})，请检查后端服务状态`);
+      }
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || `创建任务失败 (${res.status})`);
     }
@@ -173,6 +186,10 @@ export const taskApi = {
       body: JSON.stringify(normalizeUpdateRequest(data)),
     });
     if (!res.ok) {
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        throw new Error(`更新任务失败 (HTTP ${res.status})，请检查后端服务状态`);
+      }
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || `更新任务失败 (${res.status})`);
     }
@@ -186,7 +203,11 @@ export const taskApi = {
   // 删除任务
   async delete(id: string): Promise<void> {
     const res = await fetch(`${API_BASE}/tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
+    const ct = res.headers.get('content-type') || '';
     if (!res.ok) {
+      if (!ct.includes('application/json')) {
+        throw new Error(`删除任务失败 (HTTP ${res.status})，请检查后端服务状态`);
+      }
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || `删除任务失败 (${res.status})`);
     }
@@ -203,7 +224,11 @@ export const taskApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "completed" }),
     });
+    const ct = res.headers.get('content-type') || '';
     if (!res.ok) {
+      if (!ct.includes('application/json')) {
+        throw new Error(`完成任务失败 (HTTP ${res.status})，请检查后端服务状态`);
+      }
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || `完成任务失败 (${res.status})`);
     }
@@ -219,7 +244,11 @@ export const taskApi = {
     const res = await fetch(`${API_BASE}/tasks/${encodeURIComponent(id)}/cancel`, {
       method: "POST",
     });
+    const ct = res.headers.get('content-type') || '';
     if (!res.ok) {
+      if (!ct.includes('application/json')) {
+        throw new Error(`取消任务失败 (HTTP ${res.status})，请检查后端服务状态`);
+      }
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || `取消任务失败 (${res.status})`);
     }
@@ -238,7 +267,11 @@ export const taskApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "pending" }),
     });
+    const ct = res.headers.get('content-type') || '';
     if (!res.ok) {
+      if (!ct.includes('application/json')) {
+        throw new Error(`重新打开任务失败 (HTTP ${res.status})，请检查后端服务状态`);
+      }
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || `重新打开任务失败 (${res.status})`);
     }
@@ -252,7 +285,11 @@ export const taskApi = {
   // 获取任务评论列表
   async getComments(taskId: string): Promise<TaskComment[]> {
     const res = await fetch(`${API_BASE}/tasks/${encodeURIComponent(taskId)}/comments`);
+    const ct = res.headers.get('content-type') || '';
     if (!res.ok) {
+      if (!ct.includes('application/json')) {
+        throw new Error(`获取评论列表失败 (HTTP ${res.status})，请检查后端服务状态`);
+      }
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || `获取评论列表失败 (${res.status})`);
     }
@@ -270,7 +307,11 @@ export const taskApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content, author }),
     });
+    const ct = res.headers.get('content-type') || '';
     if (!res.ok) {
+      if (!ct.includes('application/json')) {
+        throw new Error(`添加评论失败 (HTTP ${res.status})，请检查后端服务状态`);
+      }
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || `添加评论失败 (${res.status})`);
     }
@@ -286,7 +327,11 @@ export const taskApi = {
     const res = await fetch(`${API_BASE}/tasks/comments/${encodeURIComponent(commentId)}`, {
       method: "DELETE",
     });
+    const ct = res.headers.get('content-type') || '';
     if (!res.ok) {
+      if (!ct.includes('application/json')) {
+        throw new Error(`删除评论失败 (HTTP ${res.status})，请检查后端服务状态`);
+      }
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || `删除评论失败 (${res.status})`);
     }
