@@ -256,8 +256,9 @@ body {
   }
 }
 
-/* 全局过渡效果 - 仅针对常用属性，避免 transform 冲突 */
-* {
+/* 全局过渡效果 - 仅针对常用交互元素，避免 transform 冲突 */
+a, button, input, select, textarea,
+[role="button"], [role="tab"] {
   transition-property: background-color, border-color, color, box-shadow;
   transition-duration: 150ms;
   transition-timing-function: ease-in-out;
@@ -268,12 +269,6 @@ body {
   transition-property: transform;
   transition-duration: 200ms;
   transition-timing-function: ease-out;
-}
-
-.transition-all {
-  transition-property: all;
-  transition-duration: 150ms;
-  transition-timing-function: ease-in-out;
 }
 
 /* 弹性 hover 效果 */
