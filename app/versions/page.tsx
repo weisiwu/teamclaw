@@ -271,18 +271,18 @@ function VersionPanelContent() {
           })}
         </div>
       ) : (
-        <div className="border rounded-lg overflow-hidden">
-          <div className="flex items-center gap-4 px-4 py-3 bg-muted text-sm font-medium text-muted-foreground">
-            <Tag className="w-4 h-4" />
+        <div className="border rounded-lg overflow-x-auto">
+          <div className="flex items-center gap-4 px-4 py-3 bg-muted text-sm font-medium text-muted-foreground min-w-[640px]">
+            <Tag className="w-4 h-4 flex-shrink-0" />
             <div className="flex-1">标签 / 版本 / 提交信息</div>
-            <div className="w-24 text-right">Hash</div>
-            <div className="w-20">作者</div>
-            <div className="w-24 text-right">日期</div>
+            <div className="w-24 text-right flex-shrink-0 hidden sm:block">Hash</div>
+            <div className="w-20 flex-shrink-0 hidden sm:block">作者</div>
+            <div className="w-24 text-right flex-shrink-0 hidden md:block">日期</div>
           </div>
           {filteredTags.map(tag => (
             <div
               key={tag.name}
-              className="flex items-center gap-4 px-4 py-3 border-t hover:bg-muted/50 cursor-pointer transition-colors"
+              className="flex items-center gap-4 px-4 py-3 border-t hover:bg-muted/50 cursor-pointer transition-colors min-w-[640px]"
               onClick={() => router.push(`/versions?tag=${encodeURIComponent(tag.name)}`)}
             >
               <Tag className="w-4 h-4 text-blue-600 flex-shrink-0" />
@@ -293,9 +293,9 @@ function VersionPanelContent() {
                 </div>
                 <p className="text-sm text-muted-foreground truncate">{tag.subject}</p>
               </div>
-              <span className="font-mono text-xs text-muted-foreground flex-shrink-0">{tag.commit}</span>
-              <span className="text-xs text-muted-foreground flex-shrink-0">{tag.author}</span>
-              <span className="text-xs text-muted-foreground flex-shrink-0">{new Date(tag.taggerDate).toLocaleDateString('zh-CN')}</span>
+              <span className="font-mono text-xs text-muted-foreground flex-shrink-0 hidden sm:block">{tag.commit}</span>
+              <span className="text-xs text-muted-foreground flex-shrink-0 hidden sm:block">{tag.author}</span>
+              <span className="text-xs text-muted-foreground flex-shrink-0 hidden md:block">{new Date(tag.taggerDate).toLocaleDateString('zh-CN')}</span>
             </div>
           ))}
         </div>
@@ -856,7 +856,7 @@ export default function VersionsPage() {
           ) : (
             /* Compact table view */
             <div className="page-table-wrapper mb-6">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead>
                   <tr className="page-table-header">
                     <th className="page-table-header-cell">版本</th>

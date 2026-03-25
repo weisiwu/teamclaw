@@ -36,6 +36,7 @@ export function TabsList({ children, className }: TabsListProps) {
       role="tablist"
       className={cn(
         "flex items-center gap-1 border-b border-gray-200 dark:border-slate-700",
+        "overflow-x-auto scrollbar-hide whitespace-nowrap",
         className
       )}
     >
