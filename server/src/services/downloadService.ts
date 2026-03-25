@@ -3,6 +3,7 @@
  */
 
 import fs from 'fs';
+import { generateId } from '../utils/generateId.js';
 import path from 'path';
 import archiver from 'archiver';
 import { v4 as uuidv4 } from 'uuid';
@@ -66,7 +67,7 @@ class DownloadQueue {
     filePaths: Map<string, string>
   ): Promise<DownloadTask> {
     const task: DownloadTask = {
-      id: `dl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      id: generateId('dl'),
       userId,
       type: fileIds.length > 1 ? 'batch' : 'single',
       fileIds,

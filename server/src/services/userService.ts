@@ -6,6 +6,7 @@
  * Fixes: BUG-05 内存Map存储重启全丢
  */
 
+import { generateId } from '../utils/generateId.js';
 import { Role, ROLE_WEIGHTS } from '../constants/roles.js';
 import { userRepo, UserRow } from '../db/repositories/userRepo.js';
 
@@ -56,8 +57,8 @@ function rowToUser(row: UserRow): User {
   };
 }
 
-function generateId(): string {
-  return `u_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+function generateUserId(): string {
+  return generateId('u');
 }
 
 // ============ CRUD 操作 ============
@@ -103,8 +104,8 @@ export async function getUserByExternalId(
  */
 export async function createUser(data: CreateUserRequest): Promise<User> {
   const now = new Date().toISOString();
-  const id = generateId();
-  const userId = generateId();
+  const id = generateUserId();
+  const userId = generateUserId();
 
   const user: User = {
     id,

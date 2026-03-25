@@ -3,6 +3,7 @@
  * CRUD 操作 + 内置 Tools 注册
  */
 
+import { generateId } from '../utils/generateId.js';
 import { query, queryOne, execute } from '../db/pg.js';
 import type {
   ToolDefinition,
@@ -44,7 +45,7 @@ function rowToTool(row: ToolRow): ToolDefinition {
  */
 function generateId(source: string): string {
   const prefix = source === 'builtin' ? 'builtin' : 'tool';
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  return generateId(prefix);
 }
 
 // ========== CRUD 操作 ==========

@@ -64,7 +64,7 @@ export function createWebhookEndpoint(params: {
   events: TaskEventType[];
 }): WebhookEndpoint {
   const endpoint: WebhookEndpoint = {
-    id: `wh_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    id: generateId('wh'),
     name: params.name,
     url: params.url,
     secret: params.secret,
@@ -111,7 +111,7 @@ export function createNotificationRule(params: {
   webhookEndpointId?: string;
 }): NotificationRule {
   const rule: NotificationRule = {
-    id: `rule_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    id: generateId('rule'),
     name: params.name,
     eventType: params.eventType,
     filter: params.filter,
@@ -145,7 +145,7 @@ export async function emitTaskEvent(eventType: TaskEventType, taskId: string, pa
   if (!task) return;
 
   const event: TaskNotificationEvent = {
-    eventId: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    eventId: generateId('evt'),
     eventType,
     taskId,
     taskTitle: task.title,

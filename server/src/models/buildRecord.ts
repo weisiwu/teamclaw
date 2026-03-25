@@ -47,7 +47,9 @@ export interface BuildRecord {
   lastRollbackCommit?: string;   // the commit we rolled back to
   rollbackFromCommit?: string;   // the commit we rolled back from (before rollback)
 
-  // Package
+  import { generateId } from '../utils/generateId.js';
+
+// Package
   packagePath?: string;          // absolute path to the created package
   packageUrl?: string;           // URL path to download the package
   packageFormat?: 'zip' | 'tar.gz' | 'tar';
@@ -105,7 +107,7 @@ load();
 // ========== CRUD ==========
 
 export function createBuildRecord(data: Omit<BuildRecord, 'id' | 'buildNumber' | 'queuedAt' | 'status'>): BuildRecord {
-  const id = `br_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+  const id = generateId('br');
 
   // Get next build number for this version
   const currentNum = nextBuildNumberByVersion.get(data.versionId) || 1;

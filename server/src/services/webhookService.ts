@@ -3,6 +3,7 @@
  * 后台管理平台 - Webhook 服务
  */
 
+import { generateId } from '../utils/generateId.js';
 import { Webhook, WebhookHistory, CreateWebhookRequest, UpdateWebhookRequest, WebhookEvent } from '../models/webhook.js';
 import { auditService } from './auditService.js';
 import * as fs from 'fs';
@@ -20,7 +21,7 @@ interface WebhookHistoryStore {
 }
 
 function generateId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return generateId(prefix);
 }
 
 function loadStore<T>(file: string, defaultVal: T): T {

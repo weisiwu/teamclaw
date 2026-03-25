@@ -3,6 +3,7 @@
  * 项目导入流程管理
  */
 
+import { generateId } from '../utils/generateId.js';
 import { ImportTask, ImportStep, Project } from '../models/project.js';
 import { importRepo } from '../db/repositories/importRepo.js';
 import { cloneOrCopyProject } from './gitClone.js';
@@ -260,7 +261,7 @@ const NON_CRITICAL_STEPS: Set<ImportStepName> = new Set([
  * Create an import task
  */
 export function createImportTask(projectId: string): ImportTask {
-  const taskId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const taskId = generateId('task');
   const steps: ImportStep[] = ALL_STEPS.map((name, i) => ({
     step: i + 1,
     name,

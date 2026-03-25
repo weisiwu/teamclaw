@@ -3,6 +3,7 @@
  * Manages download queues, progress tracking, and batch ZIP packaging
  */
 
+import { generateId } from '../utils/generateId.js';
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
@@ -41,7 +42,7 @@ function ensureDownloadsDir(): void {
 
 // Generate unique task ID
 function generateTaskId(): string {
-  return `dl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return generateId('dl');
 }
 
 // Create a new download task

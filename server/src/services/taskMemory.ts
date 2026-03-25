@@ -7,6 +7,7 @@
  * 新增：LLM 摘要生成、向量化存储、语义检索
  */
 
+import { generateId } from '../utils/generateId.js';
 import { Task } from '../models/task.js';
 import { llmService } from './llmService.js';
 import { addDocuments, query } from './vectorStore.js';
@@ -157,7 +158,7 @@ class TaskMemoryService {
   ): Promise<void> {
     const ctx = await this.getOrCreateContext(taskId, sessionId);
     ctx.messages.push({
-      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+      id: generateId('msg'),
       role,
       content,
       timestamp: new Date().toISOString(),
@@ -178,7 +179,7 @@ class TaskMemoryService {
   ): Promise<TaskCheckpoint> {
     const ctx = await this.getOrCreateContext(taskId, sessionId);
     const checkpoint: TaskCheckpoint = {
-      id: `cp_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+      id: generateId('cp'),
       progress,
       summary,
       timestamp: new Date().toISOString(),

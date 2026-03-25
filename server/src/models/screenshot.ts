@@ -3,6 +3,7 @@
  */
 
 import { query, queryOne, execute } from '../db/pg.js';
+import { generateId } from '../utils/generateId.js';
 
 export interface Screenshot {
   id: string;
@@ -22,7 +23,7 @@ export interface Screenshot {
 
 export const ScreenshotModel = {
   async create(data: Omit<Screenshot, 'id' | 'createdAt'>): Promise<Screenshot> {
-    const id = `scr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const id = generateId('scr');
     const createdAt = new Date().toISOString();
 
     await execute(`

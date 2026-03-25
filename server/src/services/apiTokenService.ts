@@ -3,6 +3,7 @@
  * CRUD 业务逻辑 + 加密/脱敏处理
  */
 
+import { generateId } from '../utils/generateId.js';
 import { query, queryOne, execute } from '../db/pg.js';
 import {
   encrypt,
@@ -51,13 +52,6 @@ function sanitizeToken(token: ApiToken): SanitizedApiToken {
     ...token,
     apiKey: maskApiKey(token.apiKey),
   };
-}
-
-/**
- * 生成唯一 ID
- */
-function generateId(): string {
-  return `token_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
 // ========== CRUD 操作 ==========

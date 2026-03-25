@@ -9,6 +9,7 @@
  * - 取消审计日志
  */
 
+import { generateId } from '../utils/generateId.js';
 import { Task, TaskStatus } from '../models/task.js';
 
 export interface CancelOptions {
@@ -185,7 +186,7 @@ class TaskCancelService {
 
     // 记录审计日志
     this.auditLog.push({
-      id: `cancel_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      id: generateId('cancel'),
       taskId,
       cancelledAt: new Date().toISOString(),
       reason,

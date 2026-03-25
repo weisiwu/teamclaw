@@ -3,6 +3,7 @@
  * 后台管理平台 - 定时任务调度服务
  */
 
+import { generateId } from '../utils/generateId.js';
 import { CronJob, CronRun, CreateCronJobRequest, UpdateCronJobRequest } from '../models/cronJob.js';
 import * as cron from 'node-cron';
 import { getFeishuConfig, sendFeishuMessage } from './feishuService.js';
@@ -17,7 +18,7 @@ const cronRuns = new Map<string, CronRun[]>();
 const scheduledTasks = new Map<string, cron.ScheduledTask>();
 
 function generateId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return generateId(prefix);
 }
 
 function parseCronNextRun(cronExpr: string): string | null {

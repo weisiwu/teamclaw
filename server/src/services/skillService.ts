@@ -6,6 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { generateId } from '../utils/generateId.js';
 import { query, queryOne, execute } from '../db/pg.js';
 import { estimateTokens } from './llmService.js';
 import type {
@@ -54,14 +55,6 @@ function rowToSkill(row: SkillRow): SkillDefinition {
     createdBy: row.created_by || undefined,
     projectId: row.project_id || undefined,
   };
-}
-
-/**
- * 生成唯一 ID
- */
-function generateId(source: string): string {
-  const prefix = source === 'generated' ? 'skill_gen' : 'skill';
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
 // ========== 磁盘扫描 ==========

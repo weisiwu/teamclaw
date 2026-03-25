@@ -7,6 +7,7 @@
  * 数据持久化：PostgreSQL（通过 taskRepo）+ 内存 Map 缓存
  */
 
+import { generateId } from '../utils/generateId.js';
 import { Task, TaskStatus } from '../models/task.js';
 import { taskRepo } from '../db/repositories/taskRepo.js';
 
@@ -320,7 +321,7 @@ class TaskLifecycleService {
   }
 
   private generateTaskId(): string {
-    return `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    return generateId('task');
   }
 
   private async executeHooks(task: Task, oldStatus: TaskStatus, newStatus: TaskStatus): Promise<void> {

@@ -5,6 +5,7 @@
  */
 
 import { execute, query } from '../db/pg.js';
+import { generateId } from '../utils/generateId.js';
 import { performBump, formatBumpSummary } from './versionBump.js';
 import { createTagRecord } from './tagService.js';
 import { createTag } from './gitService.js';
@@ -54,7 +55,7 @@ async function insertBumpHistoryRecord(params: {
   summary?: string;
   createdBy?: string;
 }): Promise<BumpHistoryRecord> {
-  const id = `bh_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const id = generateId('bh');
   const now = new Date().toISOString();
 
   await execute(`
@@ -150,7 +151,7 @@ export async function executeAutoBump(
     `${triggerDesc}，执行 ${bumpType} bump：${currentVersion} → ${newVersion}`;
 
   // 插入新版本记录
-  const newVersionId = `v_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const newVersionId = generateId('v');
   const now = new Date().toISOString();
 
   await execute(`

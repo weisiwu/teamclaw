@@ -18,6 +18,7 @@ import { auditService } from '../services/auditService.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { execSync } from 'child_process';
 import path from 'path';
+import { generateId } from '../utils/generateId.js';
 import os from 'os';
 
 const router = Router();
@@ -178,7 +179,7 @@ router.post(
     }
 
     RollbackRecordModel.create({
-      id: `rb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      id: generateId('rb'),
       versionId: req.params.id,
       versionName: row.version as string,
       targetRef: target,

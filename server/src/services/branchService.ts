@@ -61,7 +61,7 @@ export async function createBranch(data: {
     throw new Error(`Branch ${data.name} already exists`);
   }
 
-  const id = `branch_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const id = generateId('branch');
   const now = new Date().toISOString();
 
   await execute(`

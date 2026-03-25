@@ -343,7 +343,7 @@ export function getSubscriberCount(versionId: string): number {
 }
 
 function makeEventId(): string {
-  return `evt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  return generateId('evt');
 }
 
 /**

@@ -1,4 +1,5 @@
 import { query, queryOne, execute } from '../db/pg.js';
+import { generateId } from '../utils/generateId.js';
 
 export type ChangeEventType =
   | 'version_created'
@@ -66,7 +67,7 @@ function rowToEvent(row: DbRow): VersionChangeEvent {
 }
 
 function makeId(): string {
-  return `evt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  return generateId('evt');
 }
 
 export const VersionChangeEventModel = {

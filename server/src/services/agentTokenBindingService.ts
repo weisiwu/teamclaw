@@ -3,6 +3,7 @@
  * 绑定 CRUD + 调度查询
  */
 
+import { generateId } from '../utils/generateId.js';
 import { query, queryOne, execute } from '../db/pg.js';
 import type {
   AgentTokenBinding,
@@ -32,13 +33,6 @@ function rowToBinding(row: AgentTokenBindingRow): AgentTokenBinding {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
-}
-
-/**
- * 生成唯一 ID
- */
-function generateId(): string {
-  return `bind_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
 /**
@@ -158,7 +152,7 @@ export async function createBinding(
     throw new Error(`Binding already exists for agent ${params.agentName} and token ${params.tokenId}`);
   }
 
-  const id = generateId();
+  const id = generateId('bind');
   const now = new Date().toISOString();
   const priority = params.priority ?? 1;
 

@@ -4,6 +4,7 @@
  * PostgreSQL 持久化 + JSON 文件回退
  */
 
+import { generateId } from '../utils/generateId.js';
 import { AuditLog, AuditAction, AuditLogQuery, AuditLogResponse } from '../models/auditLog.js';
 import { execute, query, queryOne } from '../db/pg.js';
 import * as fs from 'fs';
@@ -12,7 +13,7 @@ import * as path from 'path';
 const DATA_FILE = path.join(process.cwd(), 'data', 'auditLogs.json');
 
 function generateId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return generateId(prefix);
 }
 
 /**

@@ -3,6 +3,7 @@
  * 绑定 CRUD + 权限查询
  */
 
+import { generateId } from '../utils/generateId.js';
 import { query, queryOne, execute } from '../db/pg.js';
 import type {
   AgentToolBinding,
@@ -29,13 +30,6 @@ function rowToBinding(row: AgentToolBindingRow): AgentToolBinding {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
-}
-
-/**
- * 生成唯一 ID
- */
-function generateId(): string {
-  return `atb_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
 /**
@@ -241,7 +235,7 @@ export async function getOrCreateBinding(
     return detail!;
   }
 
-  const id = generateId();
+  const id = generateId('atb');
   const now = new Date().toISOString();
 
   await execute(
@@ -288,7 +282,7 @@ export async function setAgentToolBindings(
       );
     } else {
       // 创建
-      const id = generateId();
+      const id = generateId('atb');
       await execute(
         `INSERT INTO agent_tool_bindings (id, agent_name, tool_id, enabled, requires_approval, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7)

@@ -27,7 +27,7 @@ function isProtectedTag(tagName: string): boolean {
 // ========== Tag 记录管理 ==========
 
 export async function createTagRecord(data: Omit<TagRecord, 'id' | 'createdAt' | 'archived' | 'protected'>): Promise<TagRecord> {
-  const id = `tag_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+  const id = generateId('tag');
   const protected_ = isProtectedTag(data.name) ? 1 : 0;
   const now = new Date().toISOString();
   const source = data.source || 'manual';

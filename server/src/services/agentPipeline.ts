@@ -49,7 +49,7 @@ const pipelines: Map<string, Pipeline> = new Map();
  * 生成 pipeline ID
  */
 function generatePipelineId(): string {
-  return `pipeline_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return generateId('pipeline');
 }
 
 /**

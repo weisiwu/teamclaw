@@ -3,6 +3,7 @@
  */
 
 import { query, queryOne, execute } from '../db/pg.js';
+import { generateId } from '../utils/generateId.js';
 
 export interface VersionChange {
   type: 'feature' | 'fix' | 'improvement' | 'breaking' | 'docs' | 'refactor' | 'other';
@@ -44,7 +45,7 @@ function rowToSummary(row: Record<string, unknown>): VersionSummary {
 
 export const VersionSummaryModel = {
   async create(data: Omit<VersionSummary, 'id' | 'generatedAt'>): Promise<VersionSummary> {
-    const id = `sum_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const id = generateId('sum');
     const generatedAt = new Date().toISOString();
 
     await execute(`

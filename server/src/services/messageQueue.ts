@@ -6,6 +6,7 @@
  * 数据持久化：PostgreSQL（通过 messageRepo）+ 内存 Map 缓存
  */
 
+import { generateId } from '../utils/generateId.js';
 import { Message, QueueStatus } from '../models/message.js';
 import { shouldPreempt } from './priorityCalculator.js';
 import { messageMerger } from './messageMerger.js';
@@ -16,11 +17,6 @@ import { addDocuments } from './vectorStore.js';
 function getDateStr(): string {
   const now = new Date();
   return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-}
-
-// 生成消息ID
-function generateMessageId(): string {
-  return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
 // 生成队列ID

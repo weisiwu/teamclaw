@@ -92,7 +92,7 @@ class DocFavoriteService {
     }
 
     const favorite: DocFavorite = {
-      favoriteId: `fav-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      favoriteId: generateId('fav'),
       docId,
       userId,
       createdAt: new Date().toISOString(),

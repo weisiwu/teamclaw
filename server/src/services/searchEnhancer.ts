@@ -233,7 +233,7 @@ export function saveSearchHistory(userId: string, queryStr: string, type: 'keywo
 }
 
 async function saveSearchHistoryAsync(userId: string, queryStr: string, type: 'keyword' | 'semantic', filters: SearchFilter, resultCount: number): Promise<void> {
-  const id = `hist_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const id = generateId('hist');
   await execute(
     `INSERT INTO search_history (id, user_id, query, type, filters, result_count, created_at)
     VALUES ($1, $2, $3, $4, $5, $6, $7)`,

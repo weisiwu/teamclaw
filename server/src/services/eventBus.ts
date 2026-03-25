@@ -4,6 +4,7 @@
  */
 
 import { EventEmitter } from 'events';
+import { generateId } from '../utils/generateId.js';
 
 export type SystemEvent =
   | 'message:received'
@@ -31,9 +32,6 @@ export interface EventPayload {
   data: Record<string, unknown>;
 }
 
-function generateId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
 
 class SystemEventBus extends EventEmitter {
   private traceMap: Map<string, EventPayload[]> = new Map();

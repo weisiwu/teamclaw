@@ -30,8 +30,8 @@ export interface PermissionDelegation {
 const roleChangeLog: RoleChangeRecord[] = [];
 const permissionDelegations: PermissionDelegation[] = [];
 
-function generateId(): string {
-  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+function generateRoleId(): string {
+  return generateId('role');
 }
 
 // ============ 角色变更历史 ============
@@ -47,7 +47,7 @@ export async function recordRoleChange(
   reason?: string
 ): Promise<RoleChangeRecord> {
   const record: RoleChangeRecord = {
-    id: generateId(),
+    id: generateRoleId(),
     userId,
     fromRole,
     toRole,
@@ -167,7 +167,7 @@ export async function grantDelegation(
   }
 
   const delegation: PermissionDelegation = {
-    id: generateId(),
+    id: generateRoleId(),
     delegatorId,
     delegateId,
     permissions,

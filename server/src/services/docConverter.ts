@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
+import { generateId } from '../utils/generateId.js';
 
 export interface ConvertedDoc {
   originalPath: string;
@@ -246,7 +247,7 @@ async function extractPptxText(filePath: string): Promise<string[]> {
   const slides: string[] = [];
 
   // Unzip to temp dir
-  const tmpDir = path.join('/tmp', `pptx_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`);
+  const tmpDir = path.join('/tmp', generateId('pptx'));
   fs.mkdirSync(tmpDir, { recursive: true });
 
   try {

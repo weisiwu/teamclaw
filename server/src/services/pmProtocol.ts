@@ -32,7 +32,7 @@ const sessions: Map<string, ClarificationSession> = new Map();
  * 生成唯一 sessionId
  */
 function generateSessionId(): string {
-  return `pm_session_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return generateId('pm_session');
 }
 
 /**

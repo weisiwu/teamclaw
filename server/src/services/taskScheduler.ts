@@ -80,7 +80,7 @@ class TaskSchedulerService {
     delayMs: number,
     options?: { maxRuns?: number; description?: string }
   ): ScheduledTask {
-    const scheduleId = `sched_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const scheduleId = generateId('sched');
     const now = Date.now();
     const schedule: ScheduledTask = {
       scheduleId,
@@ -107,7 +107,7 @@ class TaskSchedulerService {
     intervalMs: number,
     options?: { maxRuns?: number; description?: string }
   ): ScheduledTask {
-    const scheduleId = `sched_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const scheduleId = generateId('sched');
     const now = Date.now();
     const schedule: ScheduledTask = {
       scheduleId,
@@ -134,7 +134,7 @@ class TaskSchedulerService {
     cronExpr: string,
     options?: { maxRuns?: number; description?: string }
   ): ScheduledTask {
-    const scheduleId = `sched_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const scheduleId = generateId('sched');
     const now = Date.now();
     const schedule: ScheduledTask = {
       scheduleId,

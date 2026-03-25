@@ -10,6 +10,7 @@
  * 持久化：PostgreSQL agent_executions 表 + 内存 Map 缓存
  */
 
+import { generateId } from '../utils/generateId.js';
 import { getAgent, releaseAgent, updateAgentStatus, updateLoadScore } from './agentService.js';
 import { canDispatch } from '../constants/agents.js';
 import { buildSystemPrompt, getUserPromptPrefix } from '../prompts/agentPrompts.js';
@@ -130,7 +131,7 @@ export function dispatchToAgent(req: DispatchRequest): ExecutionContext | { erro
     }
   }
 
-  const executionId = `exec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const executionId = generateId('exec');
   const now = new Date().toISOString();
 
   const context: ExecutionContext = {

@@ -72,7 +72,7 @@ export class TokenStatsService {
   async recordUsage(record: Omit<TokenUsageRecord, 'id'>): Promise<TokenUsageRecord> {
     const rec: TokenUsageRecord = {
       ...record,
-      id: `tu_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      id: generateId('tu'),
     };
     tokenUsageCache.push(rec);
     // Persist to DB (non-blocking)
