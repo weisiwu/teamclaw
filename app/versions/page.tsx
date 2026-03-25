@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import type { Version } from '@/lib/api/types';
+import { useState, useEffect, useMemo } from 'react';
+import type { Version, GitTag } from '@/lib/api/types';
 import {
   BUILD_STATUS_LABELS,
   BUILD_STATUS_BADGE_VARIANT,
@@ -11,6 +11,7 @@ import {
 } from '@/lib/api/constants';
 import { getVersions } from '@/lib/api/versions';
 import { compareVersions } from '@/lib/api/versionCompare';
+import { useTags } from '@/lib/api/tags';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -39,24 +40,315 @@ import {
   Check,
   GitBranch,
   LayoutDashboard,
+  Grid3X3,
+  ArrowUpDown,
+  Hash,
+  User,
+  Calendar,
+  ExternalLink,
+  Copy,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-export default function VersionsPage() {
+// ─── Version Panel Tab Content ────────────────────────────────────────────────
+function TagCardInline({ tag, build, expandedTags, toggleExpand }: {
+  tag: GitTag;
+  build: { label: string; dot: string; bg: string } | null;
+  expandedTags: Set<string>;
+  toggleExpand: (name: string) => void;
+}) {
   const router = useRouter();
+  const [copied, setCopied] = useState(false);
+  const statusColors: Record<string, string> = {
+    active: 'bg-green-100 text-green-700',
+    archived: 'bg-gray-100 text-gray-500',
+    protected: 'bg-amber-100 text-amber-700',
+  };
+
+  return (
+    <div
+      className="border rounded-xl p-5 hover:border-blue-300 hover:shadow-md transition-all bg-white cursor-pointer"
+      onClick={() => router.push(`/versions?tag=${encodeURIComponent(tag.name)}`)}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Tag className="w-4 h-4 text-blue-600 mt-0.5" />
+          <span className="font-mono font-bold text-foreground text-lg">{tag.name}</span>
+          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${statusColors[tag.status]}`}>
+            {tag.status === 'active' ? '活跃' : tag.status === 'archived' ? '已归档' : '保护中'}
+          </span>
+          {build && (
+            <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border ${build.bg}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${build.dot}`} />
+              {build.label}
+            </span>
+          )}
+        </div>
+        <button
+          className="text-muted-foreground hover:text-foreground"
+          onClick={e => { e.stopPropagation(); toggleExpand(tag.name); }}
+        >
+          <ChevronRight className={`w-4 h-4 transition-transform ${expandedTags.has(tag.name) ? 'rotate-90' : ''}`} />
+        </button>
+      </div>
+      <p className="text-sm text-muted-foreground mb-2">版本：{tag.version}</p>
+      <div className="bg-muted/50 rounded-lg p-3 mb-3">
+        <p className="text-sm line-clamp-2">{tag.subject}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1"><Hash className="w-3 h-3" /><span className="font-mono">{tag.commit}</span></span>
+        <span className="flex items-center gap-1"><User className="w-3 h-3" />{tag.author}</span>
+        <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{new Date(tag.taggerDate).toLocaleDateString('zh-CN')}</span>
+      </div>
+      {expandedTags.has(tag.name) && (
+        <div className="mt-4 pt-4 border-t space-y-2" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between bg-muted rounded-lg p-2">
+            <span className="text-xs font-mono">{tag.commitHash}</span>
+            <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => { navigator.clipboard.writeText(tag.commitHash); setCopied(true); setTimeout(() => setCopied(false), 2000); }}>
+              {copied ? <span className="text-xs text-green-600">已复制</span> : <Copy className="w-3 h-3" />}
+            </Button>
+          </div>
+          <div className="flex items-center gap-2 pt-2">
+            <a href={`/versions?tag=${encodeURIComponent(tag.name)}`} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium" onClick={e => e.stopPropagation()}>
+              <ExternalLink className="w-3 h-3" />查看版本详情
+            </a>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VersionPanelContent() {
+  const router = useRouter();
+  const { data, isLoading, error, refetch, isRefetching } = useTags();
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+  const [statusFilter, setStatusFilter] = useState<'all' | GitTag['status']>('all');
+  const [metaFilter, setMetaFilter] = useState<'all' | 'hasScreenshot' | 'hasChangelog'>('all');
+  const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
+
+  const tags = useMemo(() => data?.data || [], [data]);
+
+  const filteredTags = useMemo(() => {
+    const result = tags.filter(tag => {
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        if (
+          !tag.name.toLowerCase().includes(query) &&
+          !tag.version.toLowerCase().includes(query) &&
+          !tag.subject.toLowerCase().includes(query) &&
+          !tag.author.toLowerCase().includes(query)
+        ) return false;
+      }
+      if (statusFilter !== 'all' && tag.status !== statusFilter) return false;
+      if (metaFilter === 'hasScreenshot' && !tag.hasScreenshot) return false;
+      if (metaFilter === 'hasChangelog' && !tag.hasChangelog) return false;
+      return true;
+    });
+    result.sort((a, b) => {
+      const dateA = new Date(a.taggerDate).getTime();
+      const dateB = new Date(b.taggerDate).getTime();
+      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+    return result;
+  }, [tags, searchQuery, sortOrder, statusFilter, metaFilter]);
+
+  const toggleExpand = (name: string) => {
+    setExpandedTags(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) { next.delete(name); } else { next.add(name); }
+      return next;
+    });
+  };
+
+  const buildStatusConfig: Record<string, { label: string; dot: string; bg: string }> = {
+    success: { label: '构建成功', dot: 'bg-emerald-500', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    failed: { label: '构建失败', dot: 'bg-red-500', bg: 'bg-red-50 text-red-700 border-red-200' },
+    building: { label: '构建中', dot: 'bg-blue-500 animate-pulse', bg: 'bg-blue-50 text-blue-700 border-blue-200' },
+    pending: { label: '待构建', dot: 'bg-gray-400', bg: 'bg-gray-50 text-gray-600 border-gray-200' },
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Panel Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-3">
+          <Tag className="w-5 h-5 text-blue-600" />
+          <h2 className="text-lg font-semibold">版本面板</h2>
+          <Badge variant="outline">{filteredTags.length} 个标签</Badge>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}>
+            <RefreshCw className={`w-4 h-4 mr-1 ${isRefetching ? 'animate-spin' : ''}`} />
+            {isRefetching ? '刷新中...' : '刷新'}
+          </Button>
+          <div className="flex border rounded-lg overflow-hidden">
+            {[['grid', Grid3X3], ['list', List]].map(([mode, Icon]) => (
+              <button
+                key={mode}
+                className={`p-2 ${viewMode === mode ? 'bg-blue-50 text-blue-600' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                onClick={() => setViewMode(mode as 'grid' | 'list')}
+              >
+                <Icon className="w-4 h-4" />
+              </button>
+            ))}
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setSortOrder(o => o === 'newest' ? 'oldest' : 'newest')}>
+            <ArrowUpDown className="w-4 h-4 mr-1" />
+            {sortOrder === 'newest' ? '最新优先' : '最早优先'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="搜索标签名、版本号..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="pl-9 pr-8"
+          />
+          {searchQuery && (
+            <button className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setSearchQuery('')}>
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <select
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value as 'all' | GitTag['status'])}
+          className="px-3 py-2 border rounded-lg text-sm"
+        >
+          <option value="all">全部状态</option>
+          <option value="active">活跃</option>
+          <option value="archived">已归档</option>
+          <option value="protected">保护中</option>
+        </select>
+        <select
+          value={metaFilter}
+          onChange={e => setMetaFilter(e.target.value as 'all' | 'hasScreenshot' | 'hasChangelog')}
+          className="px-3 py-2 border rounded-lg text-sm"
+        >
+          <option value="all">全部标签</option>
+          <option value="hasScreenshot">📎 有截图</option>
+          <option value="hasChangelog">📝 有摘要</option>
+        </select>
+        {(searchQuery || statusFilter !== 'all' || metaFilter !== 'all') && (
+          <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(''); setStatusFilter('all'); setMetaFilter('all'); }}>
+            <X className="w-4 h-4 mr-1" />清除筛选
+          </Button>
+        )}
+      </div>
+
+      {/* Content */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-20 gap-3">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          <span className="text-muted-foreground">加载中...</span>
+        </div>
+      ) : error ? (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="py-8 flex flex-col items-center gap-3">
+            <AlertTriangle className="w-8 h-8 text-red-500" />
+            <p className="text-red-700 font-medium">加载失败</p>
+            <p className="text-sm text-red-600">{String(error)}</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>重试</Button>
+          </CardContent>
+        </Card>
+      ) : filteredTags.length === 0 ? (
+        <EmptyState icon={Tag} title="暂无标签" description="发布版本后自动创建" />
+      ) : viewMode === 'grid' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredTags.map(tag => {
+            const build = tag.buildStatus ? buildStatusConfig[tag.buildStatus] : null;
+            return <TagCardInline key={tag.name} tag={tag} build={build} expandedTags={expandedTags} toggleExpand={toggleExpand} />;
+          })}
+        </div>
+      ) : (
+        <div className="border rounded-lg overflow-hidden">
+          <div className="flex items-center gap-4 px-4 py-3 bg-muted text-sm font-medium text-muted-foreground">
+            <Tag className="w-4 h-4" />
+            <div className="flex-1">标签 / 版本 / 提交信息</div>
+            <div className="w-24 text-right">Hash</div>
+            <div className="w-20">作者</div>
+            <div className="w-24 text-right">日期</div>
+          </div>
+          {filteredTags.map(tag => (
+            <div
+              key={tag.name}
+              className="flex items-center gap-4 px-4 py-3 border-t hover:bg-muted/50 cursor-pointer transition-colors"
+              onClick={() => router.push(`/versions?tag=${encodeURIComponent(tag.name)}`)}
+            >
+              <Tag className="w-4 h-4 text-blue-600 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono font-medium">{tag.name}</span>
+                  <span className="text-sm text-muted-foreground">{tag.version}</span>
+                </div>
+                <p className="text-sm text-muted-foreground truncate">{tag.subject}</p>
+              </div>
+              <span className="font-mono text-xs text-muted-foreground flex-shrink-0">{tag.commit}</span>
+              <span className="text-xs text-muted-foreground flex-shrink-0">{tag.author}</span>
+              <span className="text-xs text-muted-foreground flex-shrink-0">{new Date(tag.taggerDate).toLocaleDateString('zh-CN')}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="text-sm text-muted-foreground text-center">
+        显示 {filteredTags.length} / {tags.length} 个标签
+      </div>
+    </div>
+  );
+}
+
+// ─── Branches Tab Content ─────────────────────────────────────────────────────
+function BranchesContent() {
+  const [BranchManager, setBranchManager] = useState<React.ComponentType<Record<string, unknown>> | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    import('@/components/versions/BranchManager')
+      .then(mod => setBranchManager(() => mod.BranchManager))
+      .catch(() => setLoadError('组件加载失败'));
+  }, []);
+
+  if (loadError) {
+    return (
+      <Card className="border-red-200 bg-red-50">
+        <CardContent className="py-8 flex flex-col items-center gap-3">
+          <AlertTriangle className="w-8 h-8 text-red-500" />
+          <p className="text-red-700 font-medium">{loadError}</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!BranchManager) {
+    return (
+      <div className="flex items-center justify-center py-20 gap-3">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        <span className="text-muted-foreground">加载中...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-[calc(100vh-200px)]">
+      <BranchManager />
+    </div>
+  );
+}
+
+// ─── Main Page ─────────────────────────────────────────────────────────────────
+export default function VersionsPage() {
   const [activeTab, setActiveTab] = useState('list');
   const [page, setPage] = useState(1);
-
-  // Navigate to sub-pages when tab changes to panel/branches
-  useEffect(() => {
-    if (activeTab === 'panel') {
-      router.push('/versions/panel');
-    } else if (activeTab === 'branches') {
-      router.push('/branches');
-    }
-  }, [activeTab, router]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [data, setData] = useState<{ data: Version[]; total: number; totalPages: number } | null>(
@@ -191,10 +483,16 @@ export default function VersionsPage() {
       <TabsContent value="list">
 
       {/* Stats Summary Bar */}
-      {!isLoading &&
-        !error &&
-        total > 0 &&
-        (() => {
+      {isLoading ? (
+        <div className="page-section mb-4 flex items-center gap-6 flex-wrap animate-pulse">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-muted rounded" />
+              <div className="w-16 h-4 bg-muted rounded" />
+            </div>
+          ))}
+        </div>
+      ) : !error && total > 0 && (() => {
           const successBuilds = versions.filter(v => v.buildStatus === 'success').length;
           const failedBuilds = versions.filter(v => v.buildStatus === 'failed').length;
           const totalBuilds = successBuilds + failedBuilds;
@@ -742,6 +1040,12 @@ export default function VersionsPage() {
           ) : null}
         </DialogContent>
       </Dialog>
+      </TabsContent>
+      <TabsContent value="panel" className="mt-6">
+        <VersionPanelContent />
+      </TabsContent>
+      <TabsContent value="branches" className="mt-6">
+        <BranchesContent />
       </TabsContent>
     </div>
   );
