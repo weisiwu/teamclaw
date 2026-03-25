@@ -9,7 +9,7 @@ import { success } from './utils/response.js';
 import { requireAdmin } from './middleware/auth.js';
 import { unifiedErrorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { runMigrations } from './db/migrations/run.js';
-import { waitForDatabase } from './utils/db.js';
+import { waitForDatabase, strictCheckTables } from './utils/db.js';
 import healthRouter from './routes/health.js';
 import projectRouter from './routes/project.js';
 import userRouter from './routes/user.js';
@@ -243,6 +243,12 @@ const server = app.listen(PORT, async () => {
   await waitForDatabase();
   // 运行数据库迁移
   await runMigrations();
+  // 严格检查所有关键表（包括新增的 build_records/experiment_* 等）
+  const tablesOk = await strictCheckTables();
+  if (!tablesOk) {
+    console.error('⚠️  部分关键表缺失，迁移可能未完全运行，请手动执行:');
+    console.error('   npx tsx server/src/db/migrations/run.ts');
+  }
   // 自动填充 Demo 数据（首次启动）
   await seedDemoData();
   // Seed 默认 Agent（首次启动时从 AGENT_TEAM 常量填充）
