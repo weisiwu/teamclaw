@@ -356,6 +356,7 @@ export default function VersionsPage() {
   );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [viewMode, setViewMode] = useState<'card' | 'compact'>('card');
   const [pageSize, setPageSize] = useState(20);
   const [compareMode, setCompareMode] = useState(false);
@@ -371,10 +372,30 @@ export default function VersionsPage() {
     setIsLoading(true);
     setError(null);
     getVersions(page, pageSize, statusFilter)
-      .then(setData)
+      .then(res => {
+        setData(res);
+        setLastRefreshed(new Date());
+      })
       .catch(err => setError(err instanceof Error ? err : new Error(String(err))))
       .finally(() => setIsLoading(false));
   }, [page, statusFilter, pageSize]);
+
+  // 自动刷新：每 30 秒重新获取数据（仅列表 Tab 激活时）
+  useEffect(() => {
+    if (activeTab !== 'list') return;
+    const interval = setInterval(() => {
+      setIsLoading(true);
+      setError(null);
+      getVersions(page, pageSize, statusFilter)
+        .then(res => {
+          setData(res);
+          setLastRefreshed(new Date());
+        })
+        .catch(err => setError(err instanceof Error ? err : new Error(String(err))))
+        .finally(() => setIsLoading(false));
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [activeTab, page, statusFilter, pageSize]);
 
   const handlePageSizeChange = (newSize: number) => {
     setPageSize(newSize);
@@ -484,11 +505,19 @@ export default function VersionsPage() {
 
       {/* Stats Summary Bar */}
       {isLoading ? (
-        <div className="page-section mb-4 flex items-center gap-6 flex-wrap animate-pulse">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-muted rounded" />
-              <div className="w-16 h-4 bg-muted rounded" />
+        <div className="page-section mb-4 flex items-center gap-6 flex-wrap">
+          {[
+            { icon: Package, label: '版本总数', valueClass: 'w-8 h-4 bg-muted rounded' },
+            { icon: TrendingUp, label: '构建成功率', valueClass: 'w-10 h-4 bg-muted rounded' },
+            { icon: GitCommit, label: '平均提交', valueClass: 'w-8 h-4 bg-muted rounded' },
+            { icon: CheckCircle2, label: '已发布', valueClass: 'w-6 h-4 bg-muted rounded' },
+            { icon: null, label: '草稿', valueClass: 'w-4 h-4 bg-muted rounded' },
+            { icon: null, label: '归档', valueClass: 'w-6 h-4 bg-muted rounded' },
+          ].map((item, i) => (
+            <div key={i} className="flex items-center gap-2 animate-pulse">
+              {item.icon && <item.icon className="w-4 h-4 text-muted-foreground/40" />}
+              <span className="text-sm text-muted-foreground/60">{item.label}</span>
+              <div className={item.valueClass} />
             </div>
           ))}
         </div>
@@ -546,6 +575,12 @@ export default function VersionsPage() {
                 <span className="text-sm text-muted-foreground">归档</span>
                 <span className="text-sm font-semibold text-yellow-600">{archivedCount}</span>
               </div>
+              {lastRefreshed && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground ml-auto">
+                  <RefreshCw className="w-3 h-3" />
+                  <span>自动刷新于 {lastRefreshed.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                </div>
+              )}
             </div>
           );
         })()}

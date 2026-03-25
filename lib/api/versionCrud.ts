@@ -21,7 +21,19 @@ export async function getVersions(
 ): Promise<VersionListResponse> {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   if (status !== 'all') params.set('status', status);
+
   const res = await fetch(`${API_BASE}/versions?${params}`);
+
+  // Content-Type 检查（非 JSON 时给出友好错误）
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await res.text().catch(() => '(无法读取响应)');
+    throw new Error(
+      `服务器返回了非 JSON 格式（${res.status}）。` +
+      (text.length > 50 ? `请检查 /api/v1/versions 路由是否正常` : text)
+    );
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || `获取版本列表失败 (${res.status})`);
