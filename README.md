@@ -44,8 +44,17 @@ npm install
 3. 初始化数据库（PostgreSQL）：
 
 ```bash
-# 一键初始化：启动 Docker DB → 创建数据库 → 运行迁移
+# 默认：启动 Docker DB → 创建数据库 → 运行迁移
 ./scripts/setup-db.sh
+
+# 连接外部已存在的 PostgreSQL（跳过 Docker）
+./scripts/setup-db.sh --external
+
+# 重置数据库（删除重建，适合开发中彻底刷新）
+./scripts/setup-db.sh --reset
+
+# 查看帮助
+./scripts/setup-db.sh --help
 ```
 
 4. 配置环境变量：
@@ -164,6 +173,7 @@ npm run prepare          # 安装 Husky hooks
 ## 故障排查
 
 ### 数据库连接失败
+
 ```bash
 # 1. 检查 Docker 是否运行
 docker ps | grep postgres
@@ -171,20 +181,31 @@ docker ps | grep postgres
 # 2. 检查 DATABASE_URL 环境变量
 echo $DATABASE_URL
 
-# 3. 重新初始化数据库
-./scripts/setup-db.sh
-
-# 4. 查看详细错误日志
+# 3. 查看容器日志
 docker logs teamclaw-postgres
+
+# 4. 重新初始化
+./scripts/setup-db.sh --reset
 ```
 
+常见原因：
+- **Docker 未启动**：启动 Docker Desktop 后重试
+- **端口被占用**：`lsof -i :5432` 检查 5432 端口
+- **DATABASE_URL 格式错误**：应为 `postgresql://user:password@host:port/dbname`
+- **数据库不存在**：运行 `./scripts/setup-db.sh` 创建
+
 ### 迁移失败
+
 ```bash
 # 手动运行迁移
 cd server && npx tsx src/db/migrations/run.ts
+
+# 查看迁移日志
+cat /tmp/migration.log
 ```
 
 ### 端口占用
+
 ```bash
 # 检查端口占用
 lsof -i :3000  # 前端
@@ -192,6 +213,19 @@ lsof -i :9700  # 后端
 
 # 停止占用进程或修改 .env 中的 PORT
 ```
+
+### 前端页面空白 / 500 错误
+
+1. 检查后端是否正常运行：`curl http://localhost:9700/health`
+2. 检查 `.env.local` 是否存在：`cp .env.example .env.local`
+3. 清除缓存：`rm -rf .next && npm run dev`
+4. 检查浏览器控制台具体错误信息
+
+### 飞书集成功能不可用
+
+1. 确认 `server/.env` 中已填写 `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET`
+2. 在飞书开放平台确认应用权限和事件订阅
+3. 检查 `SERVER_URL` 是否为可访问的公网地址（飞书需要）
 
 ## 许可证
 

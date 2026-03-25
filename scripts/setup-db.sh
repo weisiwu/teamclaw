@@ -1,7 +1,10 @@
 #!/bin/bash
 # ============================================================
 # TeamClaw 数据库一键启动脚本
-# 用法: ./scripts/setup-db.sh
+# 用法:
+#   ./scripts/setup-db.sh              # 默认：启动 Docker DB 并初始化
+#   ./scripts/setup-db.sh --external  # 连接外部已存在的数据库
+#   ./scripts/setup-db.sh --reset     # 重置数据库（删除重建）
 # ============================================================
 set -euo pipefail
 
@@ -21,15 +24,34 @@ log_ok()    { echo -e "${GREEN}[OK]${NC}   $*"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 log_fail()  { echo -e "${RED}[FAIL]${NC} $*" >&2; }
 
-# ── 0. 环境变量检查 ─────────────────────────────────────────
-log_info "检查环境变量..."
+# ── 参数解析 ────────────────────────────────────────────────
+MODE="docker"  # docker | external | reset
+for arg in "$@"; do
+  case "$arg" in
+    --external) MODE="external" ;;
+    --reset)    MODE="reset" ;;
+    --help|-h)
+      echo "用法: $0 [--external|--reset]"
+      echo "  （无参数）默认：启动 Docker DB 并初始化"
+      echo "  --external  连接外部已存在的数据库（跳过 Docker）"
+      echo "  --reset     重置数据库（删除重建）"
+      exit 0
+      ;;
+  esac
+done
 
-# 加载 .env 文件（如果存在）
-if [ -f "$PROJECT_DIR/.env" ]; then
-  set -a
-  source <(grep -v '^\s*#' "$PROJECT_DIR/.env" | grep -v '^\s*$')
-  set +a
-fi
+# ── 0. 环境变量加载 ─────────────────────────────────────────
+log_info "加载环境变量..."
+
+# 支持从 server/.env 和根目录 .env 加载
+for env_file in "$PROJECT_DIR/server/.env" "$PROJECT_DIR/.env"; do
+  if [ -f "$env_file" ]; then
+    set -a
+    source <(grep -v '^\s*#' "$env_file" | grep -v '^\s*$')
+    set +a
+    log_info "已加载: $env_file"
+  fi
+done
 
 DB_CONTAINER="${DB_CONTAINER:-teamclaw-postgres}"
 DB_NAME="${DB_NAME:-${POSTGRES_DB:-teamclaw}}"
@@ -38,108 +60,224 @@ DB_PASSWORD="${DB_PASSWORD:-${POSTGRES_PASSWORD:-password}}"
 DB_PORT="${DB_PORT:-5432}"
 
 if [ -z "$DATABASE_URL" ]; then
-  log_warn "DATABASE_URL 未设置，将使用默认值"
+  log_warn "DATABASE_URL 未设置，使用默认值"
   DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@localhost:${DB_PORT}/${DB_NAME}"
 fi
 
-# 验证关键变量
-if [ -z "$DB_NAME" ] || [ -z "$DB_USER" ]; then
-  log_fail "缺少必需的环境变量: DB_NAME 或 DB_USER"
-  exit 1
-fi
-log_ok "环境变量检查通过"
+# 解析 DATABASE_URL 获取各组件（用于外部连接）
+_parse_db_url() {
+  # 格式: postgresql://user:password@host:port/dbname
+  local url="$1"
+  _DB_EXT_HOST="${url#*@}"
+  _DB_EXT_HOST="${_DB_EXT_HOST%%:*}"
+  _DB_EXT_PORT="${url#*:}"
+  _DB_EXT_PORT="${_DB_EXT_PORT#*/}"
+  _DB_EXT_PORT="${_DB_EXT_PORT%%/*}"
+  _DB_EXT_DB="${url##*/}"
+}
 
-# ── 1. Docker PostgreSQL 启动 ─────────────────────────────
-log_info "启动 PostgreSQL 容器..."
+# ── 前置检查 ────────────────────────────────────────────────
+_check_prereq() {
+  log_info "检查前置条件..."
 
-# 检查 Docker 是否运行
-if ! docker info > /dev/null 2>&1; then
-  log_fail "Docker 未运行，请先启动 Docker Desktop"
-  exit 1
-fi
-
-# 如果容器已存在但未运行，则启动
-if docker ps -a --format '{{.Names}}' | grep -q "^${DB_CONTAINER}$"; then
-  if docker ps --format '{{.Names}}' | grep -q "^${DB_CONTAINER}$"; then
-    log_ok "PostgreSQL 容器已在运行"
-  else
-    log_info "启动已有容器 ${DB_CONTAINER}..."
-    docker start "$DB_CONTAINER"
-    log_ok "容器已启动"
-  fi
-else
-  log_info "创建并启动 PostgreSQL 容器..."
-  docker run -d \
-    --name "$DB_CONTAINER" \
-    -e POSTGRES_DB="$DB_NAME" \
-    -e POSTGRES_USER="$DB_USER" \
-    -e POSTGRES_PASSWORD="$DB_PASSWORD" \
-    -e POSTGRES_INITDB_ARGS="-c max_connections=200" \
-    -p "${DB_PORT}:5432" \
-    -v "${PROJECT_DIR}/scripts/db-init.sql:/docker-entrypoint-initdb.d/init.sql:ro" \
-    postgres:16-alpine
-
-  log_ok "容器已创建并启动（postgres:16-alpine）"
-fi
-
-# ── 2. 等待 PostgreSQL 就绪 ─────────────────────────────────
-log_info "等待 PostgreSQL 就绪..."
-
-RETRIES=30
-for i in $(seq 1 $RETRIES); do
-  if docker exec "$DB_CONTAINER" pg_isready -U "$DB_USER" -q 2>/dev/null; then
-    log_ok "PostgreSQL 已就绪"
-    break
-  fi
-  if [ "$i" -eq $RETRIES ]; then
-    log_fail "PostgreSQL 连接超时（${RETRIES}s）"
+  if [ -z "$DB_NAME" ] || [ -z "$DB_USER" ]; then
+    log_fail "缺少必需环境变量: DB_NAME=$DB_NAME 或 DB_USER=$DB_USER"
+    log_fail "请先执行: cp server/.env.example server/.env"
     exit 1
   fi
-  sleep 1
-done
 
-# ── 3. 初始化数据库（扩展 & 迁移）──────────────────────────
-log_info "执行数据库初始化..."
-
-# 3a. 运行 db-init.sql 中的扩展初始化（如 uuid-ossp、pg_trgm）
-if [ -f "$PROJECT_DIR/scripts/db-init.sql" ]; then
-  docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" \
-    < "$PROJECT_DIR/scripts/db-init.sql" > /dev/null 2>&1 \
-    && log_ok "数据库扩展初始化完成" \
-    || log_warn "扩展初始化未执行（可能已存在）"
-fi
-
-# 3b. 执行迁移脚本
-if [ -f "$PROJECT_DIR/server/src/db/migrations/run.ts" ]; then
-  cd "$PROJECT_DIR"
-  if npx tsx server/src/db/migrations/run.ts 2>/dev/null; then
-    log_ok "数据库迁移完成"
-  else
-    log_warn "迁移脚本执行异常，请检查 server/src/db/migrations/ 目录"
+  # 检查 psql 是否可用（外部模式必须）
+  if [ "$MODE" = "external" ] && ! command -v psql &>/dev/null; then
+    log_warn "psql 未安装，尝试用 docker exec 代替..."
+    MODE="external-docker"
   fi
-fi
 
-# ── 4. 验证 ─────────────────────────────────────────────────
-log_info "验证数据库状态..."
+  log_ok "前置检查通过"
+}
 
-TABLE_COUNT=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -c \
-  "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';" 2>/dev/null | tr -d ' ')
-TABLE_COUNT=${TABLE_COUNT:-0}
+# ── 1. Docker PostgreSQL 启动 ─────────────────────────────
+_start_docker_postgres() {
+  log_info "启动 PostgreSQL（Docker 模式）..."
 
-if [ "$TABLE_COUNT" -gt 0 ]; then
-  log_ok "数据库验证成功，当前公共表数量: ${TABLE_COUNT}"
-else
-  log_warn "未检测到公共表，可能迁移脚本不存在或 db-init.sql 路径有误"
-fi
+  if ! docker info > /dev/null 2>&1; then
+    log_fail "Docker 未运行，请先启动 Docker Desktop"
+    exit 1
+  fi
 
-echo ""
-log_ok "=========================================="
-log_ok "  数据库搭建完成！"
-log_ok "=========================================="
-echo ""
-echo -e "  连接地址: ${CYAN}${DATABASE_URL}${NC}"
-echo -e "  容器名称: ${CYAN}${DB_CONTAINER}${NC}"
-echo -e "  端口映射: ${CYAN}${DB_PORT}:5432${NC}"
-echo ""
-log_info "如需停止数据库，请运行: docker stop ${DB_CONTAINER}"
-log_info "完全删除容器请运行: docker rm -f ${DB_CONTAINER}"
+  if docker ps -a --format '{{.Names}}' | grep -q "^${DB_CONTAINER}$"; then
+    if docker ps --format '{{.Names}}' | grep -q "^${DB_CONTAINER}$"; then
+      log_ok "PostgreSQL 容器已在运行"
+    else
+      log_info "启动已有容器 ${DB_CONTAINER}..."
+      docker start "$DB_CONTAINER"
+      log_ok "容器已启动"
+    fi
+  else
+    log_info "创建并启动 PostgreSQL 容器..."
+    docker run -d \
+      --name "$DB_CONTAINER" \
+      -e POSTGRES_DB="$DB_NAME" \
+      -e POSTGRES_USER="$DB_USER" \
+      -e POSTGRES_PASSWORD="$DB_PASSWORD" \
+      -e POSTGRES_INITDB_ARGS="-c max_connections=200" \
+      -p "${DB_PORT}:5432" \
+      -v "${PROJECT_DIR}/scripts/db-init.sql:/docker-entrypoint-initdb.d/init.sql:ro" \
+      postgres:16-alpine
+    log_ok "容器已创建并启动（postgres:16-alpine）"
+  fi
+}
+
+# ── 2. 等待 PostgreSQL 就绪 ─────────────────────────────────
+_wait_postgres() {
+  local psql_cmd="${1:-docker exec}"
+  log_info "等待 PostgreSQL 就绪..."
+
+  local RETRIES=30
+  for i in $(seq 1 $RETRIES); do
+    if [ "$psql_cmd" = "docker exec" ]; then
+      docker exec "$DB_CONTAINER" pg_isready -U "$DB_USER" -q 2>/dev/null && ok=true || ok=false
+    else
+      $psql_cmd -U "$DB_USER" -d postgres -q 2>/dev/null && ok=true || ok=false
+    fi
+
+    if $ok; then
+      log_ok "PostgreSQL 已就绪（${i}s）"
+      return 0
+    fi
+
+    if [ "$i" -eq $RETRIES ]; then
+      log_fail "PostgreSQL 连接超时（${RETRIES}s）"
+      exit 1
+    fi
+    sleep 1
+  done
+}
+
+# ── 3. 重置数据库（reset 模式） ────────────────────────────
+_reset_db() {
+  log_info "重置数据库..."
+  local cmd="docker exec"
+  if [ "$MODE" = "external" ]; then
+    cmd="psql"
+    _parse_db_url "$DATABASE_URL"
+    DB_HOST="$_DB_EXT_HOST" DB_PORT="$_DB_EXT_PORT"
+  fi
+
+  if $cmd psql -U "$DB_USER" -d postgres -c "SELECT 1" &>/dev/null; then
+    $cmd psql -U "$DB_USER" -d postgres -c "DROP DATABASE IF EXISTS \"$DB_NAME\"" &>/dev/null \
+      && log_ok "旧数据库已删除" \
+      || log_warn "删除旧数据库失败（可能不存在）"
+    $cmd psql -U "$DB_USER" -d postgres -c "CREATE DATABASE \"$DB_NAME\"" \
+      && log_ok "新数据库已创建" \
+      || { log_fail "创建数据库失败"; exit 1; }
+  else
+    log_fail "无法连接到 PostgreSQL"
+    exit 1
+  fi
+}
+
+# ── 4. 初始化数据库（扩展 & 迁移）──────────────────────────
+_init_db() {
+  log_info "执行数据库初始化..."
+  local cmd="docker exec -i $DB_CONTAINER psql -U $DB_USER -d $DB_NAME"
+  local use_docker=true
+
+  if [ "$MODE" = "external" ] || [ "$MODE" = "external-docker" ]; then
+    use_docker=false
+    if [ "$MODE" = "external-docker" ]; then
+      cmd="docker exec -i $DB_CONTAINER psql -U $DB_USER -d $DB_NAME"
+    else
+      _parse_db_url "$DATABASE_URL"
+      cmd="psql -h $_DB_EXT_HOST -p $_DB_EXT_PORT -U $DB_USER -d $DB_NAME"
+    fi
+  fi
+
+  # 4a. 扩展初始化
+  if [ -f "$PROJECT_DIR/scripts/db-init.sql" ]; then
+    if $use_docker; then
+      docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" \
+        < "$PROJECT_DIR/scripts/db-init.sql" > /dev/null 2>&1 \
+        && log_ok "扩展初始化完成" \
+        || log_warn "扩展已存在，跳过"
+    else
+      $cmd < "$PROJECT_DIR/scripts/db-init.sql" > /dev/null 2>&1 \
+        && log_ok "扩展初始化完成" \
+        || log_warn "扩展已存在，跳过"
+    fi
+  fi
+
+  # 4b. 运行迁移
+  if [ -f "$PROJECT_DIR/server/src/db/migrations/run.ts" ]; then
+    cd "$PROJECT_DIR"
+    if npx tsx server/src/db/migrations/run.ts 2>&1 | tee /tmp/migration.log; then
+      log_ok "数据库迁移完成"
+    else
+      log_warn "迁移有警告，请检查 /tmp/migration.log"
+    fi
+  fi
+}
+
+# ── 5. 验证 ─────────────────────────────────────────────────
+_verify() {
+  log_info "验证数据库状态..."
+  local cmd="docker exec $DB_CONTAINER psql -U $DB_USER -d $DB_NAME"
+  local count
+
+  if [ "$MODE" = "external" ]; then
+    _parse_db_url "$DATABASE_URL"
+    cmd="psql -h $_DB_EXT_HOST -p $_DB_EXT_PORT -U $DB_USER -d $DB_NAME"
+  elif [ "$MODE" = "external-docker" ]; then
+    cmd="docker exec -i $DB_CONTAINER psql -U $DB_USER -d $DB_NAME"
+  fi
+
+  count=$($cmd -t -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';" 2>/dev/null | tr -d ' ' || echo "0")
+
+  if [ "${count:-0}" -gt 0 ]; then
+    log_ok "数据库验证成功：${count} 张公共表"
+  else
+    log_warn "未检测到公共表，迁移可能未执行"
+  fi
+}
+
+# ── 主流程 ──────────────────────────────────────────────────
+main() {
+  echo ""
+  log_info "=========================================="
+  log_info "  TeamClaw 数据库初始化脚本"
+  log_info "  模式: $MODE"
+  log_info "=========================================="
+  echo ""
+
+  _check_prereq
+
+  case "$MODE" in
+    docker|reset)
+      _start_docker_postgres
+      _wait_postgres
+      ;;
+    external|external-docker)
+      log_info "使用外部 PostgreSQL: $DATABASE_URL"
+      _wait_postgres "$([ "$MODE" = "external" ] && echo "psql" || echo "docker exec")"
+      ;;
+  esac
+
+  if [ "$MODE" = "reset" ]; then
+    _reset_db
+  fi
+
+  _init_db
+  _verify
+
+  echo ""
+  log_ok "=========================================="
+  log_ok "  数据库初始化完成！"
+  log_ok "=========================================="
+  echo ""
+  echo -e "  连接地址: ${CYAN}${DATABASE_URL}${NC}"
+  [ "$MODE" != "external" ] && echo -e "  容器名称: ${CYAN}${DB_CONTAINER}${NC}"
+  echo ""
+  [ "$MODE" = "docker" ] && log_info "停止 DB: docker stop $DB_CONTAINER"
+  [ "$MODE" = "docker" ] && log_info "删除容器: docker rm -f $DB_CONTAINER"
+}
+
+main
