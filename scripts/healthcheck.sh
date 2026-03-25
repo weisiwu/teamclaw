@@ -20,6 +20,9 @@ FRONTEND_ROUTES=(
   "/api/v1/skills"
   "/api/v1/feishu/chats"
   "/api/v1/feishu/messages"
+  "/api/v1/tags"
+  "/api/v1/dashboard/overview"
+  "/api/v1/search"
 )
 
 # 关键后端 API 路由（Express 直连）
@@ -37,6 +40,9 @@ BACKEND_ROUTES=(
   "/api/v1/skills"
   "/api/v1/branches"
   "/api/v1/dashboard/overview"
+  "/api/v1/tags"
+  "/api/v1/search"
+  "/api/v1/builds"
 )
 
 # ── 颜色 ────────────────────────────────────────────────────
@@ -136,9 +142,32 @@ for route in "${BACKEND_ROUTES[@]}"; do
   fi
 done
 
+# 4. JSON 格式验证（抽样）
+echo ""
+echo -e "${YELLOW}[4/5] JSON 格式验证${NC}"
+SAMPLE_ROUTES=(
+  "${FRONTEND_URL}/api/v1/tasks"
+  "${FRONTEND_URL}/api/v1/versions"
+  "${FRONTEND_URL}/api/v1/tags"
+)
+for route in "${SAMPLE_ROUTES[@]}"; do
+  ((TOTAL_COUNT++))
+  ct=$(curl -s -I "$route" 2>/dev/null | grep -i "content-type:" | head -1 || echo "")
+  if echo "$ct" | grep -qi "application/json"; then
+    echo -e "${GREEN}[PASS]${NC}  [JSON] $route"
+    ((PASS_COUNT++))
+  elif echo "$ct" | grep -qi "text/html"; then
+    echo -e "${RED}[FAIL]${NC}  [HTML!] $route 返回了 HTML 而不是 JSON"
+    ((FAIL_COUNT++))
+  else
+    echo -e "${YELLOW}[WARN]${NC}  [未知] $route"
+  fi
+done
+
+
 # 4. 总结报告
 echo ""
-echo -e "${YELLOW}[4/4] 检查结果汇总${NC}"
+echo -e "${YELLOW}[5/5] 检查结果汇总${NC}"
 echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo -e "  总检查数: $TOTAL_COUNT"
 echo -e "  ${GREEN}通过: $PASS_COUNT${NC}"

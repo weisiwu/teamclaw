@@ -9,6 +9,7 @@ import { Loader2, ArrowLeft, Tag, Lock, Trash2, Edit3, Check, X, AlertTriangle, 
 import Link from "next/link";
 
 const API_BASE = "/api/v1";
+import { apiGet, apiPut, apiDelete, getFriendlyErrorMessage } from "@/lib/api-safe-fetch";
 
 interface TagDetail {
   id: string;
@@ -52,27 +53,22 @@ export default function TagDetailPage() {
   useEffect(() => {
     if (!tagName) return;
     setIsLoading(true);
-    // Use dedicated tag detail endpoint which includes author info
-    fetch(`${API_BASE}/tags/${encodeURIComponent(tagName)}`)
-      .then((r) => r.json())
-      .then((json) => {
-        if ((json.code === 200 || json.code === 0) && json.data) {
-          setTag(json.data);
-        } else {
-          // Fallback to list endpoint
-          return fetch(`${API_BASE}/tags?prefix=${encodeURIComponent(tagName)}`).then(r => r.json());
-        }
-      })
-      .then((json) => {
-        if (json && (json.code === 200 || json.code === 0) && json.data?.data?.length > 0) {
-          const found = json.data.data.find((t: TagDetail) => t.name === tagName);
-          setTag(found || json.data.data[0]);
-        } else if (!tag) {
-          setTag(null);
-        }
-      })
-      .catch(console.error)
-      .finally(() => setIsLoading(false));
+    (async () => {
+      const result = await apiGet<TagDetail>(`${API_BASE}/tags/${encodeURIComponent(tagName)}`);
+      if (result.success && result.data) {
+        setTag(result.data);
+        setIsLoading(false);
+        return;
+      }
+      const listResult = await apiGet<{ data: TagDetail[] }>(`${API_BASE}/tags?prefix=${encodeURIComponent(tagName)}`);
+      if (listResult.success && listResult.data?.data?.length > 0) {
+        const found = listResult.data.data.find((t: TagDetail) => t.name === tagName);
+        setTag(found || listResult.data.data[0]);
+      } else if (!tag) {
+        setTag(null);
+      }
+      setIsLoading(false);
+    })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tagName]);
 
@@ -81,19 +77,14 @@ export default function TagDetailPage() {
     setIsRenaming(true);
     setRenameError(null);
     try {
-      const res = await fetch(`${API_BASE}/tags/${tag.id}/rename`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName }),
-      });
-      const json = await res.json();
-      if (json.code === 200 || json.code === 0) {
+      const result = await apiPut(`${API_BASE}/tags/${tag.id}/rename`, { name: newName });
+      if (result.success) {
         setActionMsg({ type: "success", text: `已重命名为: ${newName}` });
         setTag((prev) => prev ? { ...prev, name: newName } : prev);
         setIsRenaming(false);
         router.replace(`/tags/${encodeURIComponent(newName)}`);
       } else {
-        setRenameError(json.message || "重命名失败");
+        setRenameError(result.error ? getFriendlyErrorMessage(result.error) : "重命名失败");
       }
     } catch {
       setRenameError("请求失败");
@@ -106,9 +97,8 @@ export default function TagDetailPage() {
     if (!tag?.id) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`${API_BASE}/tags/${tag.id}`, { method: "DELETE" });
-      const json = await res.json();
-      if (json.code === 200 || json.code === 0) {
+      const result = await apiDelete(`${API_BASE}/tags/${tag.id}`);
+      if (result.success) {
         router.push("/tags");
       } else {
         setActionMsg({ type: "error", text: json.message || "删除失败" });

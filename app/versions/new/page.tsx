@@ -9,6 +9,7 @@ import { ArrowLeft, Loader2, Check } from "lucide-react";
 import Link from "next/link";
 
 const API_BASE = "/api/v1";
+import { apiPost, getFriendlyErrorMessage } from "@/lib/api-safe-fetch";
 
 export default function NewVersionPage() {
   const router = useRouter();
@@ -33,30 +34,20 @@ export default function NewVersionPage() {
     setIsSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/versions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          version: form.version,
-          title: form.title,
-          description: form.description,
-          status: "draft",
-          tags: [],
-        }),
+      const result = await apiPost(`${API_BASE}/versions`, {
+        version: form.version,
+        title: form.title,
+        description: form.description,
+        status: "draft",
+        tags: [],
       });
-      const json = await res.json();
-      if (json.code === 200 || json.code === 0 || json.code === 201) {
-        // Auto-create git tag
-        const created = json.data;
+      if (result.success) {
+        const created = result.data as { id?: string } | undefined;
         if (created?.id) {
           try {
-            await fetch(`${API_BASE}/versions/${created.id}/git-tags`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                tagName: form.version.startsWith("v") ? form.version : `v${form.version}`,
-                message: `${form.title}: ${form.description}`,
-              }),
+            await apiPost(`${API_BASE}/versions/${created.id}/git-tags`, {
+              tagName: form.version.startsWith("v") ? form.version : `v${form.version}`,
+              message: `${form.title}: ${form.description}`,
             });
           } catch {
             // Tag creation failure is non-fatal
@@ -64,7 +55,7 @@ export default function NewVersionPage() {
         }
         router.push("/versions");
       } else {
-        setError(json.message || "创建失败");
+        setError(result.error ? getFriendlyErrorMessage(result.error) : "创建失败");
       }
     } catch {
       setError("请求失败，请重试");

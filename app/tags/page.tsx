@@ -9,6 +9,7 @@ import { Plus, Search, Tag, Lock, Trash2, Loader2, ChevronLeft, ChevronRight, Al
 import Link from "next/link";
 
 const API_BASE = "/api/v1";
+import { apiGet, apiDelete, getFriendlyErrorMessage } from "@/lib/api-safe-fetch";
 
 interface TagRecord {
   id: string;
@@ -45,20 +46,14 @@ export default function TagsPage() {
 
   const fetchTags = async (p: number, pref: string) => {
     setIsLoading(true);
-    try {
-      const params = new URLSearchParams({ page: String(p), pageSize: String(pageSize) });
-      if (pref) params.set("prefix", pref);
-      const res = await fetch(`${API_BASE}/tags?${params}`);
-      const json = await res.json();
-      if (json.code === 200 || json.code === 0) {
-        setTags(json.data.data || []);
-        setTotalPages(json.data.totalPages || 1);
-      }
-    } catch (e) {
-      console.error("Failed to fetch tags:", e);
-    } finally {
-      setIsLoading(false);
+    const params = new URLSearchParams({ page: String(p), pageSize: String(pageSize) });
+    if (pref) params.set("prefix", pref);
+    const result = await apiGet<{ data: TagRecord[]; totalPages: number }>(`${API_BASE}/tags?${params}`);
+    if (result.success && result.data) {
+      setTags(result.data.data || []);
+      setTotalPages(result.data.totalPages || 1);
     }
+    setIsLoading(false);
   };
 
   // Debounce search input to avoid excessive re-renders
@@ -80,20 +75,14 @@ export default function TagsPage() {
     if (!deleteId) return;
     setIsDeleting(true);
     setDeleteError(null);
-    try {
-      const res = await fetch(`${API_BASE}/tags/${deleteId}`, { method: "DELETE" });
-      const json = await res.json();
-      if (json.code === 200 || json.code === 0) {
-        setTags((prev) => prev.filter((t) => t.id !== deleteId));
-        setDeleteId(null);
-      } else {
-        setDeleteError(json.message || "删除失败");
-      }
-    } catch {
-      setDeleteError("请求失败");
-    } finally {
-      setIsDeleting(false);
+    const result = await apiDelete(`${API_BASE}/tags/${deleteId}`);
+    if (result.success) {
+      setTags((prev) => prev.filter((t) => t.id !== deleteId));
+      setDeleteId(null);
+    } else {
+      setDeleteError(result.error ? getFriendlyErrorMessage(result.error) : "删除失败");
     }
+    setIsDeleting(false);
   };
 
   const filtered = debouncedSearch

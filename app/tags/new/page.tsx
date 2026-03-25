@@ -9,6 +9,7 @@ import { ArrowLeft, Loader2, Check } from "lucide-react";
 import Link from "next/link";
 
 const API_BASE = "/api/v1";
+import { apiPost, getFriendlyErrorMessage } from "@/lib/api-safe-fetch";
 
 export default function NewTagPage() {
   const router = useRouter();
@@ -30,22 +31,17 @@ export default function NewTagPage() {
     setIsSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/tags`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.name,
-          commitHash: form.commitHash || undefined,
-          message: form.message || undefined,
-          versionId: "manual",
-          versionName: form.name,
-        }),
+      const result = await apiPost(`${API_BASE}/tags`, {
+        name: form.name,
+        commitHash: form.commitHash || undefined,
+        message: form.message || undefined,
+        versionId: "manual",
+        versionName: form.name,
       });
-      const json = await res.json();
-      if (json.code === 200 || json.code === 0 || json.code === 201) {
+      if (result.success) {
         router.push("/tags");
       } else {
-        setError(json.message || "创建失败");
+        setError(result.error ? getFriendlyErrorMessage(result.error) : "创建失败");
       }
     } catch {
       setError("请求失败，请重试");
