@@ -1,10 +1,12 @@
 #!/bin/bash
 # ============================================================
 # TeamClaw 数据库一键启动脚本
+# 版本: 1.4.0（2026-03-26）
 # 用法:
 #   ./scripts/setup-db.sh              # 默认：启动 Docker DB 并初始化
 #   ./scripts/setup-db.sh --external  # 连接外部已存在的数据库
 #   ./scripts/setup-db.sh --reset     # 重置数据库（删除重建）
+#   ./scripts/setup-db.sh --dry-run   # 预检模式（只检查不执行）
 # ============================================================
 set -euo pipefail
 
@@ -26,15 +28,18 @@ log_fail()  { echo -e "${RED}[FAIL]${NC} $*" >&2; }
 
 # ── 参数解析 ────────────────────────────────────────────────
 MODE="docker"  # docker | external | reset
+DRY_RUN=false
 for arg in "$@"; do
   case "$arg" in
     --external) MODE="external" ;;
     --reset)    MODE="reset" ;;
+    --dry-run)  DRY_RUN=true; MODE="dry-run" ;;
     --help|-h)
-      echo "用法: $0 [--external|--reset]"
+      echo "用法: $0 [--external|--reset|--dry-run]"
       echo "  （无参数）默认：启动 Docker DB 并初始化"
       echo "  --external  连接外部已存在的数据库（跳过 Docker）"
       echo "  --reset     重置数据库（删除重建）"
+      echo "  --dry-run  预检模式：检查环境变量、Docker 状态，不执行写入操作"
       exit 0
       ;;
   esac
@@ -62,6 +67,26 @@ DB_PORT="${DB_PORT:-5432}"
 if [ -z "$DATABASE_URL" ]; then
   log_warn "DATABASE_URL 未设置，使用默认值"
   DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@localhost:${DB_PORT}/${DB_NAME}"
+fi
+
+# ── 0.1 DATABASE_URL 格式验证 ──────────────────────────────
+_validate_url() {
+  local url="$1"
+  if ! echo "$url" | grep -qE '^postgresql://[^:]+:[^@]+@[^:]+:[0-9]+/[^/]+$'; then
+    log_fail "DATABASE_URL 格式不正确：$url"
+    log_fail "正确格式：postgresql://user:password@host:port/dbname"
+    return 1
+  fi
+  log_ok "DATABASE_URL 格式验证通过"
+  return 0
+}
+
+# --external 模式必须先验证 URL
+if [ "$MODE" = "external" ]; then
+  if ! _validate_url "$DATABASE_URL"; then
+    log_fail "请检查 server/.env 中的 DATABASE_URL 配置"
+    exit 1
+  fi
 fi
 
 # 解析 DATABASE_URL 获取各组件（用于外部连接）
@@ -258,6 +283,19 @@ main() {
     external|external-docker)
       log_info "使用外部 PostgreSQL: $DATABASE_URL"
       _wait_postgres "$([ "$MODE" = "external" ] && echo "psql" || echo "docker exec")"
+      ;;
+    dry-run)
+      log_info "=== 预检模式（Dry Run）==="
+      _check_prereq
+      log_ok "环境检查通过"
+      log_info "DATABASE_URL: $DATABASE_URL"
+      log_info "DB_NAME: $DB_NAME"
+      log_info "DB_USER: $DB_USER"
+      log_info "DB_HOST: ${_DB_EXT_HOST:-localhost}"
+      log_info "DB_PORT: ${_DB_EXT_PORT:-5432}"
+      echo ""
+      log_ok "预检完成，所有检查通过（未执行任何写入操作）"
+      exit 0
       ;;
   esac
 

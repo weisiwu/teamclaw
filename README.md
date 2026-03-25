@@ -193,6 +193,26 @@ docker logs teamclaw-postgres
 - **端口被占用**：`lsof -i :5432` 检查 5432 端口
 - **DATABASE_URL 格式错误**：应为 `postgresql://user:password@host:port/dbname`
 - **数据库不存在**：运行 `./scripts/setup-db.sh` 创建
+- **外部数据库连接失败**（--external 模式）：运行 `./scripts/setup-db.sh --dry-run` 预检
+
+### 使用外部数据库（--external 模式）
+
+```bash
+# 1. 预检（不执行写入操作）
+./scripts/setup-db.sh --dry-run
+
+# 2. 设置 DATABASE_URL
+export DATABASE_URL="postgresql://user:password@host:port/dbname"
+
+# 3. 连接外部数据库
+./scripts/setup-db.sh --external
+
+# 4. 验证连接
+./scripts/setup-db.sh --dry-run
+```
+
+DATABASE_URL 格式必须为：`postgresql://用户名:密码@主机:端口/数据库名`
+示例：`postgresql://teamclaw:password@192.168.1.100:5432/teamclaw`
 
 ### 迁移失败
 
