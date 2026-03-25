@@ -26,6 +26,9 @@ import {
 import { agentToolBindingService } from './agentToolBindingService.js';
 import { toolService } from './toolService.js';
 import { skillService, truncateSkills } from './skillService.js';
+import { experimentTracker } from './experimentTracker.js';
+import { gitExperiment } from './gitExperiment.js';
+import type { ExperimentStatus, MetricDirection } from './experimentTracker.js';
 
 export interface ExecutionContext {
   executionId: string;
@@ -56,6 +59,30 @@ export interface DispatchRequest {
   prompt: string; // 任务描述
   timeoutMs?: number; // 超时时间，默认 5 分钟
   model?: string; // 可选指定模型
+}
+
+export interface AutonomousLoopRequest {
+  dispatcher: string;
+  targetAgent: string;          // 执行 Agent（如 coder）
+  taskId: string;
+  prompt: string;               // 优化目标描述
+  projectPath: string;          // 项目路径
+  sessionTag: string;           // 实验会话标签（如 mar26-perf）
+  verifyCommand: string;        // 验证命令（如 npm run build）
+  metricName: string;           // 指标名称（如 build_time_s）
+  metricDirection: MetricDirection; // lower_is_better | higher_is_better
+  maxIterations?: number;       // 最大轮次，默认 50
+  iterationTimeoutMs?: number;  // 每轮超时，默认 5 分钟
+  model?: string;
+}
+
+export interface AutonomousLoopContext {
+  sessionId: string;
+  sessionTag: string;
+  branchName: string;
+  status: 'running' | 'completed' | 'paused' | 'aborted';
+  currentIteration: number;
+  maxIterations: number;
 }
 
 // ============ 内存存储（DB-backed cache） ============
@@ -549,6 +576,374 @@ export function abortExecution(agentName: string, reason: string): boolean {
   }).catch(err => console.error('[agentExecution] Failed to persist abort:', err));
 
   return true;
+}
+
+// ============ 自主实验循环引擎 ============
+
+/** 活跃的自主循环 Map（sessionId -> abort flag） */
+const activeLoops: Map<string, { aborted: boolean }> = new Map();
+
+/**
+ * 启动自主实验循环（Autonomous Experiment Loop）
+ * 借鉴 autoresearch 模式：修改→验证→keep/discard→重复
+ *
+ * 立即返回 session 信息，后台异步执行循环
+ */
+export async function dispatchAutonomousLoop(
+  req: AutonomousLoopRequest
+): Promise<AutonomousLoopContext | { error: string }> {
+  const {
+    dispatcher, targetAgent, taskId, prompt,
+    projectPath, sessionTag, verifyCommand,
+    metricName, metricDirection,
+    maxIterations = 50,
+    iterationTimeoutMs = 5 * 60 * 1000,
+  } = req;
+
+  // 权限校验
+  if (!canDispatch(dispatcher, targetAgent)) {
+    return { error: `Agent ${dispatcher} 无权指派自主循环给 ${targetAgent}` };
+  }
+
+  try {
+    // 确保实验表存在
+    await experimentTracker.ensureExperimentTables();
+
+    // 创建实验分支
+    const branch = await gitExperiment.createExperimentBranch(projectPath, sessionTag);
+
+    // 创建实验会话
+    const session = await experimentTracker.createSession({
+      tag: sessionTag,
+      agentName: targetAgent,
+      projectPath,
+      verifyCommand,
+      metricName,
+      metricDirection,
+      maxIterations,
+      branchName: branch.branchName,
+    });
+
+    const loopControl = { aborted: false };
+    activeLoops.set(session.id, loopControl);
+
+    // 异步启动循环（不阻塞返回）
+    runAutonomousLoop({
+      session,
+      targetAgent,
+      taskId,
+      prompt,
+      projectPath,
+      verifyCommand,
+      metricDirection,
+      maxIterations,
+      iterationTimeoutMs,
+      loopControl,
+      model: req.model,
+    }).catch(err => {
+      console.error(`[autonomousLoop] Fatal error in session ${sessionTag}:`, err.message);
+      experimentTracker.updateSessionStatus(session.id, 'aborted').catch(() => {});
+    }).finally(() => {
+      activeLoops.delete(session.id);
+    });
+
+    return {
+      sessionId: session.id,
+      sessionTag,
+      branchName: branch.branchName,
+      status: 'running',
+      currentIteration: 0,
+      maxIterations,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { error: `启动自主循环失败: ${message}` };
+  }
+}
+
+/**
+ * 中止自主实验循环
+ */
+export function abortAutonomousLoop(sessionId: string): boolean {
+  const control = activeLoops.get(sessionId);
+  if (!control) return false;
+  control.aborted = true;
+  return true;
+}
+
+/**
+ * 获取活跃的自主循环列表
+ */
+export function getActiveAutonomousLoops(): string[] {
+  return Array.from(activeLoops.keys());
+}
+
+/**
+ * 自主实验循环的核心执行逻辑
+ */
+async function runAutonomousLoop(params: {
+  session: Awaited<ReturnType<typeof experimentTracker.createSession>>;
+  targetAgent: string;
+  taskId: string;
+  prompt: string;
+  projectPath: string;
+  verifyCommand: string;
+  metricDirection: MetricDirection;
+  maxIterations: number;
+  iterationTimeoutMs: number;
+  loopControl: { aborted: boolean };
+  model?: string;
+}): Promise<void> {
+  const {
+    session, targetAgent, taskId, prompt, projectPath,
+    verifyCommand, metricDirection, maxIterations,
+    iterationTimeoutMs, loopControl,
+  } = params;
+
+  let lastKeepCommit = await gitExperiment.getCurrentCommitHash(projectPath);
+  let baselineValue = 0;
+
+  console.log(`[autonomousLoop] Starting session ${session.tag} on branch ${session.branchName}`);
+  console.log(`[autonomousLoop] Verify: ${verifyCommand} | Metric: ${session.metricName} (${metricDirection})`);
+
+  // Step 0: 运行基线
+  try {
+    console.log(`[autonomousLoop] Running baseline...`);
+    const baselineResult = await runVerifyCommand(projectPath, verifyCommand, iterationTimeoutMs);
+    baselineValue = baselineResult.metricValue;
+    await experimentTracker.updateSessionBaseline(session.id, baselineValue);
+    console.log(`[autonomousLoop] Baseline ${session.metricName}: ${baselineValue}`);
+  } catch (err) {
+    console.error(`[autonomousLoop] Baseline failed:`, err);
+    await experimentTracker.updateSessionStatus(session.id, 'aborted');
+    return;
+  }
+
+  // 主循环
+  for (let i = 1; i <= maxIterations; i++) {
+    if (loopControl.aborted) {
+      console.log(`[autonomousLoop] Session ${session.tag} aborted at iteration ${i}`);
+      await experimentTracker.updateSessionStatus(session.id, 'aborted');
+      return;
+    }
+
+    // 检查会话状态（可能被 experimentTracker 暂停）
+    const currentSession = await experimentTracker.getSession(session.id);
+    if (!currentSession || currentSession.status !== 'active') {
+      console.log(`[autonomousLoop] Session ${session.tag} is ${currentSession?.status}, stopping.`);
+      return;
+    }
+
+    const iterationStartMs = Date.now();
+    console.log(`[autonomousLoop] === Iteration ${i}/${maxIterations} ===`);
+
+    try {
+      // 1. 让 Agent 提出假设并修改代码
+      const agentPrompt = buildIterationPrompt(prompt, session.metricName, baselineValue, metricDirection, i);
+      const messages = await buildAgentMessages(targetAgent, taskId, agentPrompt);
+      const response = await llmAutoRoute(messages, undefined, targetAgent);
+
+      // 2. 提取 Agent 的修改描述
+      const description = extractExperimentDescription(response.content) || `Iteration ${i}`;
+
+      // 3. 检查是否有文件变更
+      const isClean = await gitExperiment.isWorkingTreeClean(projectPath);
+      if (isClean) {
+        console.log(`[autonomousLoop] No changes in iteration ${i}, skipping.`);
+        await experimentTracker.recordResult({
+          sessionId: session.id,
+          commitHash: lastKeepCommit,
+          metricValue: baselineValue,
+          status: 'discard',
+          description: `${description} (no changes)`,
+          durationMs: Date.now() - iterationStartMs,
+        });
+        continue;
+      }
+
+      // 4. Commit 变更
+      let commitInfo;
+      try {
+        commitInfo = await gitExperiment.commitAll(
+          projectPath,
+          `experiment: ${description}`
+        );
+      } catch {
+        console.warn(`[autonomousLoop] Commit failed in iteration ${i}`);
+        await experimentTracker.recordResult({
+          sessionId: session.id,
+          commitHash: '',
+          metricValue: 0,
+          status: 'crash',
+          description: `${description} (commit failed)`,
+          durationMs: Date.now() - iterationStartMs,
+        });
+        continue;
+      }
+
+      // 5. 运行验证
+      let verifyResult: { metricValue: number; success: boolean; error?: string };
+      try {
+        verifyResult = await runVerifyCommand(projectPath, verifyCommand, iterationTimeoutMs);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.warn(`[autonomousLoop] Verify crashed in iteration ${i}: ${errMsg}`);
+
+        // Crash: 回滚并记录
+        await gitExperiment.discardToCommit(projectPath, lastKeepCommit);
+        await experimentTracker.recordResult({
+          sessionId: session.id,
+          commitHash: commitInfo.hash,
+          metricValue: 0,
+          status: 'crash',
+          description,
+          errorMessage: errMsg,
+          durationMs: Date.now() - iterationStartMs,
+        });
+        continue;
+      }
+
+      // 6. 评估结果：keep or discard
+      const improved = metricDirection === 'lower_is_better'
+        ? verifyResult.metricValue < baselineValue
+        : verifyResult.metricValue > baselineValue;
+
+      let status: ExperimentStatus;
+      if (!verifyResult.success) {
+        status = 'crash';
+      } else if (improved) {
+        status = 'keep';
+      } else {
+        status = 'discard';
+      }
+
+      // 7. 执行决策
+      if (status === 'keep') {
+        lastKeepCommit = commitInfo.hash;
+        baselineValue = verifyResult.metricValue;
+        console.log(`[autonomousLoop] ✅ KEEP: ${session.metricName} ${verifyResult.metricValue} (improved)`);
+      } else {
+        await gitExperiment.discardToCommit(projectPath, lastKeepCommit);
+        console.log(`[autonomousLoop] ❌ ${status.toUpperCase()}: ${session.metricName} ${verifyResult.metricValue} (baseline: ${baselineValue})`);
+      }
+
+      // 8. 记录结果
+      await experimentTracker.recordResult({
+        sessionId: session.id,
+        commitHash: commitInfo.hash,
+        metricValue: verifyResult.metricValue,
+        status,
+        description,
+        errorMessage: verifyResult.error,
+        durationMs: Date.now() - iterationStartMs,
+      });
+
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[autonomousLoop] Unexpected error in iteration ${i}: ${errMsg}`);
+
+      // 安全回滚
+      try {
+        await gitExperiment.discardToCommit(projectPath, lastKeepCommit);
+      } catch { /* ignore */ }
+
+      await experimentTracker.recordResult({
+        sessionId: session.id,
+        commitHash: '',
+        metricValue: 0,
+        status: 'crash',
+        description: `Unexpected error: ${errMsg}`,
+        errorMessage: errMsg,
+        durationMs: Date.now() - iterationStartMs,
+      });
+    }
+  }
+
+  // 循环结束
+  await experimentTracker.updateSessionStatus(session.id, 'completed');
+  const summary = await experimentTracker.getSessionSummary(session.id);
+  console.log(`[autonomousLoop] Session ${session.tag} completed.`);
+  if (summary) {
+    console.log(`[autonomousLoop] Results: ${summary.session.keepCount} keep, ${summary.session.discardCount} discard, ${summary.session.crashCount} crash`);
+    console.log(`[autonomousLoop] Best ${session.metricName}: ${summary.session.bestValue} (baseline: ${summary.session.baselineValue})`);
+  }
+}
+
+/**
+ * 运行验证命令并解析指标
+ */
+async function runVerifyCommand(
+  projectPath: string,
+  verifyCommand: string,
+  timeoutMs: number
+): Promise<{ metricValue: number; success: boolean; error?: string }> {
+  const { exec: execCb } = await import('child_process');
+  const { promisify } = await import('util');
+  const execAsync = promisify(execCb);
+
+  const startMs = Date.now();
+
+  try {
+    const { stdout, stderr } = await execAsync(verifyCommand, {
+      cwd: projectPath,
+      timeout: timeoutMs,
+      maxBuffer: 5 * 1024 * 1024,
+    });
+
+    const durationSec = (Date.now() - startMs) / 1000;
+
+    // 尝试从输出中解析指标值
+    // 支持格式：metric_name: 123.45 或 val_bpb: 0.997
+    const metricMatch = stdout.match(/(?:metric|val_bpb|score|time|duration)[:\s]+([\d.]+)/i)
+      || stderr.match(/(?:metric|val_bpb|score|time|duration)[:\s]+([\d.]+)/i);
+
+    const metricValue = metricMatch ? parseFloat(metricMatch[1]) : durationSec;
+
+    return { metricValue, success: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const isTimeout = message.includes('TIMEOUT') || message.includes('timed out');
+
+    return {
+      metricValue: 0,
+      success: false,
+      error: isTimeout ? `Timeout after ${timeoutMs}ms` : message,
+    };
+  }
+}
+
+/**
+ * 构建迭代提示词
+ */
+function buildIterationPrompt(
+  basePrompt: string,
+  metricName: string,
+  currentBaseline: number,
+  direction: MetricDirection,
+  iteration: number
+): string {
+  const directionText = direction === 'lower_is_better' ? '越低越好' : '越高越好';
+  return `[自主实验 #${iteration}]
+
+目标：${basePrompt}
+
+当前基线指标：${metricName} = ${currentBaseline}（${directionText}）
+
+请分析代码，提出一个具体的改进假设，然后直接修改代码实现它。
+
+要求：
+1. 每轮只做一个原子化修改
+2. 修改必须可验证
+3. 在回复开头用 [EXPERIMENT: 简短描述] 标记你的实验内容
+4. 追求简洁——同等效果下更简单的方案更好`;
+}
+
+/**
+ * 从 Agent 响应中提取实验描述
+ */
+function extractExperimentDescription(response: string): string | null {
+  const match = response.match(/\[EXPERIMENT:\s*([^\]]+)\]/i);
+  return match ? match[1].trim() : null;
 }
 
 /**

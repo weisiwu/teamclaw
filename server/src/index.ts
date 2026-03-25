@@ -50,6 +50,7 @@ import { seedDefaultAgents } from './services/agentService.js';
 import { seedDemoData } from './services/demoSeed.js';
 import { migrateEnvTokens } from './services/apiTokenService.js';
 import traceRouter from './routes/trace.js';
+import experimentRouter from './routes/experiment.js';
 // 初始化事件总线串联模块（按依赖顺序导入）
 import './services/messageToTask.js'; // 消息→任务
 import './services/taskToAgent.js'; // 任务→Agent
@@ -223,6 +224,7 @@ app.use('/api/v1/branches', branchRouter);
 app.use('/api/v1/downloads', downloadRouter);
 app.use('/api/v1/llm', llmRouter);
 app.use('/api/v1/traces', traceRouter);
+app.use('/api/v1/experiments', experimentRouter);
 
 // Root
 app.get('/', (req, res) => {
@@ -261,6 +263,14 @@ const server = app.listen(PORT, async () => {
     console.log(`[init] Built-in skills initialized: ${skillInitResult.added} added, ${skillInitResult.updated} updated, ${skillInitResult.unchanged} unchanged`);
   } catch (err) {
     console.error('[init] Failed to initialize built-in skills:', err);
+  }
+  // 初始化实验追踪表
+  try {
+    const { ensureExperimentTables } = await import('./services/experimentTracker.js');
+    await ensureExperimentTables();
+    console.log('[init] Experiment tables initialized');
+  } catch (err) {
+    console.error('[init] Failed to initialize experiment tables:', err);
   }
   // 同步磁盘 Skills
   try {

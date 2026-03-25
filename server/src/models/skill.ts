@@ -270,6 +270,132 @@ apps/{app-name}/
     updatedAt: '2026-03-26T00:00:00.000Z',
     createdBy: 'system',
   },
+  {
+    id: 'builtin_skill_autonomous_experiment_loop',
+    name: 'autonomous-experiment-loop',
+    displayName: '自主实验循环流程',
+    description: '定义 Agent 自主实验的执行流程：假设→实施→验证→保留/回滚→下一轮，借鉴 autoresearch 的 program.md 模式',
+    category: 'coding',
+    source: 'generated',
+    content: `# 自主实验循环流程（Autonomous Experiment Loop）
+
+> 本流程定义 Agent 在自主实验模式下的行为规范。
+> 适用于代码优化、Bug 修复、性能调优等可量化验证的任务。
+
+## 一、核心概念
+
+自主实验模式让 Agent 在无人值守的情况下自主迭代：
+- **每次实验** = 一个原子化的代码修改 + 验证
+- **固定时间预算**：每次实验有时间上限（默认 5 分钟）
+- **单一验证指标**：每次实验用统一标准衡量成败
+- **Keep/Discard 决策**：改进则保留（keep），无改进或回退则丢弃（discard）
+
+## 二、实验循环流程
+
+\`\`\`
+LOOP（直到达到最大轮次或被手动中止）：
+
+1. 📋 读取当前状态
+   - 查看上次实验结果和历史趋势
+   - 读取待修改的代码文件
+
+2. 💡 提出假设
+   - 基于代码分析提出一个改进假设
+   - 假设必须具体、可验证、单一焦点
+   - 记录：预期效果和风险评估
+
+3. 🔧 实施修改
+   - 只修改必要的文件（最小化变更）
+   - git commit 记录修改内容
+   - commit message 格式：experiment: {简短描述}
+
+4. ✅ 运行验证
+   - 执行验证命令（如 npm run build / npm test）
+   - 收集量化指标（构建时间、测试通过率、性能分数等）
+   - 超时视为失败
+
+5. 📊 评估结果
+   - 对比基线指标
+   - 判定：keep（改进）/ discard（无改进或恶化）/ crash（崩溃）
+
+6. 🔄 决策执行
+   - keep：保留 commit，更新基线
+   - discard：git reset --hard 回到上一个 keep 点
+   - crash：记录错误，git reset，尝试修复或跳过
+
+7. 📝 记录结果
+   - 追加到实验追踪表（experiment_results）
+   - 字段：commit、指标值、内存占用、状态、描述
+
+8. 回到步骤 1
+\`\`\`
+
+## 三、验证指标定义
+
+根据任务类型选择对应验证命令和指标：
+
+| 任务类型 | 验证命令 | 主指标 | 方向 |
+|----------|----------|--------|------|
+| 构建优化 | \`npm run build\` | 构建时间（秒） | 越低越好 |
+| 测试修复 | \`npm test\` | 测试通过率（%） | 越高越好 |
+| 性能优化 | \`npm run benchmark\` | 性能分数 | 越高越好 |
+| Bug 修复 | \`npm run build && npm test\` | 错误数 | 越低越好 |
+| 代码质量 | \`npm run lint\` | 警告数 | 越低越好 |
+
+## 四、实验追踪表格式
+
+每次实验记录为一行，字段如下：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| experiment_id | string | 实验唯一 ID |
+| session_tag | string | 实验会话标签（如 mar26-perf） |
+| commit_hash | string | git commit 短哈希（7 位） |
+| metric_name | string | 指标名称 |
+| metric_value | number | 指标值 |
+| baseline_value | number | 基线值 |
+| delta | number | 变化量（正=改进） |
+| status | enum | keep / discard / crash |
+| description | string | 本轮实验说明 |
+| duration_ms | number | 耗时（毫秒） |
+| created_at | timestamp | 记录时间 |
+
+## 五、Agent 行为规范
+
+### 必须遵守
+- 每轮只修改一个逻辑单元（单一职责）
+- 修改前必须 git commit 当前状态
+- discard 时必须完全回滚，不留残余
+- 诚实记录结果，不篡改指标
+- 简洁优先：同等效果下，更简单的方案更好
+
+### 禁止行为
+- 一次实验修改多个不相关的文件
+- 跳过验证直接标记 keep
+- 删除或修改验证脚本本身
+- 忽略 crash 继续累积错误
+- 超过最大轮次后继续执行
+
+### 崩溃处理
+1. 如果是低级错误（拼写、import），直接修复重跑
+2. 如果是方案本身有问题，记录 crash 并跳过
+3. 连续 3 次 crash 后暂停，等待人工介入
+
+## 六、分支管理
+
+- 实验在专用分支上进行：\`experiment/{session_tag}\`
+- 基于当前主分支创建实验分支
+- keep 的修改留在实验分支上
+- 实验结束后，人工决定是否合并到主分支
+- discard 的修改通过 git reset 清除，不留痕迹`,
+    applicableAgents: ['coder', 'coder1', 'coder2'],
+    enabled: true,
+    tags: ['experiment', 'autonomous', 'loop', 'procedure'],
+    version: '1.0.0',
+    createdAt: '2026-03-26T00:00:00.000Z',
+    updatedAt: '2026-03-26T00:00:00.000Z',
+    createdBy: 'system',
+  },
 ];
 
 // Skill 摘要信息（列表视图用）
