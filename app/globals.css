@@ -199,13 +199,13 @@ body {
     @apply bg-card border border-border rounded-xl overflow-hidden;
   }
   .page-table-header {
-    @apply bg-muted/50 border-b border-border px-4 py-3;
+    @apply bg-muted border-b border-border px-4 py-3;
   }
   .page-table-header-cell {
     @apply text-sm font-medium text-muted-foreground;
   }
   .page-table-row {
-    @apply hover:bg-muted/30 transition-colors;
+    @apply hover:bg-muted transition-colors;
   }
   .page-table-cell {
     @apply px-4 py-3 text-sm text-foreground;

@@ -488,27 +488,23 @@ export default function VersionsPage() {
             </div>
           ) : (
             /* Compact table view */
-            <div className="overflow-x-auto mb-6">
+            <div className="page-table-wrapper mb-6">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b dark:border-slate-700">
-                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">版本</th>
-                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">状态</th>
-                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">标题</th>
-                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">
-                      构建状态
-                    </th>
-                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">提交</th>
-                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">文件</th>
-                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">
-                      创建时间
-                    </th>
+                  <tr className="page-table-header">
+                    <th className="page-table-header-cell">版本</th>
+                    <th className="page-table-header-cell">状态</th>
+                    <th className="page-table-header-cell">标题</th>
+                    <th className="page-table-header-cell">构建状态</th>
+                    <th className="page-table-header-cell">提交</th>
+                    <th className="page-table-header-cell">文件</th>
+                    <th className="page-table-header-cell">创建时间</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-border">
                   {filtered.map(v => (
-                    <tr key={v.id} className="border-b dark:border-slate-800 hover:bg-muted/50">
-                      <td className="py-2 px-3">
+                    <tr key={v.id} className="page-table-row">
+                      <td className="page-table-cell">
                         <Link
                           href={`/versions/${v.id}`}
                           className="flex items-center gap-2 hover:underline"
@@ -521,15 +517,15 @@ export default function VersionsPage() {
                           )}
                         </Link>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="page-table-cell">
                         <Badge variant={VERSION_STATUS_BADGE[v.status]} className="text-xs">
                           {VERSION_STATUS_LABELS[v.status]}
                         </Badge>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="page-table-cell">
                         <span className="font-medium">{v.title}</span>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="page-table-cell">
                         <Badge
                           variant={BUILD_STATUS_BADGE_VARIANT[v.buildStatus]}
                           className={`text-xs ${v.buildStatus === 'pending' ? 'bg-muted text-muted-foreground border-border' : ''}`}
@@ -537,9 +533,9 @@ export default function VersionsPage() {
                           {BUILD_STATUS_LABELS[v.buildStatus]}
                         </Badge>
                       </td>
-                      <td className="py-2 px-3 text-muted-foreground">{v.commitCount}</td>
-                      <td className="py-2 px-3 text-muted-foreground">{v.changedFiles.length}</td>
-                      <td className="py-2 px-3 text-muted-foreground">
+                      <td className="page-table-cell">{v.commitCount}</td>
+                      <td className="page-table-cell">{v.changedFiles.length}</td>
+                      <td className="page-table-cell">
                         {v.createdAt ? new Date(v.createdAt).toLocaleDateString('zh-CN') : '-'}
                       </td>
                     </tr>

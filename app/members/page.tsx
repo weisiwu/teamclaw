@@ -372,7 +372,7 @@ export default function MembersPage() {
         </div>
       </div>
 
-      <div className="bg-card border-border overflow-hidden">
+      <div className="page-table-wrapper">
         {isLoading ? (
           <MembersSkeleton />
         ) : filteredMembers.length === 0 ? (
@@ -394,9 +394,9 @@ export default function MembersPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-muted/50 border-b dark:border-slate-700">
-                <tr>
-                  <th className="px-4 py-3 text-sm font-medium text-muted-foreground w-10">
+              <thead>
+                <tr className="page-table-header">
+                  <th className="page-table-header-cell w-10">
                     <input
                       type="checkbox"
                       checked={selectedIds.size === filteredMembers.length && filteredMembers.length > 0}
@@ -405,7 +405,7 @@ export default function MembersPage() {
                     />
                   </th>
                   <th
-                    className="text-left px-4 py-3 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted dark:hover:bg-slate-700/50"
+                    className="page-table-header-cell cursor-pointer hover:bg-muted/50"
                     onClick={() => handleSort("name")}
                   >
                     <div className="flex items-center">
@@ -414,7 +414,7 @@ export default function MembersPage() {
                     </div>
                   </th>
                   <th
-                    className="text-left px-4 py-3 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted dark:hover:bg-slate-700/50"
+                    className="page-table-header-cell cursor-pointer hover:bg-muted/50"
                     onClick={() => handleSort("role")}
                   >
                     <div className="flex items-center">
@@ -423,7 +423,7 @@ export default function MembersPage() {
                     </div>
                   </th>
                   <th
-                    className="text-left px-4 py-3 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted dark:hover:bg-slate-700/50"
+                    className="page-table-header-cell cursor-pointer hover:bg-muted/50"
                     onClick={() => handleSort("weight")}
                   >
                     <div className="flex items-center">
@@ -432,7 +432,7 @@ export default function MembersPage() {
                     </div>
                   </th>
                   <th
-                    className="text-left px-4 py-3 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted dark:hover:bg-slate-700/50"
+                    className="page-table-header-cell cursor-pointer hover:bg-muted/50"
                     onClick={() => handleSort("createdAt")}
                   >
                     <div className="flex items-center">
@@ -440,14 +440,14 @@ export default function MembersPage() {
                       {getSortIcon("createdAt")}
                     </div>
                   </th>
-                  <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">状态</th>
-                  <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">操作</th>
+                  <th className="page-table-header-cell">状态</th>
+                  <th className="page-table-header-cell">操作</th>
                 </tr>
               </thead>
-              <tbody className="divide-y dark:divide-slate-700">
+              <tbody className="divide-y divide-border">
                 {filteredMembers.map((member, idx) => (
-                  <tr key={member.id} className={`hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors ${idx % 2 === 1 ? 'bg-muted/30' : ''}`}>
-                    <td className="px-4 py-3">
+                  <tr key={member.id} className={`page-table-row ${idx % 2 === 1 ? 'bg-muted/30' : ''}`}>
+                    <td className="page-table-cell">
                       <input
                         type="checkbox"
                         checked={selectedIds.has(member.id)}
@@ -455,13 +455,13 @@ export default function MembersPage() {
                         className="rounded border-gray-300 dark:border-slate-600"
                       />
                     </td>
-                    <td className="px-4 py-3 text-sm text-foreground">{member.name}</td>
-                    <td className="px-4 py-3">
+                    <td className="page-table-cell">{member.name}</td>
+                    <td className="page-table-cell">
                       <Badge variant={getRoleBadgeVariant(member.role)}>
                         {ROLE_LABELS[member.role]}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground dark:text-gray-400">
+                    <td className="page-table-cell">
                       {editingWeightId === member.id ? (
                         <input
                           type="number"
@@ -483,8 +483,8 @@ export default function MembersPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground dark:text-gray-400">{member.createdAt}</td>
-                    <td className="px-4 py-3">
+                    <td className="page-table-cell">{member.createdAt}</td>
+                    <td className="page-table-cell">
                       <div className="flex items-center gap-2">
                         <Badge variant={member.status === "active" ? "success" : "info"}>
                           {member.status === "active" ? "启用" : "禁用"}
@@ -505,7 +505,7 @@ export default function MembersPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="page-table-cell">
                       <div className="flex items-center gap-2">
                         <Button
                           size="icon"
