@@ -27,6 +27,7 @@ FRONTEND_ROUTES=(
   "/api/v1/search"
   "/api/v1/projects"
   "/api/v1/members"
+  "/api/v1/messages"
   "/api/v1/builds"
   "/api/v1/settings"
 )
@@ -38,6 +39,7 @@ BACKEND_ROUTES=(
   "/api/v1/health/live"
   "/api/v1/projects"
   "/api/v1/users"
+  "/api/v1/messages"
   "/api/v1/auth/login"
   "/api/v1/versions"
   "/api/v1/agents"
@@ -60,7 +62,11 @@ JSON_ROUTES=(
   "/api/v1/tags"
   "/api/v1/agents"
   "/api/v1/projects"
+  "/api/v1/members"
+  "/api/v1/messages"
   "/api/v1/dashboard/overview"
+  "/api/v1/branches"
+  "/api/v1/skills"
 )
 
 # ── 颜色 ────────────────────────────────────────────────────

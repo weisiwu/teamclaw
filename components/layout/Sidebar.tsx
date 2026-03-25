@@ -24,8 +24,6 @@ const menuItems = [
   { href: "/import", label: "项目导入", icon: FolderPlus },
   { href: "/tasks", label: "任务管理", icon: Layers },
   { href: "/versions", label: "版本管理", icon: GitBranch },
-  { href: "/versions/panel", label: "版本面板", icon: GitBranch },
-  { href: "/branches", label: "分支管理", icon: GitBranch },
   { href: "/agent-team", label: "Agent 团队", icon: Bot },
   { href: "/capabilities", label: "Tools & Skills", icon: Zap },
   { href: "/cron", label: "定时任务", icon: Clock },

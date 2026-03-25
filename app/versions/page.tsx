@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { LegacySelect } from '@/components/ui/select';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   Plus,
   Search,
@@ -36,12 +37,26 @@ import {
   GitCompare,
   X,
   Check,
+  GitBranch,
+  LayoutDashboard,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function VersionsPage() {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState('list');
   const [page, setPage] = useState(1);
+
+  // Navigate to sub-pages when tab changes to panel/branches
+  useEffect(() => {
+    if (activeTab === 'panel') {
+      router.push('/versions/panel');
+    } else if (activeTab === 'branches') {
+      router.push('/branches');
+    }
+  }, [activeTab, router]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [data, setData] = useState<{ data: Version[]; total: number; totalPages: number } | null>(
@@ -91,7 +106,25 @@ export default function VersionsPage() {
     <div className="page-container">
       {/* Header */}
       <div className="page-header">
-        <h1 className="page-header-title">版本管理</h1>
+        <div className="flex items-center gap-6">
+          <h1 className="page-header-title">版本管理</h1>
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="gap-1">
+              <TabsTrigger value="list" className="gap-1.5 text-sm">
+                <GitBranch className="w-4 h-4" />
+                版本列表
+              </TabsTrigger>
+              <TabsTrigger value="panel" className="gap-1.5 text-sm">
+                <LayoutDashboard className="w-4 h-4" />
+                版本面板
+              </TabsTrigger>
+              <TabsTrigger value="branches" className="gap-1.5 text-sm">
+                <GitBranch className="w-4 h-4" />
+                分支管理
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
         <div className="flex items-center gap-2">
           {compareMode ? (
             <>
@@ -155,6 +188,7 @@ export default function VersionsPage() {
           </Link>
         </div>
       </div>
+      <TabsContent value="list">
 
       {/* Stats Summary Bar */}
       {!isLoading &&
@@ -708,6 +742,7 @@ export default function VersionsPage() {
           ) : null}
         </DialogContent>
       </Dialog>
+      </TabsContent>
     </div>
   );
 }
