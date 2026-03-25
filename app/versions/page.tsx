@@ -532,8 +532,8 @@ export default function VersionsPage() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between bg-white dark:bg-slate-800 rounded-xl border dark:border-slate-700 px-4 py-3">
-              <span className="text-sm text-gray-500 dark:text-gray-400">
+            <div className="flex items-center justify-between bg-card border-border px-4 py-3">
+              <span className="text-sm text-muted-foreground">
                 共 {total} 条，第 {page}/{totalPages} 页
               </span>
               <div className="flex gap-2">

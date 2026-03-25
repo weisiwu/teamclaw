@@ -271,7 +271,7 @@ export default function MembersPage() {
   if (error) {
     return (
       <div className="page-container">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">成员管理</h1>
+        <h1 className="text-2xl font-bold text-foreground mb-6">成员管理</h1>
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 text-red-600 dark:text-red-400">
           加载数据失败，请刷新页面重试
         </div>
@@ -282,7 +282,7 @@ export default function MembersPage() {
   return (
     <div className="page-container">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">成员管理</h1>
+        <h1 className="text-2xl font-bold text-foreground">成员管理</h1>
         {isAdminOrAbove() && (
           <Button onClick={handleAdd}>
             <UserPlus className="w-4 h-4 mr-2" />
@@ -345,7 +345,7 @@ export default function MembersPage() {
           
           {importFile && (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">{importFile.name}</span>
+              <span className="text-sm text-muted-foreground">{importFile.name}</span>
               <Button size="sm" onClick={handleImport} disabled={createMember.isPending}>
                 {createMember.isPending ? "导入中..." : "确认导入"}
               </Button>
@@ -372,7 +372,7 @@ export default function MembersPage() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl border dark:border-slate-700 overflow-hidden">
+      <div className="bg-card border-border overflow-hidden">
         {isLoading ? (
           <MembersSkeleton />
         ) : filteredMembers.length === 0 ? (
@@ -394,9 +394,9 @@ export default function MembersPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-slate-800/50 border-b dark:border-slate-700">
+              <thead className="bg-muted/50 border-b dark:border-slate-700">
                 <tr>
-                  <th className="px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-300 w-10">
+                  <th className="px-4 py-3 text-sm font-medium text-muted-foreground w-10">
                     <input
                       type="checkbox"
                       checked={selectedIds.size === filteredMembers.length && filteredMembers.length > 0}
@@ -405,7 +405,7 @@ export default function MembersPage() {
                     />
                   </th>
                   <th
-                    className="text-left px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700/50"
+                    className="text-left px-4 py-3 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted dark:hover:bg-slate-700/50"
                     onClick={() => handleSort("name")}
                   >
                     <div className="flex items-center">
@@ -414,7 +414,7 @@ export default function MembersPage() {
                     </div>
                   </th>
                   <th
-                    className="text-left px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700/50"
+                    className="text-left px-4 py-3 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted dark:hover:bg-slate-700/50"
                     onClick={() => handleSort("role")}
                   >
                     <div className="flex items-center">
@@ -423,7 +423,7 @@ export default function MembersPage() {
                     </div>
                   </th>
                   <th
-                    className="text-left px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700/50"
+                    className="text-left px-4 py-3 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted dark:hover:bg-slate-700/50"
                     onClick={() => handleSort("weight")}
                   >
                     <div className="flex items-center">
@@ -432,7 +432,7 @@ export default function MembersPage() {
                     </div>
                   </th>
                   <th
-                    className="text-left px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700/50"
+                    className="text-left px-4 py-3 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted dark:hover:bg-slate-700/50"
                     onClick={() => handleSort("createdAt")}
                   >
                     <div className="flex items-center">
@@ -440,13 +440,13 @@ export default function MembersPage() {
                       {getSortIcon("createdAt")}
                     </div>
                   </th>
-                  <th className="text-left px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-300">状态</th>
-                  <th className="text-left px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-300">操作</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">状态</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y dark:divide-slate-700">
                 {filteredMembers.map((member, idx) => (
-                  <tr key={member.id} className={`hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors ${idx % 2 === 1 ? 'bg-gray-50 dark:bg-slate-800/30' : ''}`}>
+                  <tr key={member.id} className={`hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors ${idx % 2 === 1 ? 'bg-muted/30' : ''}`}>
                     <td className="px-4 py-3">
                       <input
                         type="checkbox"
@@ -455,13 +455,13 @@ export default function MembersPage() {
                         className="rounded border-gray-300 dark:border-slate-600"
                       />
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">{member.name}</td>
+                    <td className="px-4 py-3 text-sm text-foreground">{member.name}</td>
                     <td className="px-4 py-3">
                       <Badge variant={getRoleBadgeVariant(member.role)}>
                         {ROLE_LABELS[member.role]}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                    <td className="px-4 py-3 text-sm text-muted-foreground dark:text-gray-400">
                       {editingWeightId === member.id ? (
                         <input
                           type="number"
@@ -483,7 +483,7 @@ export default function MembersPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{member.createdAt}</td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground dark:text-gray-400">{member.createdAt}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <Badge variant={member.status === "active" ? "success" : "info"}>
@@ -608,32 +608,32 @@ export default function MembersPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
-              <span className="text-gray-500 dark:text-gray-400">ID</span>
-              <span className="text-sm font-mono text-gray-700 dark:text-gray-300">{viewingMember?.id}</span>
+              <span className="text-muted-foreground">ID</span>
+              <span className="text-sm font-mono text-foreground">{viewingMember?.id}</span>
             </div>
             <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
-              <span className="text-gray-500 dark:text-gray-400">姓名</span>
-              <span className="text-gray-900 dark:text-white font-medium">{viewingMember?.name}</span>
+              <span className="text-muted-foreground">姓名</span>
+              <span className="text-foreground font-medium">{viewingMember?.name}</span>
             </div>
             <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
-              <span className="text-gray-500 dark:text-gray-400">角色</span>
+              <span className="text-muted-foreground">角色</span>
               <Badge variant={viewingMember ? getRoleBadgeVariant(viewingMember.role) : 'secondary'}>
                 {viewingMember && ROLE_LABELS[viewingMember.role]}
               </Badge>
             </div>
             <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
-              <span className="text-gray-500 dark:text-gray-400">权重</span>
-              <span className="text-gray-900 dark:text-white">{viewingMember?.weight}</span>
+              <span className="text-muted-foreground">权重</span>
+              <span className="text-foreground">{viewingMember?.weight}</span>
             </div>
             <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
-              <span className="text-gray-500 dark:text-gray-400">状态</span>
+              <span className="text-muted-foreground">状态</span>
               <Badge variant={viewingMember?.status === "active" ? "success" : "info"}>
                 {viewingMember?.status === "active" ? "启用" : "禁用"}
               </Badge>
             </div>
             <div className="flex items-center justify-between py-3 border-b dark:border-slate-700">
-              <span className="text-gray-500 dark:text-gray-400">加入时间</span>
-              <span className="text-gray-700 dark:text-gray-300">{viewingMember?.createdAt}</span>
+              <span className="text-muted-foreground">加入时间</span>
+              <span className="text-foreground">{viewingMember?.createdAt}</span>
             </div>
           </div>
           <DialogFooter>

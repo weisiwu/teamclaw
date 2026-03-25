@@ -106,14 +106,14 @@ function ToolSkeletonGrid() {
         <Card key={i} className="animate-pulse">
           <CardContent className="p-5 space-y-3">
             <div className="flex justify-between">
-              <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-3/4" />
-              <div className="h-6 w-12 bg-gray-200 dark:bg-slate-700 rounded-full" />
+              <div className="h-4 bg-muted rounded w-3/4" />
+              <div className="h-6 w-12 bg-muted rounded-full" />
             </div>
-            <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-full" />
-            <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-2/3" />
+            <div className="h-3 bg-muted rounded w-full" />
+            <div className="h-3 bg-muted rounded w-2/3" />
             <div className="flex gap-2 pt-2">
-              <div className="h-5 w-16 bg-gray-200 dark:bg-slate-700 rounded" />
-              <div className="h-5 w-16 bg-gray-200 dark:bg-slate-700 rounded" />
+              <div className="h-5 w-16 bg-muted rounded" />
+              <div className="h-5 w-16 bg-muted rounded" />
             </div>
           </CardContent>
         </Card>
@@ -129,14 +129,14 @@ function SkillSkeletonGrid() {
         <Card key={i} className="animate-pulse">
           <CardContent className="p-5 space-y-3">
             <div className="flex justify-between">
-              <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-3/4" />
-              <div className="h-6 w-12 bg-gray-200 dark:bg-slate-700 rounded-full" />
+              <div className="h-4 bg-muted rounded w-3/4" />
+              <div className="h-6 w-12 bg-muted rounded-full" />
             </div>
-            <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-full" />
-            <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-2/3" />
+            <div className="h-3 bg-muted rounded w-full" />
+            <div className="h-3 bg-muted rounded w-2/3" />
             <div className="flex gap-2 pt-2">
-              <div className="h-5 w-16 bg-gray-200 dark:bg-slate-700 rounded" />
-              <div className="h-5 w-16 bg-gray-200 dark:bg-slate-700 rounded" />
+              <div className="h-5 w-16 bg-muted rounded" />
+              <div className="h-5 w-16 bg-muted rounded" />
             </div>
           </CardContent>
         </Card>
@@ -156,7 +156,7 @@ function ConfirmDialog({ open, title, description, confirmLabel = '确认', vari
     <Dialog open={open} onOpenChange={onCancel}>
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">{description}</p>
+        <p className="text-sm text-muted-foreground mt-2">{description}</p>
         <DialogFooter>
           <Button variant="outline" onClick={onCancel}>取消</Button>
           <Button variant={variant === 'destructive' ? 'destructive' : 'default'} onClick={onConfirm} loading={!!loading}>
@@ -212,20 +212,20 @@ function ToolDetailDialog({ tool, open, onOpenChange, onSave, saving }: {
         <DialogHeader><DialogTitle>{isCreate ? '新建 Tool' : `编辑 Tool：${tool?.name}`}</DialogTitle></DialogHeader>
         <div className="space-y-4 mt-2">
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">名称</label>
+            <label className="text-sm font-medium text-foreground mb-1 block">名称</label>
             <Input value={name} onChange={e => setName(e.target.value)} placeholder="Tool 显示名称" />
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">标识符</label>
+            <label className="text-sm font-medium text-foreground mb-1 block">标识符</label>
             <Input value={identifier} onChange={e => setIdentifier(e.target.value)} placeholder="tool_identifier" disabled={!isCreate} />
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">描述</label>
+            <label className="text-sm font-medium text-foreground mb-1 block">描述</label>
             <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Tool 功能描述" rows={2} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">分类</label>
+              <label className="text-sm font-medium text-foreground mb-1 block">分类</label>
               <Select value={category} onValueChange={v => setCategory(v as ToolCategory)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -234,7 +234,7 @@ function ToolDetailDialog({ tool, open, onOpenChange, onSave, saving }: {
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">风险等级</label>
+              <label className="text-sm font-medium text-foreground mb-1 block">风险等级</label>
               <Select value={riskLevel} onValueChange={v => setRiskLevel(v as RiskLevel)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -245,10 +245,10 @@ function ToolDetailDialog({ tool, open, onOpenChange, onSave, saving }: {
           </div>
           <div className="flex items-center gap-3">
             <Switch checked={requiresApproval} onCheckedChange={setRequiresApproval} size="sm" />
-            <span className="text-sm text-gray-700 dark:text-gray-300">需要审批</span>
+            <span className="text-sm text-foreground">需要审批</span>
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+            <label className="text-sm font-medium text-foreground mb-1 block">
               参数定义 <span className="text-xs text-gray-400">(每行：名称|类型|必填|默认值|描述)</span>
             </label>
             <Textarea value={params} onChange={e => setParams(e.target.value)}
@@ -327,27 +327,27 @@ function SkillPreviewDialog({ skill, open, onOpenChange, onSave, saving }: {
           {/* 左侧元信息 */}
           <div className="w-56 shrink-0 space-y-3 overflow-y-auto">
             <div>
-              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">名称</label>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">名称</label>
               {(isEditing || isCreate) ? (
                 <Input value={name} onChange={e => setName(e.target.value)} className="mt-1" placeholder="Skill 名称" />
               ) : (
-                <p className="text-sm text-gray-900 dark:text-gray-100 mt-0.5">{skill?.name}</p>
+                <p className="text-sm text-foreground mt-0.5">{skill?.name}</p>
               )}
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">标识符</label>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 font-mono">{skill?.identifier ?? '—'}</p>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">标识符</label>
+              <p className="text-sm text-muted-foreground mt-0.5 font-mono">{skill?.identifier ?? '—'}</p>
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">描述</label>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">描述</label>
               {(isEditing || isCreate) ? (
                 <Textarea value={description} onChange={e => setDescription(e.target.value)} className="mt-1" rows={2} placeholder="描述" />
               ) : (
-                <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{skill?.description ?? '—'}</p>
+                <p className="text-sm text-foreground mt-0.5">{skill?.description ?? '—'}</p>
               )}
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">分类</label>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">分类</label>
               {(isEditing || isCreate) ? (
                 <Select value={category} onValueChange={v => setCategory(v as SkillCategory)}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
@@ -356,11 +356,11 @@ function SkillPreviewDialog({ skill, open, onOpenChange, onSave, saving }: {
                   </SelectContent>
                 </Select>
               ) : (
-                <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{categoryLabel(skill?.category ?? '', SKILL_CATEGORIES)}</p>
+                <p className="text-sm text-foreground mt-0.5">{categoryLabel(skill?.category ?? '', SKILL_CATEGORIES)}</p>
               )}
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">标签</label>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">标签</label>
               {(isEditing || isCreate) ? (
                 <Input value={tags} onChange={e => setTags(e.target.value)} className="mt-1" placeholder="react, frontend" />
               ) : (
@@ -371,7 +371,7 @@ function SkillPreviewDialog({ skill, open, onOpenChange, onSave, saving }: {
             </div>
             {skill?.applicableAgents?.length ? (
               <div>
-                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">适用 Agent</label>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">适用 Agent</label>
                 <div className="flex flex-wrap gap-1 mt-1">
                   {skill.applicableAgents.map(a => <Badge key={a} variant="info">{a}</Badge>)}
                 </div>
@@ -379,23 +379,23 @@ function SkillPreviewDialog({ skill, open, onOpenChange, onSave, saving }: {
             ) : null}
             {skill?.generatedAt && (
               <div>
-                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">生成时间</label>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{new Date(skill.generatedAt).toLocaleString()}</p>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">生成时间</label>
+                <p className="text-xs text-muted-foreground mt-0.5">{new Date(skill.generatedAt).toLocaleString()}</p>
               </div>
             )}
             {skill?.linkedProject && (
               <div>
-                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">关联项目</label>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{skill.linkedProject}</p>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">关联项目</label>
+                <p className="text-xs text-muted-foreground mt-0.5">{skill.linkedProject}</p>
               </div>
             )}
           </div>
 
           {/* 右侧内容 */}
-          <div className="flex-1 min-w-0 overflow-y-auto border-l border-gray-200 dark:border-slate-700 pl-4">
+          <div className="flex-1 min-w-0 overflow-y-auto border-l border-border pl-4">
             {(isEditing || isCreate) ? (
               <div>
-                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 block">内容 (Markdown)</label>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 block">内容 (Markdown)</label>
                 <Textarea value={content} onChange={e => setContent(e.target.value)} className="font-mono text-sm min-h-[400px]"
                   placeholder="# Skill 内容&#10;&#10;使用 Markdown 编写..." />
               </div>
@@ -429,13 +429,13 @@ function ToolCard({ tool, onToggle, onEdit, onDelete, toggling }: {
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">{tool.name}</h3>
+              <h3 className="font-semibold text-foreground truncate">{tool.name}</h3>
               {tool.source === 'builtin' && <Badge variant="info">内置</Badge>}
               {tool.riskLevel === 'high' && <Badge variant="error">高风险</Badge>}
             </div>
-            <p className="text-xs font-mono text-gray-500 dark:text-gray-400 mb-2">{tool.identifier}</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-3">{tool.description}</p>
-            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400 mb-3">
+            <p className="text-xs font-mono text-muted-foreground mb-2">{tool.identifier}</p>
+            <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{tool.description}</p>
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground mb-3">
               <span>分类：{categoryLabel(tool.category, TOOL_CATEGORIES)}</span>
               <span>来源：{sourceLabel(tool.source)}</span>
               <span>{RISK_ICON[tool.riskLevel]} 风险：{tool.riskLevel === 'low' ? '低' : tool.riskLevel === 'medium' ? '中' : '高'}</span>
@@ -443,7 +443,7 @@ function ToolCard({ tool, onToggle, onEdit, onDelete, toggling }: {
             </div>
             {tool.parameters?.length ? (
               <div className="mb-3">
-                <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">参数：</p>
+                <p className="text-xs text-muted-foreground mb-1">参数：</p>
                 <div className="flex flex-wrap gap-1">
                   {tool.parameters.map(p => <Badge key={p.name} variant="default" className="font-mono text-xs">{p.name}{p.required ? '*' : ''}</Badge>)}
                 </div>
@@ -455,7 +455,7 @@ function ToolCard({ tool, onToggle, onEdit, onDelete, toggling }: {
               : <Switch checked={tool.enabled} onCheckedChange={checked => onToggle(tool.id, checked)} size="sm" />}
           </div>
         </div>
-        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-slate-700">
+        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-border">
           <Button variant="ghost" size="sm" onClick={() => onEdit(tool)}><Edit2 className="w-3.5 h-3.5 mr-1" />编辑</Button>
           <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600 dark:text-red-400" onClick={() => onDelete(tool)}>
             <Trash2 className="w-3.5 h-3.5 mr-1" />删除
@@ -478,12 +478,12 @@ function SkillCard({ skill, onToggle, onEdit, onDelete, onPreview, toggling }: {
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">{skill.name}</h3>
+              <h3 className="font-semibold text-foreground truncate">{skill.name}</h3>
               {isAuto && <Badge variant="warning">🤖 自动生成</Badge>}
             </div>
-            <p className="text-xs font-mono text-gray-500 dark:text-gray-400 mb-2">{skill.identifier}</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-3">{skill.description}</p>
-            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400 mb-3">
+            <p className="text-xs font-mono text-muted-foreground mb-2">{skill.identifier}</p>
+            <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{skill.description}</p>
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground mb-3">
               <span>分类：{categoryLabel(skill.category, SKILL_CATEGORIES)}</span>
               <span>来源：{sourceLabel(skill.source)}</span>
             </div>
@@ -506,7 +506,7 @@ function SkillCard({ skill, onToggle, onEdit, onDelete, onPreview, toggling }: {
               : <Switch checked={skill.enabled} onCheckedChange={checked => onToggle(skill.id, checked)} size="sm" />}
           </div>
         </div>
-        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-slate-700">
+        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-border">
           <Button variant="ghost" size="sm" onClick={() => onPreview(skill)}><Eye className="w-3.5 h-3.5 mr-1" />预览</Button>
           <Button variant="ghost" size="sm" onClick={() => onEdit(skill)}><Edit2 className="w-3.5 h-3.5 mr-1" />编辑</Button>
           <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600 dark:text-red-400" onClick={() => onDelete(skill)}>
@@ -531,12 +531,12 @@ function StatsOverview({ tools = [], skills = [] }: { tools?: Tool[]; skills?: S
         <CardContent className="p-4">
           <div className="flex items-center gap-2 mb-2">
             <Wrench className="w-4 h-4 text-blue-500" />
-            <span className="font-medium text-gray-900 dark:text-gray-100">Tools</span>
+            <span className="font-medium text-foreground">Tools</span>
           </div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">
+          <div className="text-2xl font-bold text-foreground mb-1">
             {tools.length} 个 <span className="text-sm font-normal text-gray-500 ml-2">（{toolEnabled} 启用 / {tools.length - toolEnabled} 禁用）</span>
           </div>
-          <div className="flex gap-3 text-xs text-gray-500 dark:text-gray-400">
+          <div className="flex gap-3 text-xs text-muted-foreground">
             {toolBySource.builtin ? <span>内置: {toolBySource.builtin}</span> : null}
             {toolBySource.user ? <span>用户: {toolBySource.user}</span> : null}
             {toolBySource.imported ? <span>导入: {toolBySource.imported}</span> : null}
@@ -547,12 +547,12 @@ function StatsOverview({ tools = [], skills = [] }: { tools?: Tool[]; skills?: S
         <CardContent className="p-4">
           <div className="flex items-center gap-2 mb-2">
             <BookOpen className="w-4 h-4 text-purple-500" />
-            <span className="font-medium text-gray-900 dark:text-gray-100">Skills</span>
+            <span className="font-medium text-foreground">Skills</span>
           </div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">
+          <div className="text-2xl font-bold text-foreground mb-1">
             {skills.length} 个 <span className="text-sm font-normal text-gray-500 ml-2">（{skillEnabled} 启用 / {skills.length - skillEnabled} 禁用）</span>
           </div>
-          <div className="flex gap-3 text-xs text-gray-500 dark:text-gray-400">
+          <div className="flex gap-3 text-xs text-muted-foreground">
             {skillBySource.auto ? <span>生成: {skillBySource.auto}</span> : null}
             {skillBySource.user ? <span>用户: {skillBySource.user}</span> : null}
             {skillBySource.imported ? <span>导入: {skillBySource.imported}</span> : null}
@@ -750,7 +750,7 @@ export default function CapabilitiesPage() {
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                     toolCategory === cat.value
                       ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-blue-500'
+                      : 'bg-white dark:bg-slate-800 text-muted-foreground border border-gray-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-blue-500'
                   }`}
                 >
                   {cat.label}
@@ -824,7 +824,7 @@ export default function CapabilitiesPage() {
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                     skillCategory === cat.value
                       ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-blue-500'
+                      : 'bg-white dark:bg-slate-800 text-muted-foreground border border-gray-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-blue-500'
                   }`}
                 >
                   {cat.label}

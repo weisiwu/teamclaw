@@ -138,7 +138,7 @@ export default function DocsPage() {
             )}
           </Button>
           {selectedFiles.size > 0 && (
-            <span className="text-sm text-gray-500 dark:text-gray-400">已选择 {selectedFiles.size} 项</span>
+            <span className="text-sm text-muted-foreground">已选择 {selectedFiles.size} 项</span>
           )}
         </div>
 
@@ -149,20 +149,20 @@ export default function DocsPage() {
       </div>
 
       {/* Doc list */}
-      <div className="border rounded-lg divide-y">
+      <div className="border-border rounded-lg divide-y">
         {docs.length === 0 ? (
-          <div className="p-10 text-center text-gray-500 dark:text-gray-400">
+          <div className="p-10 text-center text-muted-foreground">
             <Folder className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
             <p>使用上方搜索框查找文档</p>
           </div>
         ) : (
           docs.map((doc) => (
-            <div key={doc.id} className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+            <div key={doc.id} className="flex items-center gap-4 p-4 hover:bg-muted dark:hover:bg-slate-700 transition-colors">
               <button onClick={() => toggleSelection(doc.id)} className="flex-shrink-0">
                 {selectedFiles.has(doc.id) ? (
                   <CheckSquare className="w-5 h-5 text-blue-600" />
                 ) : (
-                  <Square className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+                  <Square className="w-5 h-5 text-muted-foreground" />
                 )}
               </button>
 
@@ -170,7 +170,7 @@ export default function DocsPage() {
 
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">{doc.title}</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{doc.snippet}</p>
+                <p className="text-sm text-muted-foreground truncate">{doc.snippet}</p>
                 <div className="flex items-center gap-2 mt-1">
                   {doc.metadata?.fileType && (
                     <Badge variant="info" className="text-xs">
@@ -178,10 +178,10 @@ export default function DocsPage() {
                     </Badge>
                   )}
                   {doc.metadata?.size && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">{formatFileSize(Number(doc.metadata.size))}</span>
+                    <span className="text-xs text-muted-foreground">{formatFileSize(Number(doc.metadata.size))}</span>
                   )}
                   {doc.metadata?.uploadedAt && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                    <span className="text-xs text-muted-foreground">
                       {new Date(String(doc.metadata.uploadedAt)).toLocaleDateString('zh-CN')}
                     </span>
                   )}
