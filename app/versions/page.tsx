@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
+import { LegacySelect } from '@/components/ui/select';
 import { EmptyState } from '@/components/ui/empty-state';
 import {
   Plus,
@@ -260,16 +261,17 @@ export default function VersionsPage() {
         {/* Page size selector */}
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">每页</span>
-          <select
-            className="h-8 w-16 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            value={pageSize}
-            onChange={e => handlePageSizeChange(Number(e.target.value))}
-          >
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
+          <LegacySelect
+            value={String(pageSize)}
+            onValueChange={value => handlePageSizeChange(Number(value))}
+            options={[
+              { value: '10', label: '10' },
+              { value: '20', label: '20' },
+              { value: '50', label: '50' },
+              { value: '100', label: '100' },
+            ]}
+            className="h-8 w-16"
+          />
           <span className="text-sm text-muted-foreground">条</span>
         </div>
 

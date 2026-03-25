@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { LegacySelect } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -256,8 +258,8 @@ function CronModal({
             <label className="block text-sm font-medium text-foreground mb-1">
               任务 Prompt *
             </label>
-            <textarea
-              className="w-full min-h-[100px] px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm bg-background text-foreground"
+            <Textarea
+              className="w-full min-h-[100px]"
               value={formData.prompt}
               onChange={(e) => setFormData({ ...formData, prompt: e.target.value })}
               placeholder="请输入任务执行的 Prompt 内容"
@@ -469,15 +471,16 @@ export default function CronPage() {
               className="w-full"
             />
           </div>
-          <select
+          <LegacySelect
             value={filterStatus}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterStatus(e.target.value as "all" | "running" | "stopped")}
-            className="px-3 py-2 border border-gray-300 dark:border-slate-500 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-          >
-            <option value="all">全部状态</option>
-            <option value="running">运行中</option>
-            <option value="stopped">已停止</option>
-          </select>
+            onValueChange={(value) => setFilterStatus(value as "all" | "running" | "stopped")}
+            options={[
+              { value: "all", label: "全部状态" },
+              { value: "running", label: "运行中" },
+              { value: "stopped", label: "已停止" },
+            ]}
+            className="w-auto min-w-[120px]"
+          />
         </div>
 
         {/* 定时任务列表 */}
