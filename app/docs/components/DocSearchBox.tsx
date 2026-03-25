@@ -23,6 +23,7 @@ import { SearchFilter, SearchHistoryRecord, EnhancedSearchResult } from '@/lib/a
 interface DocSearchBoxProps {
   onSearch?: (results: EnhancedSearchResult[]) => void;
   onFilterChange?: (filter: SearchFilter) => void;
+  onLoading?: (loading: boolean) => void;
   className?: string;
 }
 
@@ -35,7 +36,7 @@ const FILE_TYPES = [
   { value: 'image', label: '图片' },
 ];
 
-export function DocSearchBox({ onSearch, onFilterChange, className = '' }: DocSearchBoxProps) {
+export function DocSearchBox({ onSearch, onFilterChange, onLoading, className = '' }: DocSearchBoxProps) {
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<'keyword' | 'semantic'>('keyword');
   const [filter, setFilter] = useState<SearchFilter>({});
@@ -87,6 +88,7 @@ export function DocSearchBox({ onSearch, onFilterChange, className = '' }: DocSe
 
   const handleSearch = useCallback(async () => {
     setIsSearching(true);
+    onLoading?.(true);
     setShowSuggestions(false);
     try {
       const results = await searchDocs({
@@ -102,8 +104,9 @@ export function DocSearchBox({ onSearch, onFilterChange, className = '' }: DocSe
       console.error('Search failed:', err);
     } finally {
       setIsSearching(false);
+      onLoading?.(false);
     }
-  }, [query, mode, filter, onSearch]);
+  }, [query, mode, filter, onSearch, onLoading]);
 
   const handleFilterChange = (key: keyof SearchFilter, value: string | number | undefined) => {
     const newFilter = { ...filter, [key]: value || undefined };

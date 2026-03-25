@@ -17,7 +17,7 @@ import {
   FileCode,
   ChevronRight,
 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
+
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
@@ -380,13 +380,11 @@ export default function MonitorPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Card className="w-full max-w-md">
-          <CardContent className="flex flex-col items-center py-12 gap-3">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            <p className="text-base text-gray-500 dark:text-gray-400">正在加载系统状态...</p>
-          </CardContent>
-        </Card>
+      <div className="page-container">
+        <div className="page-loading py-40">
+          <Loader2 className="w-6 h-6 animate-spin" />
+          <span>加载中...</span>
+        </div>
       </div>
     );
   }

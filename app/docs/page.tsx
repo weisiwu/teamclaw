@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FileText, Folder, Image as ImageIcon, FileCode, File, Eye, Download, CheckSquare, Square } from 'lucide-react';
+import { FileText, Folder, Image as ImageIcon, FileCode, File, Eye, Download, CheckSquare, Square, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DocSearchBox } from './components/DocSearchBox';
@@ -62,6 +62,7 @@ export default function DocsPage() {
   const [selectedDoc, setSelectedDoc] = useState<EnhancedSearchResult | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
 
   // Handle search results
   const handleSearch = (results: EnhancedSearchResult[]) => {
@@ -119,7 +120,7 @@ export default function DocsPage() {
       </div>
 
       {/* Search and filters */}
-      <DocSearchBox onSearch={handleSearch} onFilterChange={handleFilterChange} className="mb-6" />
+      <DocSearchBox onSearch={handleSearch} onFilterChange={handleFilterChange} onLoading={setIsSearching} className="mb-6" />
 
       {/* Actions bar */}
       <div className="flex items-center justify-between mb-4">
@@ -150,7 +151,12 @@ export default function DocsPage() {
 
       {/* Doc list */}
       <div className="border-border rounded-lg divide-y">
-        {docs.length === 0 ? (
+        {isSearching ? (
+          <div className="page-loading py-20">
+            <Loader2 className="w-6 h-6 animate-spin" />
+            <span>加载中...</span>
+          </div>
+        ) : docs.length === 0 ? (
           <div className="p-10 text-center text-muted-foreground">
             <Folder className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
             <p>使用上方搜索框查找文档</p>

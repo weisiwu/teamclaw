@@ -486,11 +486,10 @@ export default function CronPage() {
         {/* 定时任务列表 */}
         <div className="space-y-3">
           {isLoading ? (
-            <Card>
-              <CardContent className="py-12 text-center text-gray-500">
-                加载中...
-              </CardContent>
-            </Card>
+            <div className="page-loading py-20">
+              <Loader2 className="w-6 h-6 animate-spin" />
+              <span>加载中...</span>
+            </div>
           ) : error ? (
             <Card>
               <CardContent className="py-12 text-center text-red-500">

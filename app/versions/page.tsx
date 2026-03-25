@@ -325,11 +325,30 @@ export default function VersionsPage() {
         </Card>
       )}
 
-      {/* Loading */}
+      {/* Loading Skeleton */}
       {isLoading ? (
-        <div className="page-loading py-20">
-          <Loader2 className="w-6 h-6 animate-spin" />
-          <span>加载中...</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="animate-pulse">
+              <div className="bg-card border border-border rounded-xl p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="h-6 bg-muted rounded w-1/3" />
+                  <div className="h-5 bg-muted rounded w-16" />
+                </div>
+                <div className="h-4 bg-muted rounded w-3/4 mb-2" />
+                <div className="h-3 bg-muted rounded w-full mb-1" />
+                <div className="h-3 bg-muted rounded w-2/3 mb-3" />
+                <div className="flex gap-2 mb-3">
+                  <div className="h-5 bg-muted rounded w-16" />
+                  <div className="h-5 bg-muted rounded w-16" />
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted-foreground pt-3 border-t border-border">
+                  <div className="h-3 bg-muted rounded w-20" />
+                  <div className="h-3 bg-muted rounded w-16" />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       ) : filtered.length === 0 ? (
         <EmptyState
