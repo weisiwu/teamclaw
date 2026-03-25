@@ -255,6 +255,13 @@ const server = app.listen(PORT, async () => {
   } catch (err) {
     console.error('[init] Failed to initialize built-in tools:', err);
   }
+  // 初始化内置 Skills
+  try {
+    const skillInitResult = await skillService.initializeBuiltinSkills();
+    console.log(`[init] Built-in skills initialized: ${skillInitResult.added} added, ${skillInitResult.updated} updated, ${skillInitResult.unchanged} unchanged`);
+  } catch (err) {
+    console.error('[init] Failed to initialize built-in skills:', err);
+  }
   // 同步磁盘 Skills
   try {
     const skillSyncResult = await skillService.syncSkillsFromDisk();

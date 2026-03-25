@@ -20,6 +20,7 @@ import type {
   SkillFilterOptions,
   SkillSummary,
 } from '../models/skill.js';
+import { BUILTIN_SKILLS } from '../models/skill.js';
 
 /**
  * 获取 Skill 存储目录
@@ -640,6 +641,75 @@ export function truncateSkills(skills: SkillDefinition[], maxTokens: number = 80
   return included.join('\n\n---\n\n');
 }
 
+// ========== 内置 Skills 注册 ==========
+
+/**
+ * 初始化内置 Skills
+ * 将 BUILTIN_SKILLS 注册到数据库（如果不存在）
+ */
+export async function initializeBuiltinSkills(): Promise<{
+  added: number; updated: number; unchanged: number }> {
+  let added = 0;
+  let updated = 0;
+  let unchanged = 0;
+
+  for (const skill of BUILTIN_SKILLS) {
+    const existing = await queryOne<SkillRow>('SELECT * FROM skills WHERE id = $1', [skill.id]);
+
+    if (!existing) {
+      // 插入新内置 Skill
+      await execute(
+        `INSERT INTO skills (
+          id, name, display_name, description, category, source, content,
+          file_path, applicable_agents, enabled, tags, version,
+          created_at, updated_at, created_by
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+        [
+          skill.id,
+          skill.name,
+          skill.displayName,
+          skill.description,
+          skill.category,
+          skill.source,
+          skill.content,
+          skill.filePath || null,
+          JSON.stringify(skill.applicableAgents),
+          skill.enabled ? 1 : 0,
+          JSON.stringify(skill.tags),
+          skill.version,
+          skill.createdAt,
+          skill.updatedAt,
+          skill.createdBy || 'system',
+        ]
+      );
+      added++;
+    } else if (existing.version !== skill.version) {
+      // 版本变更时更新内容
+      await execute(
+        `UPDATE skills SET
+          display_name = $1, description = $2, content = $3,
+          category = $4, tags = $5, version = $6, updated_at = $7
+         WHERE id = $8`,
+        [
+          skill.displayName,
+          skill.description,
+          skill.content,
+          skill.category,
+          JSON.stringify(skill.tags),
+          skill.version,
+          new Date().toISOString(),
+          skill.id,
+        ]
+      );
+      updated++;
+    } else {
+      unchanged++;
+    }
+  }
+
+  return { added, updated, unchanged };
+}
+
 // ========== 统计 ==========
 
 /**
@@ -715,6 +785,9 @@ export const skillService = {
   getSkillsForAgent,
   getCombinedSkillContentForAgent,
   truncateSkills,
+
+  // 内置 Skills
+  initializeBuiltinSkills,
 
   // 统计
   getSkillStats,
