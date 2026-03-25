@@ -1,126 +1,161 @@
 #!/bin/bash
 # ============================================================
-# TeamClaw 页面健康检查脚本
-# 检查所有 API 路由的可用性，记录 HTTP 状态码
+# TeamClaw API 健康检查脚本
+# 访问所有关键 API 路由，记录 HTTP 状态码
 # ============================================================
+set -euo pipefail
 
-set -e
+# ── 配置 ───────────────────────────────────────────────────
+FRONTEND_URL="${HEALTHCHECK_FRONTEND_URL:-http://localhost:3000}"
+BACKEND_URL="${HEALTHCHECK_BACKEND_URL:-http://localhost:9700}"
 
-SERVER_URL="${SERVER_URL:-http://localhost:9700}"
-OUTPUT_FILE="${OUTPUT_FILE:-}"
+# 关键前端 API 路由（Next.js → Express 代理）
+FRONTEND_ROUTES=(
+  "/api/health"
+  "/api/v1/tasks"
+  "/api/v1/tools"
+  "/api/v1/versions"
+  "/api/v1/agents"
+  "/api/v1/branches"
+  "/api/v1/skills"
+  "/api/v1/feishu/chats"
+  "/api/v1/feishu/messages"
+)
 
-# 颜色定义
+# 关键后端 API 路由（Express 直连）
+BACKEND_ROUTES=(
+  "/api/v1/health"
+  "/api/v1/health/ready"
+  "/api/v1/health/live"
+  "/api/v1/projects"
+  "/api/v1/users"
+  "/api/v1/auth/login"
+  "/api/v1/versions"
+  "/api/v1/agents"
+  "/api/v1/tasks"
+  "/api/v1/tools"
+  "/api/v1/skills"
+  "/api/v1/branches"
+  "/api/v1/dashboard/overview"
+)
+
+# ── 颜色 ────────────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+CYAN='\033[0;36m'
+NC='\033[0m'
 
-# 统计
-TOTAL=0
-PASS=0
-FAIL=0
-WARN=0
-
-log_ok()   { echo -e "${GREEN}[PASS]${NC} $1"; ((PASS++)); }
-log_fail() { echo -e "${RED}[FAIL]${NC} $1"; ((FAIL++)); }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; ((WARN++)); }
-log_info() { echo -e "[INFO] $1"; }
-
+# ── 检查单个路由 ─────────────────────────────────────────────
 check_route() {
-  local method=${1:-GET}
-  local path=${2}
-  local description=${3:-}
-  local expected_status=${4:-200}
+  local url="$1"
+  local label="$2"
+  local expected_codes="${3:-200,201,204}"
 
-  ((TOTAL++))
-  
-  local full_url="${SERVER_URL}${path}"
-  local response
   local http_code
-  local content_type
-  
-  # 获取 HTTP 状态码和 Content-Type
-  response=$(curl -s -o /dev/null -w "%{http_code}|%{content_type}" --max-time 10 "$full_url" 2>/dev/null) || true
-  http_code=$(echo "$response" | cut -d'|' -f1)
-  content_type=$(echo "$response" | cut -d'|' -f2)
-  
-  local desc_text=""
-  [ -n "$description" ] && desc_text=" ($description)"
-  
-  if [ "$http_code" = "$expected_status" ]; then
-    log_ok "${method} ${path}${desc_text} → ${http_code}"
-  elif [ "$http_code" = "000" ]; then
-    log_fail "${method} ${path}${desc_text} → 连接失败（服务未启动？）"
-  elif [ "$http_code" = "404" ]; then
-    log_fail "${method} ${path}${desc_text} → 404 Not Found"
-  elif [ "$http_code" = "500" ]; then
-    log_fail "${method} ${path}${desc_text} → 500 Internal Server Error"
-  elif [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
-    log_warn "${method} ${path}${desc_text} → ${http_code}（需要认证）"
+  http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$url" 2>/dev/null || echo "000")
+
+  # 判断是否匹配预期状态码
+  local match=0
+  IFS=',' read -ra EXPECTED <<< "$expected_codes"
+  for ec in "${EXPECTED[@]}"; do
+    [[ "$http_code" == "$ec" ]] && match=1 && break
+  done
+
+  if [[ "$match" == "1" ]]; then
+    echo -e "${GREEN}[PASS]${NC}  [$http_code] $label"
+    return 0
   else
-    log_warn "${method} ${path}${desc_text} → ${http_code}（期望 ${expected_status}）"
+    echo -e "${RED}[FAIL]${NC}  [$http_code] $label"
+    return 1
   fi
 }
 
-# 检查服务是否可达
-check_server_reachable() {
-  log_info "检查后端服务连通性: ${SERVER_URL}"
-  local response
-  response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "${SERVER_URL}/health" 2>/dev/null) || response="000"
-  if [ "$response" = "000" ]; then
-    log_fail "后端服务不可达: ${SERVER_URL}"
-    log_info "请确保后端服务已启动: cd server && npm run dev"
-    exit 1
-  fi
-  log_ok "后端服务可达 (${response})"
+# ── 打印报告 ────────────────────────────────────────────────
+print_header() {
+  echo ""
+  echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+  echo -e "${CYAN}  TeamClaw API 健康检查  $(date '+%Y-%m-%d %H:%M:%S')${NC}"
+  echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+  echo ""
 }
 
-echo "============================================"
-echo " TeamClaw 页面健康检查"
-echo " 后端: ${SERVER_URL}"
-echo " 时间: $(date '+%Y-%m-%d %H:%M:%S')"
-echo "============================================"
+# ── 检查服务可用性 ──────────────────────────────────────────
+check_service() {
+  local name="$1"
+  local url="$2"
+
+  local http_code
+  http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$url" 2>/dev/null || echo "000")
+
+  if [[ "$http_code" != "000" ]]; then
+    echo -e "${GREEN}[UP]${NC}   $name ($url)"
+    return 0
+  else
+    echo -e "${RED}[DOWN]${NC} $name ($url)"
+    return 1
+  fi
+}
+
+# ── 主流程 ──────────────────────────────────────────────────
+print_header
+
+PASS_COUNT=0
+FAIL_COUNT=0
+TOTAL_COUNT=0
+
+# 1. 检查服务可用性
+echo -e "${YELLOW}[1/4] 检查服务可用性${NC}"
+check_service "Frontend (Next.js)" "$FRONTEND_URL" || true
+check_service "Backend  (Express)" "$BACKEND_URL" || true
+
+# 2. 检查前端 API 路由
 echo ""
+echo -e "${YELLOW}[2/4] 检查前端 API 路由 (Next.js → Express)${NC}"
+for route in "${FRONTEND_ROUTES[@]}"; do
+  ((TOTAL_COUNT++))
+  label="FRONTEND $route"
+  if check_route "${FRONTEND_URL}${route}" "$label"; then
+    ((PASS_COUNT++))
+  else
+    ((FAIL_COUNT++))
+  fi
+done
 
-check_server_reachable
+# 3. 检查后端 API 路由
 echo ""
+echo -e "${YELLOW}[3/4] 检查后端 API 路由 (Express 直连)${NC}"
+for route in "${BACKEND_ROUTES[@]}"; do
+  ((TOTAL_COUNT++))
+  label="BACKEND $route"
+  # Backend routes may need auth; /health, /health/ready, /health/live are public
+  if check_route "${BACKEND_URL}${route}" "$label"; then
+    ((PASS_COUNT++))
+  else
+    ((FAIL_COUNT++))
+  fi
+done
 
-echo "--- 健康检查路由 ---"
-check_route GET "/health" "健康检查"
-
+# 4. 总结报告
 echo ""
-echo "--- 认证相关 ---"
-check_route POST "/api/auth/login" "登录" 400
-check_route GET "/api/auth/me" "当前用户" 401
+echo -e "${YELLOW}[4/4] 检查结果汇总${NC}"
+echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo -e "  总检查数: $TOTAL_COUNT"
+echo -e "  ${GREEN}通过: $PASS_COUNT${NC}"
+echo -e "  ${RED}失败: $FAIL_COUNT${NC}"
+echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-echo ""
-echo "--- 任务管理 ---"
-check_route GET "/api/v1/tasks" "任务列表" 401
-check_route GET "/api/v1/tasks/test-task-id" "任务详情" 401
-
-echo ""
-echo "--- 项目与版本 ---"
-check_route GET "/api/v1/projects" "项目列表" 401
-check_route GET "/api/v1/versions" "版本列表" 401
-
-echo ""
-echo "--- 统计数据 ---"
-check_route GET "/api/v1/dashboard/stats" "仪表盘统计" 401
-check_route GET "/api/v1/token-stats" "Token 统计" 401
-
-echo ""
-echo "--- 管理接口 ---"
-check_route GET "/api/v1/admin/config" "管理配置" 401
-check_route GET "/api/v1/audit-logs" "审计日志" 401
-
-echo ""
-echo "============================================"
-echo " 检查完成: ${TOTAL} 个路由 | ${PASS} 通过 | ${FAIL} 失败 | ${WARN} 警告"
-echo "============================================"
-
-if [ "$FAIL" -gt 0 ]; then
+if [[ "$FAIL_COUNT" -gt 0 ]]; then
+  echo ""
+  echo -e "${YELLOW}常见问题排查：${NC}"
+  echo "  1. 后端未启动 → cd server && npm run dev"
+  echo "  2. 数据库未初始化 → ./scripts/setup-db.sh"
+  echo "  3. 迁移未执行 → npx tsx server/src/db/migrations/run.ts"
+  echo "  4. 前端未启动 → npm run dev"
+  echo ""
   exit 1
-elif [ "$WARN" -gt 0 ]; then
+else
+  echo ""
+  echo -e "${GREEN}✅ 所有检查通过！${NC}"
   exit 0
 fi
-exit 0

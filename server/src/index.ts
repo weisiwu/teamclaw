@@ -9,6 +9,7 @@ import { success } from './utils/response.js';
 import { requireAdmin } from './middleware/auth.js';
 import { unifiedErrorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { runMigrations } from './db/migrations/run.js';
+import { waitForDatabase } from './utils/db.js';
 import healthRouter from './routes/health.js';
 import projectRouter from './routes/project.js';
 import userRouter from './routes/user.js';
@@ -238,6 +239,8 @@ app.use(unifiedErrorHandler);
 // 保存 server 引用用于优雅关闭
 const server = app.listen(PORT, async () => {
   console.log(`TeamClaw server running on port ${PORT}`);
+  // 等待数据库就绪并检查关键表
+  await waitForDatabase();
   // 运行数据库迁移
   await runMigrations();
   // 自动填充 Demo 数据（首次启动）

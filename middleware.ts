@@ -67,6 +67,10 @@ function isPublicRoute(pathname: string): boolean {
   return PUBLIC_ROUTES.some(route => pathname.startsWith(route));
 }
 
+function isApiRoute(pathname: string): boolean {
+  return pathname.startsWith('/api/');
+}
+
 export function middleware(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
 
@@ -75,6 +79,17 @@ export function middleware(request: NextRequest): NextResponse {
     const authHeader = request.headers.get('authorization');
     const hasToken = authHeader?.startsWith('Bearer ');
     if (!hasToken) {
+      // API routes return 401 JSON instead of redirecting to HTML login
+      if (isApiRoute(pathname)) {
+        return NextResponse.json(
+          {
+            code: 401,
+            message: '未提供有效身份信息，请通过登录获取 Token',
+          },
+          { status: 401 }
+        );
+      }
+      // Page routes: redirect to login
       const loginUrl = new URL('/login', request.url);
       loginUrl.searchParams.set('redirect', pathname);
       return NextResponse.redirect(loginUrl);
