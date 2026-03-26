@@ -336,3 +336,15 @@ a, button, input, select, textarea,
   overflow: hidden;
   transition: opacity 200ms, width 200ms;
 }
+
+/* ============================================================
+   Sonner (shadcn toast) 样式覆盖
+   ============================================================ */
+.toaster group {
+  --toast-bg: var(--popover);
+  --toast-text: var(--popover-foreground);
+}
+
+.cn-toast {
+  /* sonner toast class */
+}

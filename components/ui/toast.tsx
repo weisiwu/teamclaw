@@ -1,76 +1,38 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
-import { X, CheckCircle, AlertCircle } from 'lucide-react';
+import { toast as sonnerToast } from 'sonner';
 
-type ToastType = 'success' | 'error' | 'info';
+// ============================================================================
+// shadcn/ui Sonner Toast 包装层
+// 保留 useToast API 签名，确保现有代码兼容
+// ============================================================================
 
-interface Toast {
-  id: string;
-  type: ToastType;
-  message: string;
+export type ToastType = 'success' | 'error' | 'info' | 'warning' | 'loading';
+
+interface ToastOptions {
+  description?: string;
+  duration?: number;
 }
 
-interface ToastContextValue {
-  toast: (type: ToastType, message: string) => void;
-  success: (message: string) => void;
-  error: (message: string) => void;
-  info: (message: string) => void;
-}
+// 保留原有 API 签名，内部委托给 sonner
+const toastImpl = {
+  success: (message: string, opts?: ToastOptions) =>
+    sonnerToast.success(message, { description: opts?.description }),
+  error: (message: string, opts?: ToastOptions) =>
+    sonnerToast.error(message, { description: opts?.description }),
+  info: (message: string, opts?: ToastOptions) =>
+    sonnerToast(message, { description: opts?.description }),
+  warning: (message: string, opts?: ToastOptions) =>
+    sonnerToast.warning(message, { description: opts?.description }),
+  loading: (message: string, opts?: ToastOptions) =>
+    sonnerToast.loading(message, { description: opts?.description }),
+};
 
-const ToastContext = createContext<ToastContextValue | null>(null);
-
+// 保留原有 useToast Hook 签名（返回 toast/success/error/info 函数）
+// 兼容现有所有调用 useToast() 的代码
 export function useToast() {
-  const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error('useToast must be used within ToastProvider');
-  return ctx;
+  return toastImpl;
 }
 
-export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const counterRef = useRef(0);
-
-  const addToast = useCallback((type: ToastType, message: string) => {
-    const id = `toast-${++counterRef.current}`;
-    setToasts(prev => [...prev, { id, type, message }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 5000);
-  }, []);
-
-  const success = useCallback((message: string) => addToast('success', message), [addToast]);
-  const error = useCallback((message: string) => addToast('error', message), [addToast]);
-  const info = useCallback((message: string) => addToast('info', message), [addToast]);
-  const toast = useCallback((type: ToastType, message: string) => addToast(type, message), [addToast]);
-
-  const dismiss = (id: string) => setToasts(prev => prev.filter(t => t.id !== id));
-
-  return (
-    <ToastContext.Provider value={{ toast, success, error, info }}>
-      {children}
-      {/* Toast container */}
-      <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
-        {toasts.map(t => (
-          <div
-            key={t.id}
-            className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-sm font-medium animate-slide-in-right min-w-[240px] max-w-sm ${
-              t.type === 'success' ? 'bg-green-50 dark:bg-green-900/40 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-800' :
-              t.type === 'error' ? 'bg-red-50 dark:bg-red-900/40 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800' :
-              'bg-blue-50 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
-            }`}
-          >
-            {t.type === 'success' && <CheckCircle className="w-4 h-4 shrink-0" />}
-            {t.type === 'error' && <AlertCircle className="w-4 h-4 shrink-0" />}
-            <span className="flex-1">{t.message}</span>
-            <button
-              onClick={() => dismiss(t.id)}
-              className="shrink-0 p-0.5 hover:opacity-70 transition-opacity rounded"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        ))}
-      </div>
-    </ToastContext.Provider>
-  );
-}
+// 直接导出的 toast 函数（shadcn 风格）
+export { sonnerToast as toast };

@@ -44,6 +44,7 @@
     "rehype-highlight": "^7.0.2",
     "rehype-slug": "^6.0.0",
     "remark-gfm": "^4.0.1",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "xlsx": "^0.18.5",
     "zustand": "^5.0.12"

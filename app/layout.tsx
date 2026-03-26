@@ -3,6 +3,7 @@ import "./globals.css";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ReactQueryProvider } from "@/components/providers/ReactQueryProvider";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
   title: "TeamClaw 管理后台",
@@ -25,6 +26,7 @@ export default function RootLayout({
         >
           <ReactQueryProvider>
             <AppLayout>{children}</AppLayout>
+            <Toaster position="bottom-right" richColors closeButton />
           </ReactQueryProvider>
         </ThemeProvider>
       </body>
