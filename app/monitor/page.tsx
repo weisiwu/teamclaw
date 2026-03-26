@@ -21,6 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
+import { ErrorAlert } from '@/components/ui/ErrorAlert';
 import { apiGet, getFriendlyErrorMessage } from '@/lib/api-safe-fetch';
 
 // ============ Status Labels ============
@@ -213,7 +214,11 @@ function TraceDetail({ traceId }: { traceId: string }) {
   }
 
   if (error) {
-    return <p className="text-red-500 text-sm">{error}</p>;
+    return (
+      <div className="py-4">
+        <ErrorAlert error={null} message={error} showRetry onRetry={fetchTrace} />
+      </div>
+    );
   }
 
   return (

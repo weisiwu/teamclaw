@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api-safe-fetch';
 import { getFriendlyErrorMessage } from '@/lib/api-safe-fetch';
+import { ErrorAlert } from '@/components/ui/ErrorAlert';
 
 // ========== 分支管理面板 ==========
 
@@ -318,9 +319,7 @@ export default function ProjectDetailPage({ params }: Props) {
   if (error || !data || !project) {
     return (
       <div className="p-4 sm:p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
-          加载失败：{(error as Error).message}
-        </div>
+        <ErrorAlert error={error} message="加载项目详情失败" showRetry onRetry={() => window.location.reload()} />
         <div className="mt-4">
           <Link href="/projects" className="text-blue-600 hover:underline text-sm">
             ← 返回项目列表

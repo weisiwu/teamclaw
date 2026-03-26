@@ -946,7 +946,7 @@ function TasksContent() {
                 {semanticResults.isFetching && <Loader2 className="w-3 h-3 animate-spin text-purple-500" />}
               </div>
               {semanticResults.isError ? (
-                <p className="text-sm text-red-500">搜索失败，请重试</p>
+                <ErrorAlert error={semanticResults.error} message="语义搜索失败，请重试" showRetry onRetry={semanticResults.refetch} />
               ) : semanticResults.data?.data?.list?.length === 0 ? (
                 <p className="text-sm text-gray-500">未找到相似任务</p>
               ) : semanticResults.data?.data?.list?.length ? (
