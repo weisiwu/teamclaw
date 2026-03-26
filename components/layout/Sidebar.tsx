@@ -6,7 +6,6 @@ import {
   Layers, 
   GitBranch, 
   Zap, 
-  Clock, 
   FileText, 
   Key, 
   Users,
@@ -24,10 +23,10 @@ const menuItems = [
   { href: "/versions", label: "版本管理", icon: GitBranch },
   { href: "/agent-team", label: "Agent 团队", icon: Bot },
   { href: "/capabilities", label: "Tools & Skills", icon: Zap },
-  { href: "/cron", label: "定时任务", icon: Clock },
   { href: "/docs", label: "文档中心", icon: FileText },
   { href: "/tokens", label: "Token 管理", icon: Key },
   { href: "/members", label: "成员管理", icon: Users },
+  { href: "/settings", label: "设置", icon: Settings },
 ];
 
 interface SidebarProps {
@@ -107,24 +106,14 @@ export function Sidebar({ onNavigate, collapsed = false, onToggleCollapse }: Sid
               <ChevronRight className="w-4 h-4" />
             </button>
           ) : (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={onToggleCollapse}
-                className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                title="折叠侧边栏"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span>折叠</span>
-              </button>
-              <Link
-                href="/settings"
-                onClick={handleLinkClick}
-                className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-              >
-                <Settings className="w-4 h-4 flex-shrink-0" />
-                <span className="whitespace-nowrap">设置</span>
-              </Link>
-            </div>
+            <button
+              onClick={onToggleCollapse}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+              title="折叠侧边栏"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>折叠</span>
+            </button>
           )}
         </div>
       )}
