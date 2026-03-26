@@ -131,6 +131,6 @@ export const config = {
   matcher: [
     // Protected API routes only — explicit module list (no catch-all)
     // Page-level auth is handled client-side by useAuth hook / RequireAuth component
-    '/api/v1/(agents|branches|dashboard|doc|llm|message|project|search|tag|tasks|token-stats|audit-log|version-bump|version-change-stats|version-diff|version-rollback|version-settings|version-tag|versions)/',
+    '/api/v1/(agents|branches|doc|llm|message|project|search|tag|tasks|token-stats|audit-log|version-bump|version-change-stats|version-diff|version-rollback|version-settings|version-tag|versions)/',
   ],
 };
