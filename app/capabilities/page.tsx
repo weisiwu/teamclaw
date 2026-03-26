@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -565,6 +566,13 @@ function StatsOverview({ tools = [], skills = [] }: { tools?: Tool[]; skills?: S
 
 // ============ 主页面 ============
 export default function CapabilitiesPage() {
+  const router = useRouter();
+
+  // Redirect to /agent-team — capabilities are now managed via Agent Team page
+  useEffect(() => {
+    router.replace('/agent-team?tab=tools');
+  }, [router]);
+
   const [activeTab, setActiveTab] = useState<'tools' | 'skills'>('tools');
 
   // Tool filters

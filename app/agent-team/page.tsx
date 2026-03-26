@@ -205,7 +205,7 @@ export default function AgentTeamPage() {
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
                   完整管理请访问{" "}
-                  <a href="/capabilities?tab=tools" className="text-blue-600 hover:underline">
+                  <a href="/agent-team?tab=tools" className="text-blue-600 hover:underline">
                     /capabilities
                   </a>
                 </p>
@@ -266,7 +266,7 @@ export default function AgentTeamPage() {
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
                   完整管理请访问{" "}
-                  <a href="/capabilities?tab=skills" className="text-blue-600 hover:underline">
+                  <a href="/agent-team?tab=skills" className="text-blue-600 hover:underline">
                     /capabilities
                   </a>
                 </p>
