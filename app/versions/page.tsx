@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import type { GitTag } from '@/lib/api/types';
 import { useTags } from '@/lib/api/tags';
 import { Button } from '@/components/ui/button';
@@ -29,16 +29,16 @@ import { cn } from '@/lib/utils';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; dot: string; badge: string }> = {
-  active:    { label: '活跃',   dot: 'bg-emerald-500', badge: 'bg-emerald-100 text-emerald-700' },
-  archived:  { label: '已归档', dot: 'bg-gray-400',     badge: 'bg-gray-100 text-gray-500' },
-  protected: { label: '保护中', dot: 'bg-amber-500',   badge: 'bg-amber-100 text-amber-700' },
+  active:    { label: '活跃',   dot: 'bg-emerald-500',    badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300' },
+  archived:  { label: '已归档', dot: 'bg-gray-400',        badge: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400' },
+  protected: { label: '保护中', dot: 'bg-amber-500',      badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300' },
 };
 
 const BUILD_CONFIG: Record<string, { label: string; dot: string; badge: string }> = {
-  success:  { label: '构建成功', dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  failed:   { label: '构建失败', dot: 'bg-red-500',     badge: 'bg-red-50 text-red-700 border-red-200' },
-  building: { label: '构建中',  dot: 'bg-blue-500 animate-pulse', badge: 'bg-blue-50 text-blue-700 border-blue-200' },
-  pending:  { label: '待构建',  dot: 'bg-gray-400',     badge: 'bg-gray-50 text-gray-600 border-gray-200' },
+  success:  { label: '构建成功', dot: 'bg-emerald-500',    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700' },
+  failed:   { label: '构建失败', dot: 'bg-red-500',        badge: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700' },
+  building: { label: '构建中',  dot: 'bg-blue-500 animate-pulse', badge: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700' },
+  pending:  { label: '待构建',  dot: 'bg-gray-400',        badge: 'bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700' },
 };
 
 const DATE_PRESETS = [
@@ -47,6 +47,8 @@ const DATE_PRESETS = [
   { label: '近30天', value: '30d' },
   { label: '近90天', value: '90d' },
 ];
+
+const PAGE_SIZE = 20;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -69,10 +71,10 @@ function VersionTimelineNode({ tag }: { tag: GitTag }) {
   return (
     <div className="relative pl-10 sm:pl-12">
       {/* Vertical timeline line */}
-      <div className="absolute left-[15px] sm:left-[17px] top-2 bottom-0 w-0.5 bg-gradient-to-b from-blue-200 via-blue-100 to-transparent" />
+      <div className="absolute left-[15px] sm:left-[17px] top-2 bottom-0 w-0.5 bg-gradient-to-b from-blue-300 dark:from-blue-700 via-blue-100 dark:via-blue-900 to-transparent" />
 
       {/* Timeline dot */}
-      <div className="absolute left-0 top-1.5 w-8 h-8 rounded-full bg-white border-2 border-blue-400 flex items-center justify-center shadow-sm z-10">
+      <div className="absolute left-0 top-1.5 w-8 h-8 rounded-full bg-white dark:bg-gray-800 border-2 border-blue-400 dark:border-blue-500 flex items-center justify-center shadow-sm z-10">
         <div className={cn('w-2.5 h-2.5 rounded-full', status.dot)} />
       </div>
 
@@ -94,12 +96,12 @@ function VersionTimelineNode({ tag }: { tag: GitTag }) {
                 </span>
               )}
               {tag.hasScreenshot && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-200 font-medium">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-200 dark:bg-purple-900/40 dark:text-purple-300 dark:border-purple-700 font-medium">
                   📷 含截图
                 </span>
               )}
               {tag.hasChangelog && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 font-medium">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700 font-medium">
                   📋 变更日志
                 </span>
               )}
@@ -166,8 +168,15 @@ export default function VersionsPage() {
   const [sortOrder, setSortOrder]       = useState<'newest' | 'oldest'>('newest');
   const [statusFilter, setStatusFilter] = useState<'all' | GitTag['status']>('all');
   const [datePreset, setDatePreset]     = useState<string>('all');
+  const [currentPage, setCurrentPage]   = useState(1);
+  const timelineRef = useRef<HTMLDivElement>(null);
 
   const tags = useMemo(() => data?.data ?? [], [data]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, sortOrder, statusFilter, datePreset]);
 
   const filteredTags = useMemo(() => {
     let result = tags;
@@ -207,18 +216,26 @@ export default function VersionsPage() {
     return result;
   }, [tags, searchQuery, sortOrder, statusFilter, datePreset]);
 
+  const totalPages = Math.ceil(filteredTags.length / PAGE_SIZE);
+  const pageTags = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredTags.slice(start, start + PAGE_SIZE);
+  }, [filteredTags, currentPage]);
+
   return (
     <div className="page-container py-8 space-y-6">
       {/* Page header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
             <Clock className="w-5 h-5 text-blue-600" />
           </div>
           <div>
             <h1 className="text-2xl font-bold">版本时间线</h1>
             <p className="text-sm text-muted-foreground">
-              共 {filteredTags.length} 个版本（{tags.length} 个标签）
+              {totalPages > 1
+                ? `第 ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, filteredTags.length)} / 共 ${filteredTags.length} 个版本`
+                : `共 ${filteredTags.length} 个版本（${tags.length} 个标签）`}
             </p>
           </div>
         </div>
@@ -303,7 +320,7 @@ export default function VersionsPage() {
           <span className="ml-3 text-muted-foreground">加载版本数据...</span>
         </div>
       ) : error ? (
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-800">
           <CardContent className="p-6 text-center">
             <p className="text-red-600 font-medium mb-2">加载失败</p>
             <p className="text-sm text-red-500">{String(error)}</p>
@@ -336,10 +353,71 @@ export default function VersionsPage() {
               <Loader2 className="w-4 h-4 animate-spin" />正在刷新...
             </div>
           )}
-          <VersionTimelineNode tag={filteredTags[0]} />
-          {filteredTags.slice(1).map(tag => (
-            <VersionTimelineNode key={tag.name} tag={tag} />
-          ))}
+          <div ref={timelineRef}>
+            <VersionTimelineNode tag={pageTags[0]} />
+            {pageTags.slice(1).map(tag => (
+              <VersionTimelineNode key={tag.name} tag={tag} />
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-6 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setCurrentPage(p => Math.max(1, p - 1));
+                  timelineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+                disabled={currentPage === 1}
+              >
+                ← 上一页
+              </Button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let page: number;
+                  if (totalPages <= 5) {
+                    page = i + 1;
+                  } else if (currentPage <= 3) {
+                    page = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    page = totalPages - 4 + i;
+                  } else {
+                    page = currentPage - 2 + i;
+                  }
+                  return (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? 'default' : 'ghost'}
+                      size="sm"
+                      className="w-9"
+                      onClick={() => {
+                        setCurrentPage(page);
+                        timelineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                    >
+                      {page}
+                    </Button>
+                  );
+                })}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setCurrentPage(p => Math.min(totalPages, p + 1));
+                  timelineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+                disabled={currentPage === totalPages}
+              >
+                下一页 →
+              </Button>
+              <span className="text-xs text-muted-foreground ml-2">
+                第 {currentPage} / {totalPages} 页
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>
