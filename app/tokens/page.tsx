@@ -378,7 +378,7 @@ function TokensLoading() {
 export default function TokensPage() {
   const [mainTab, setMainTab] = useState<MainTab>("usage");
 
-  // 读取 URL hash
+  // 读取 URL hash（仅初始化用）
   useEffect(() => {
     const hash = window.location.hash.replace("#", "");
     if (hash === "agent") setMainTab("agent");
@@ -386,11 +386,22 @@ export default function TokensPage() {
     else setMainTab("usage");
   }, []);
 
-  // 切换 Tab 时同步 hash
+  // 切换 Tab 时使用 router.push（不触发页面刷新）
   const handleMainTabChange = (tab: MainTab) => {
     setMainTab(tab);
-    window.location.hash = tab;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tab);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
+
+  // 初始化时从 URL 恢复 tab 状态
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam && ["usage", "agent", "apikey"].includes(tabParam)) {
+      setMainTab(tabParam as MainTab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   return (
     <Suspense fallback={<TokensLoading />}>

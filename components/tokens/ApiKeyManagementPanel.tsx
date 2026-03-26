@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useApiTokenList, useCreateApiToken, useUpdateApiToken, useDeleteApiToken, useVerifyApiToken } from "@/hooks/useApiTokens";
+import { useToast } from "@/components/ui/toast";
 import {
   API_TOKEN_PROVIDERS,
   API_TOKEN_STATUS_OPTIONS,
@@ -75,6 +76,8 @@ function TokenRow({
   onToggle,
   onVerify,
   verifying,
+  deleting,
+  toggling,
 }: {
   token: ApiToken;
   onEdit: (t: ApiToken) => void;
@@ -82,7 +85,10 @@ function TokenRow({
   onToggle: (id: string, status: string) => void;
   onVerify: (id: string) => void;
   verifying: boolean;
+  deleting: boolean;
+  toggling: boolean;
 }) {
+  const isBusy = verifying || deleting || toggling;
   return (
     <tr className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
       {/* Alias + Provider */}
@@ -136,8 +142,8 @@ function TokenRow({
           {/* Verify */}
           <button
             onClick={() => onVerify(token.id)}
-            disabled={verifying}
-            className="p-1.5 text-gray-400 hover:text-blue-600 rounded transition-colors"
+            disabled={verifying || isBusy}
+            className="p-1.5 text-gray-400 hover:text-blue-600 rounded transition-colors disabled:opacity-40"
             title="验证连接"
           >
             {verifying ? (
@@ -152,14 +158,17 @@ function TokenRow({
             onClick={() =>
               onToggle(token.id, token.status === "active" ? "disabled" : "active")
             }
-            className={`p-1.5 rounded transition-colors ${
+            disabled={toggling || isBusy}
+            className={`p-1.5 rounded transition-colors disabled:opacity-40 ${
               token.status === "active"
                 ? "text-green-500 hover:text-green-700"
                 : "text-gray-400 hover:text-green-600"
             }`}
             title={token.status === "active" ? "禁用" : "启用"}
           >
-            {token.status === "active" ? (
+            {toggling ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : token.status === "active" ? (
               <CheckCircle className="w-3.5 h-3.5" />
             ) : (
               <XCircle className="w-3.5 h-3.5" />
@@ -169,7 +178,8 @@ function TokenRow({
           {/* Edit */}
           <button
             onClick={() => onEdit(token)}
-            className="p-1.5 text-gray-400 hover:text-blue-600 rounded transition-colors"
+            disabled={isBusy}
+            className="p-1.5 text-gray-400 hover:text-blue-600 rounded transition-colors disabled:opacity-40"
             title="编辑"
           >
             <Pencil className="w-3.5 h-3.5" />
@@ -178,10 +188,15 @@ function TokenRow({
           {/* Delete */}
           <button
             onClick={() => onDelete(token.id)}
-            className="p-1.5 text-gray-400 hover:text-red-500 rounded transition-colors"
+            disabled={deleting || isBusy}
+            className="p-1.5 text-gray-400 hover:text-red-500 rounded transition-colors disabled:opacity-40"
             title="删除"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            {deleting ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="w-3.5 h-3.5" />
+            )}
           </button>
         </div>
       </td>
@@ -326,6 +341,8 @@ export function ApiKeyManagementPanel() {
   const [editingToken, setEditingToken] = useState<ApiToken | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const { data, isLoading } = useApiTokenList({
     provider: filters.provider === "all" ? undefined : filters.provider as ApiTokenProvider,
@@ -339,6 +356,7 @@ export function ApiKeyManagementPanel() {
   const updateMutation = useUpdateApiToken();
   const deleteMutation = useDeleteApiToken();
   const verifyMutation = useVerifyApiToken();
+  const { showToast } = useToast();
 
   const tokens = data?.data || [];
   const totalPages = data?.totalPages || 1;
@@ -362,6 +380,9 @@ export function ApiKeyManagementPanel() {
       };
       await createMutation.mutateAsync(body);
       setDialogOpen(false);
+      showToast("API Token 创建成功", "success");
+    } catch {
+      showToast("创建失败，请重试", "error");
     } finally {
       setSubmitting(false);
     }
@@ -390,6 +411,9 @@ export function ApiKeyManagementPanel() {
       await updateMutation.mutateAsync({ id: editingToken.id, body });
       setDialogOpen(false);
       setEditingToken(null);
+      showToast("API Token 更新成功", "success");
+    } catch {
+      showToast("更新失败，请重试", "error");
     } finally {
       setSubmitting(false);
     }
@@ -397,14 +421,30 @@ export function ApiKeyManagementPanel() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("确定要删除这个 API Token 吗？")) return;
-    await deleteMutation.mutateAsync(id);
+    setDeletingId(id);
+    try {
+      await deleteMutation.mutateAsync(id);
+      showToast("API Token 已删除", "success");
+    } catch {
+      showToast("删除失败，请重试", "error");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const handleToggle = async (id: string, newStatus: string) => {
-    await updateMutation.mutateAsync({
-      id,
-      body: { status: newStatus as ApiTokenStatus },
-    });
+    setTogglingId(id);
+    try {
+      await updateMutation.mutateAsync({
+        id,
+        body: { status: newStatus as ApiTokenStatus },
+      });
+      showToast(newStatus === "active" ? "Token 已启用" : "Token 已禁用", "success");
+    } catch {
+      showToast("状态切换失败，请重试", "error");
+    } finally {
+      setTogglingId(null);
+    }
   };
 
   const handleVerify = async (id: string) => {
@@ -412,10 +452,12 @@ export function ApiKeyManagementPanel() {
     try {
       const result = await verifyMutation.mutateAsync(id);
       if (result.success) {
-        alert(`✅ 验证成功！延迟: ${result.latencyMs}ms`);
+        showToast(`验证成功！延迟 ${result.latencyMs}ms`, "success");
       } else {
-        alert(`❌ 验证失败: ${result.error}`);
+        showToast(`验证失败: ${result.error}`, "error");
       }
+    } catch {
+      showToast("验证请求失败，请重试", "error");
     } finally {
       setVerifyingId(null);
     }
@@ -510,6 +552,8 @@ export function ApiKeyManagementPanel() {
                     onToggle={handleToggle}
                     onVerify={handleVerify}
                     verifying={verifyingId === token.id}
+                    deleting={deletingId === token.id}
+                    toggling={togglingId === token.id}
                   />
                 ))}
               </tbody>

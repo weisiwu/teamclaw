@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { useBindingsOverview } from "@/hooks/useAgentTokenBindings";
 import { useApiTokenList } from "@/hooks/useApiTokens";
-import { useAgents } from "@/hooks/useAgents";
+import { useAgentList } from "@/hooks/useAgents";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 
 const PROVIDER_COLORS: Record<string, string> = {
   openai: "bg-green-100 text-green-700",
@@ -25,7 +25,7 @@ const PROVIDER_LABELS: Record<string, string> = {
 
 export function AgentAllocationPanel() {
   const { data: overview, isLoading: overviewLoading } = useBindingsOverview();
-  const { data: agentsData, isLoading: agentsLoading } = useAgents();
+  const { data: agentsData, isLoading: agentsLoading } = useAgentList();
   const { data: tokensData, isLoading: tokensLoading } = useApiTokenList({ pageSize: 100 });
 
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
@@ -34,8 +34,40 @@ export function AgentAllocationPanel() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Agent Token 分配</h2>
+            <p className="text-sm text-muted-foreground">
+              为每个 Agent 分配 API Token 访问权限
+            </p>
+          </div>
+        </div>
+        {/* Skeleton: 3 agent cards */}
+        {[...Array(3)].map((_, i) => (
+          <Card key={i}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gray-200 animate-pulse" />
+                  <div>
+                    <div className="h-4 w-32 bg-gray-200 rounded animate-pulse mb-1" />
+                    <div className="h-3 w-48 bg-gray-100 rounded animate-pulse" />
+                  </div>
+                </div>
+                <div className="h-6 w-20 bg-gray-200 rounded animate-pulse" />
+              </div>
+              <div className="space-y-2 pl-13">
+                {[...Array(2)].map((_, j) => (
+                  <div key={j} className="flex items-center gap-2 ml-13">
+                    <div className="h-3 w-3 bg-gray-200 rounded-full animate-pulse" />
+                    <div className="h-3 w-40 bg-gray-100 rounded animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     );
   }
