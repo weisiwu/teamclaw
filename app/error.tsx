@@ -45,10 +45,10 @@ export default function Error({
           <RefreshCw className="w-4 h-4" />
           重试
         </Button>
-        <Link href="/">
+        <Link href="/tasks">
           <Button variant="outline" className="gap-2">
             <Home className="w-4 h-4" />
-            返回首页
+            返回任务
           </Button>
         </Link>
       </div>

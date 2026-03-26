@@ -26,10 +26,10 @@ export default function NotFound() {
       </p>
       
       <div className="flex gap-3">
-        <Link href="/">
+        <Link href="/tasks">
           <Button className="gap-2">
             <Home className="w-4 h-4" />
-            返回首页
+            返回任务
           </Button>
         </Link>
         <Button
