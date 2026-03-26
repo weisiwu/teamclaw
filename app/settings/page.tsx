@@ -3,7 +3,7 @@
 import { useTheme } from 'next-themes';
 import { Monitor, Moon, Sun, Users, ChevronRight, Gamepad2, RefreshCw, Trash2, AlertTriangle, CheckCircle2, Loader2, Shield, Webhook as WebhookIcon, Clock, Search, Download, Badge, Input as InputLucide, LegacySelect, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Button as ButtonLucide, PauseCircle, PlayCircle } from 'lucide-react';
 import { useEffect, useState, useCallback, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { TeamSettings } from '@/components/team/TeamSettings';
 import { useAuth } from '@/lib/hooks/useAuth';
 import type { Role } from '@/lib/auth/roles';
@@ -39,6 +39,7 @@ function SettingsContent() {
   const [mounted, setMounted] = useState(false);
   const { user } = useAuth();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const tabParam = searchParams.get('tab');
 
   useEffect(() => {
@@ -56,6 +57,13 @@ function SettingsContent() {
 
   const currentUserRole = (user?.role as Role) ?? 'member';
   const [activeSection, setActiveSection] = useState<'appearance' | 'system' | 'audit' | 'webhooks' | 'cron' | 'team' | 'demo'>('appearance');
+
+  // Tab切换时同步URL + 滚动到顶部
+  const handleTabChange = (section: typeof activeSection) => {
+    setActiveSection(section);
+    router.replace(`/settings?tab=${section}`, { scroll: true });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   if (!mounted) {
     return (
@@ -99,7 +107,7 @@ function SettingsContent() {
             return (
               <button
                 key={s.id}
-                onClick={() => setActiveSection(s.id as 'appearance' | 'system' | 'audit' | 'webhooks' | 'cron' | 'team' | 'demo')}
+                onClick={() => handleTabChange(s.id as typeof activeSection)}
                 className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-left ${
                   activeSection === s.id
                     ? 'bg-blue-50 text-blue-700 font-medium dark:bg-blue-900/30 dark:text-blue-300'
