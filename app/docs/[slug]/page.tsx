@@ -26,7 +26,7 @@ export default async function DocPage({ params }: PageProps) {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="page-container">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-6">
         <Link href="/docs" className="hover:text-gray-900 dark:hover:text-white dark:text-white transition-colors">

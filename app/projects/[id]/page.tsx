@@ -310,7 +310,7 @@ export default function ProjectDetailPage({ params }: Props) {
 
   if (isLoading) {
     return (
-      <div className="p-4 sm:p-6">
+      <div className="page-container">
         <div className="text-center py-12 text-gray-500">加载中...</div>
       </div>
     );
@@ -318,7 +318,7 @@ export default function ProjectDetailPage({ params }: Props) {
 
   if (error || !data || !project) {
     return (
-      <div className="p-4 sm:p-6">
+      <div className="page-container">
         <ErrorAlert error={error} message="加载项目详情失败" showRetry onRetry={() => window.location.reload()} />
         <div className="mt-4">
           <Link href="/projects" className="text-blue-600 hover:underline text-sm">
@@ -330,7 +330,7 @@ export default function ProjectDetailPage({ params }: Props) {
   }
 
   return (
-    <div className="p-4 sm:p-6">
+    <div className="page-container">
       {/* 顶部导航 */}
       <div className="mb-6">
         <Link href="/projects" className="text-blue-600 hover:underline text-sm">
