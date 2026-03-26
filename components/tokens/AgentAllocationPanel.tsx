@@ -101,7 +101,7 @@ export function AgentAllocationPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <h2 className="text-lg font-semibold">Agent Token 分配</h2>
           <p className="text-sm text-muted-foreground">
@@ -127,14 +127,14 @@ export function AgentAllocationPanel() {
               <Card key={agent.name}>
                 <CardContent className="p-4">
                   <div
-                    className="flex items-center gap-3 cursor-pointer"
+                    className="flex flex-col sm:flex-row sm:items-center gap-3 cursor-pointer"
                     onClick={() =>
                       setExpandedAgent(isExpanded ? null : agent.name)
                     }
                   >
                     {/* Agent name */}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium">{agent.name}</span>
                         <Badge
                           variant={agent.status === "online" ? "default" : "secondary"}
@@ -142,14 +142,17 @@ export function AgentAllocationPanel() {
                         >
                           {agent.status || "离线"}
                         </Badge>
+                        <span className="text-xs text-muted-foreground sm:hidden">
+                          {tokens.length} 个 Token
+                        </span>
                       </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
+                      <div className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
                         已分配 {tokens.length} 个 Token
                       </div>
                     </div>
 
                     {/* Bound tokens preview */}
-                    <div className="flex gap-1 flex-wrap justify-end">
+                    <div className="flex gap-1 flex-wrap justify-end sm:justify-start">
                       {tokens.slice(0, 3).map((token: { id: string; provider: string; alias: string }) => (
                         <span
                           key={token.id}
@@ -165,7 +168,7 @@ export function AgentAllocationPanel() {
                       )}
                     </div>
 
-                    <Settings className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <Settings className="w-4 h-4 text-gray-400 flex-shrink-0 hidden sm:block" />
                   </div>
 
                   {/* Expanded binding list */}
@@ -192,7 +195,7 @@ export function AgentAllocationPanel() {
                                 </span>
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   {token && (
                                     <span
                                       className={`text-xs px-1.5 py-0.5 rounded font-medium ${PROVIDER_COLORS[token.provider] || PROVIDER_COLORS.custom}`}

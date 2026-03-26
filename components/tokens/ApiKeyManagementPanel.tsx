@@ -113,7 +113,7 @@ function TokenRow({
       </td>
 
       {/* Monthly Usage / Budget */}
-      <td className="px-4 py-3 text-sm">
+      <td className="px-4 py-3 text-sm hidden sm:table-cell">
         {token.monthlyBudget ? (
           <span>
             ${token.monthlyUsage.toFixed(2)}{" "}
@@ -125,12 +125,12 @@ function TokenRow({
       </td>
 
       {/* Call Count */}
-      <td className="px-4 py-3 text-sm text-muted-foreground">
+      <td className="px-4 py-3 text-sm text-muted-foreground hidden sm:table-cell">
         {token.callCount > 0 ? token.callCount.toLocaleString() : "—"}
       </td>
 
       {/* Last Used */}
-      <td className="px-4 py-3 text-sm text-muted-foreground">
+      <td className="px-4 py-3 text-sm text-muted-foreground hidden md:table-cell">
         {token.lastUsedAt
           ? new Date(token.lastUsedAt).toLocaleDateString("zh-CN")
           : "—"}
@@ -484,12 +484,12 @@ export function ApiKeyManagementPanel() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 flex-wrap">
+      <div className="flex gap-3 flex-wrap sm:flex-nowrap">
         <Input
           placeholder="搜索 Token 名称..."
           value={filters.search}
           onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-          className="w-48"
+          className="w-full sm:w-48"
         />
         <select
           value={filters.provider}
@@ -528,14 +528,14 @@ export function ApiKeyManagementPanel() {
       ) : (
         <Card>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="border-b bg-gray-50/50">
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Token</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">状态</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">月度用量</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">调用次数</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">最后使用</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">月度用量</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">调用次数</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">最后使用</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">操作</th>
                 </tr>
               </thead>
