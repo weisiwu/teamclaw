@@ -386,22 +386,25 @@ export default function TokensPage() {
     else setMainTab("usage");
   }, []);
 
-  // 切换 Tab 时使用 router.push（不触发页面刷新）
+  // 切换 Tab 时读取当前 window.location.search（避免 useSearchParams 提升到 TokensPage）
   const handleMainTabChange = (tab: MainTab) => {
     setMainTab(tab);
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", tab);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    // Use window.location to avoid stale closure — read at click time, not render time
+    const currentParams = new URLSearchParams(window.location.search);
+    currentParams.set("tab", tab);
+    const query = currentParams.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? "?" + query : ""}`);
   };
 
   // 初始化时从 URL 恢复 tab 状态
   useEffect(() => {
-    const tabParam = searchParams.get("tab");
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get("tab");
     if (tabParam && ["usage", "agent", "apikey"].includes(tabParam)) {
       setMainTab(tabParam as MainTab);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, []);
 
   return (
     <Suspense fallback={<TokensLoading />}>
