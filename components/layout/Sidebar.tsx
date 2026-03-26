@@ -12,7 +12,11 @@ import {
   Bot,
   ChevronLeft,
   ChevronRight,
+  Sun,
+  Moon,
+  Monitor,
 } from "lucide-react";
+import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 
 const menuItems = [
@@ -33,10 +37,20 @@ interface SidebarProps {
 
 export function Sidebar({ onNavigate, collapsed = false, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
+  const { theme, setTheme } = useTheme();
 
   const handleLinkClick = () => {
     if (onNavigate) onNavigate();
   };
+
+  const cycleTheme = () => {
+    if (theme === "light") setTheme("dark");
+    else if (theme === "dark") setTheme("system");
+    else setTheme("light");
+  };
+
+  const ThemeIcon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
+  const themeLabel = theme === "dark" ? "深色" : theme === "light" ? "浅色" : "跟随系统";
 
   return (
     <aside
@@ -92,6 +106,29 @@ export function Sidebar({ onNavigate, collapsed = false, onToggleCollapse }: Sid
         })}
       </nav>
       
+      {/* Theme toggle button */}
+      <div className={cn(
+        "p-2 sm:p-3 border-t border-gray-200 dark:border-slate-700/60",
+        collapsed && "flex justify-center"
+      )}>
+        <button
+          onClick={cycleTheme}
+          className={cn(
+            "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium",
+            "text-gray-600 dark:text-slate-300",
+            "hover:bg-gray-100 dark:hover:bg-slate-700/70",
+            "transition-all duration-200",
+            "group"
+          )}
+          title={`当前主题: ${themeLabel}，点击切换`}
+        >
+          <ThemeIcon className="w-4.5 h-4.5 flex-shrink-0 text-gray-500 dark:text-slate-400 group-hover:text-blue-500 dark:group-hover:text-blue-300 transition-colors" />
+          <span className={cn("sidebar-label", collapsed && "opacity-0 w-0 overflow-hidden")}>
+            {themeLabel}主题
+          </span>
+        </button>
+      </div>
+
       {/* Collapse toggle button */}
       {onToggleCollapse && (
         <div className={cn(
