@@ -84,10 +84,14 @@ export async function apiGet<T = unknown>(
     });
 
     const parsed = await safeParseResponse(res);
-    if (!parsed.ok) return { success: false, error: parsed.error };
+    if (!parsed.ok) {
+      if (res.status === 401) { handleUnauthorized(); }
+      return { success: false, error: parsed.error };
+    }
 
     const json = parsed.data as Record<string, unknown>;
     if (json.code !== 200 && json.code !== 0 && json.code !== undefined) {
+      if (res.status === 401) { handleUnauthorized(); }
       return {
         success: false,
         error: {
@@ -134,10 +138,14 @@ export async function apiPost<T = unknown>(
     });
 
     const parsed = await safeParseResponse(res);
-    if (!parsed.ok) return { success: false, error: parsed.error };
+    if (!parsed.ok) {
+      if (res.status === 401) { handleUnauthorized(); }
+      return { success: false, error: parsed.error };
+    }
 
     const json = parsed.data as Record<string, unknown>;
     if (json.code !== 200 && json.code !== 0 && json.code !== undefined) {
+      if (res.status === 401) { handleUnauthorized(); }
       return {
         success: false,
         error: {
@@ -178,10 +186,14 @@ export async function apiDelete<T = unknown>(
     });
 
     const parsed = await safeParseResponse(res);
-    if (!parsed.ok) return { success: false, error: parsed.error };
+    if (!parsed.ok) {
+      if (res.status === 401) { handleUnauthorized(); }
+      return { success: false, error: parsed.error };
+    }
 
     const json = parsed.data as Record<string, unknown>;
     if (json.code !== 200 && json.code !== 0 && json.code !== undefined) {
+      if (res.status === 401) { handleUnauthorized(); }
       return {
         success: false,
         error: {
@@ -228,10 +240,14 @@ export async function apiPut<T = unknown>(
     });
 
     const parsed = await safeParseResponse(res);
-    if (!parsed.ok) return { success: false, error: parsed.error };
+    if (!parsed.ok) {
+      if (res.status === 401) { handleUnauthorized(); }
+      return { success: false, error: parsed.error };
+    }
 
     const json = parsed.data as Record<string, unknown>;
     if (json.code !== 200 && json.code !== 0 && json.code !== undefined) {
+      if (res.status === 401) { handleUnauthorized(); }
       return {
         success: false,
         error: {
@@ -275,4 +291,13 @@ export function getFriendlyErrorMessage(error: ApiError): string {
   if (error.code === 500) return "服务器内部错误，请稍后重试";
   if (error.code === 503) return "服务暂时不可用，请稍后重试";
   return error.message || "请求失败，请稍后重试";
+}
+
+/**
+ * 处理 401 认证失效，自动跳转登录页
+ */
+export function handleUnauthorized(): void {
+  if (typeof window !== "undefined") {
+    window.location.href = "/signin";
+  }
 }

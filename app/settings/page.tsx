@@ -6,6 +6,8 @@ import { useEffect, useState } from 'react';
 import { TeamSettings } from '@/components/team/TeamSettings';
 import { useAuth } from '@/lib/hooks/useAuth';
 import type { Role } from '@/lib/auth/roles';
+import { apiGet, apiPost } from '@/lib/api-safe-fetch';
+import { useApiError } from '@/hooks/useApiError';
 
 interface DemoStatus {
   seeded: boolean;
@@ -173,17 +175,19 @@ function DemoDataManagement() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<'seed' | 'clear' | null>(null);
   const [actionResult, setActionResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const { showError } = useApiError();
 
   const fetchStatus = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/v1/admin/demo/status', { credentials: 'include' });
-      const json = await res.json();
-      if (json.code === 200) {
-        setStatus(json.data);
+      const result = await apiGet<DemoStatus>('/api/v1/admin/demo/status');
+      if (result.success && result.data) {
+        setStatus(result.data);
+      } else if (result.error) {
+        showError(result.error, '获取 Demo 状态失败');
       }
     } catch (err) {
-      console.error('Failed to fetch demo status:', err);
+      showError(err, '获取 Demo 状态失败');
     } finally {
       setLoading(false);
     }
@@ -191,25 +195,24 @@ function DemoDataManagement() {
 
   useEffect(() => {
     fetchStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSeed = async () => {
     setActionLoading('seed');
     setActionResult(null);
     try {
-      const res = await fetch('/api/v1/admin/demo/seed', {
-        method: 'POST',
-        credentials: 'include',
-      });
-      const json = await res.json();
-      if (json.code === 200) {
-        setActionResult({ type: 'success', message: json.data.seeded ? 'Demo 数据加载成功！' : 'Demo 数据已存在，无需重复加载。' });
+      const result = await apiPost<{ seeded: boolean }>('/api/v1/admin/demo/seed', {});
+      if (result.success && result.data) {
+        setActionResult({ type: 'success', message: result.data.seeded ? 'Demo 数据加载成功！' : 'Demo 数据已存在，无需重复加载。' });
         await fetchStatus();
-      } else {
-        setActionResult({ type: 'error', message: json.message || '加载失败' });
+      } else if (result.error) {
+        showError(result.error, '加载 Demo 数据失败');
+        setActionResult({ type: 'error', message: '加载失败' });
       }
     } catch (err) {
-      setActionResult({ type: 'error', message: (err as Error).message });
+      showError(err, '加载 Demo 数据失败');
+      setActionResult({ type: 'error', message: '加载失败' });
     } finally {
       setActionLoading(null);
     }
@@ -220,19 +223,17 @@ function DemoDataManagement() {
     setActionLoading('clear');
     setActionResult(null);
     try {
-      const res = await fetch('/api/v1/admin/demo/clear', {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      const json = await res.json();
-      if (json.code === 200) {
+      const result = await apiPost('/api/v1/admin/demo/clear', {});
+      if (result.success) {
         setActionResult({ type: 'success', message: 'Demo 数据已清除！' });
         await fetchStatus();
-      } else {
-        setActionResult({ type: 'error', message: json.message || '清除失败' });
+      } else if (result.error) {
+        showError(result.error, '清除 Demo 数据失败');
+        setActionResult({ type: 'error', message: '清除失败' });
       }
     } catch (err) {
-      setActionResult({ type: 'error', message: (err as Error).message });
+      showError(err, '清除 Demo 数据失败');
+      setActionResult({ type: 'error', message: '清除失败' });
     } finally {
       setActionLoading(null);
     }
