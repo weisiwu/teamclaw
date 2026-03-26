@@ -21,6 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
+import { apiGet, getFriendlyErrorMessage } from '@/lib/api-safe-fetch';
 
 // ============ Status Labels ============
 
@@ -184,16 +185,15 @@ function TraceDetail({ traceId }: { traceId: string }) {
 
   const fetchTrace = async () => {
     try {
-      const res = await fetch(`/api/v1/traces/${traceId}`);
-      const data = await res.json();
-      if (data.success) {
-        setEvents(data.data.events);
+      const result = await apiGet<{ events: TraceEvent[] }>(`/api/v1/traces/${traceId}`);
+      if (result.success && result.data) {
+        setEvents(result.data.events || []);
         setError(null);
       } else {
-        setError(data.message || 'Failed to load trace');
+        setError(result.error ? getFriendlyErrorMessage(result.error) : 'Failed to load trace');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load trace');
+      setError(getFriendlyErrorMessage(err as Parameters<typeof getFriendlyErrorMessage>[0]));
     } finally {
       setLoading(false);
     }
@@ -306,12 +306,15 @@ export default function MonitorPage() {
 
   const fetchHealth = async () => {
     try {
-      const res = await fetch('/api/v1/health');
-      const data = await res.json();
-      setHealth(data.data);
-      setError(null);
+      const result = await apiGet<HealthData>('/api/v1/health');
+      if (result.success && result.data) {
+        setHealth(result.data);
+        setError(null);
+      } else {
+        setError(result.error ? getFriendlyErrorMessage(result.error) : 'Failed to fetch health');
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch health');
+      setError(getFriendlyErrorMessage(err as Parameters<typeof getFriendlyErrorMessage>[0]));
     } finally {
       setLoading(false);
     }
@@ -319,11 +322,11 @@ export default function MonitorPage() {
 
   const fetchTraces = async () => {
     try {
-      const res = await fetch('/api/v1/traces/recent?limit=20');
-      const data = await res.json();
-      if (data.success) {
-        setTraces(data.data.traces);
+      const result = await apiGet<{ traces: TraceInfo[] }>('/api/v1/traces/recent?limit=20');
+      if (result.success && result.data) {
+        setTraces(result.data.traces || []);
       }
+      // 追踪 API 可能不存在，降级处理时不显示错误
     } catch {
       // 追踪 API 可能不存在，降级处理
     }
