@@ -170,7 +170,7 @@ body {
 
   /* 响应式页面容器 */
   .page-container {
-    @apply p-4 sm:p-6 space-y-6;
+    @apply max-w-7xl mx-auto p-4 sm:p-6 space-y-6;
   }
 
   /* ===== 整体风格统一 - 语义化设计系统 ===== */

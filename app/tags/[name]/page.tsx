@@ -117,26 +117,30 @@ export default function TagDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-        <span className="ml-2 text-gray-500">加载中...</span>
+      <div className="page-container">
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+          <span className="ml-2 text-gray-500">加载中...</span>
+        </div>
       </div>
     );
   }
 
   if (!tag) {
     return (
-      <div className="p-6 text-center py-20">
-        <p className="text-gray-500 mb-4">Tag 不存在</p>
-        <Link href="/tags">
-          <Button variant="outline">返回列表</Button>
-        </Link>
+      <div className="page-container">
+        <div className="text-center py-20">
+          <p className="text-gray-500 mb-4">Tag 不存在</p>
+          <Link href="/tags">
+            <Button variant="outline">返回列表</Button>
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="page-container">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <Link href="/tags">
