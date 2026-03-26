@@ -23,6 +23,8 @@ import {
   CheckCircle2,
   XCircle,
 } from 'lucide-react';
+import { apiGet } from '@/lib/api-safe-fetch';
+import { useApiError } from '@/hooks/useApiError';
 
 const ACTION_LABELS: Record<string, string> = {
   'user.create': '用户创建', 'user.delete': '用户删除', 'user.update': '用户更新',
@@ -87,6 +89,7 @@ export default function AuditLogPage() {
   const [toastMsg, setToastMsg] = useState("");
   const [toastType, setToastType] = useState<"success" | "error">("success");
   const [toastVisible, setToastVisible] = useState(false);
+  const { showError } = useApiError();
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToastMsg(msg);
@@ -112,13 +115,17 @@ export default function AuditLogPage() {
       if (endDate) params.set('endDate', endDate);
       params.set('limit', String(limit));
       params.set('offset', String(offset));
-      const res = await fetch(`/api/v1/admin/audit-logs?${params}`);
-      const data = await res.json();
-      setLogs(data.data?.list || []);
-      setTotal(data.data?.total || 0);
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
-  }, [action, actor, keyword, startDate, endDate, limit, offset]);
+      const result = await apiGet<{ list: AuditLog[]; total: number }>(`/api/v1/admin/audit-logs?${params}`);
+      if (result.success && result.data) {
+        setLogs(result.data.list || []);
+        setTotal(result.data.total || 0);
+      } else {
+        showError(result.error, '获取审计日志失败');
+      }
+    } catch (e) {
+      showError(e, '获取审计日志失败');
+    } finally { setLoading(false); }
+  }, [action, actor, keyword, startDate, endDate, limit, offset, showError]);
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
@@ -154,7 +161,10 @@ export default function AuditLogPage() {
       a.download = `audit-logs-${Date.now()}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch { showToast('导出失败', 'error'); }
+      showToast('导出成功', 'success');
+    } catch (e) {
+      showError(e, '导出失败');
+    }
   };
 
   const pageLabel = () => {

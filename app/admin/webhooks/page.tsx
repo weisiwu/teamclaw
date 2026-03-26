@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import type { Webhook, WebhookHistory } from '../../../lib/api/webhooks';
 import { PermissionGuard } from '@/components/layout/PermissionGuard';
 import { Trash2, AlertTriangle } from 'lucide-react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
+import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api-safe-fetch';
+import { useApiError } from '@/hooks/useApiError';
 
 const EVENT_OPTIONS = [
   'version.created', 'version.deleted', 'version.bumped',
@@ -17,6 +19,7 @@ const EVENT_OPTIONS = [
 
 export default function WebhooksPage() {
   const { success, error: toastError } = useToast();
+  const { showError } = useApiError();
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -29,81 +32,97 @@ export default function WebhooksPage() {
   // Form state
   const [form, setForm] = useState({ name: '', url: '', secret: '', events: [] as string[] });
 
-  const fetchWebhooks = async () => {
+  const fetchWebhooks = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/admin/webhooks');
-      const data = await res.json();
-      setWebhooks(data.data?.list || []);
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
-  };
+      const result = await apiGet<{ list: Webhook[] }>('/api/v1/admin/webhooks');
+      if (result.success && result.data) {
+        setWebhooks(result.data.list || []);
+      } else {
+        showError(result.error, '获取 Webhook 列表失败');
+      }
+    } catch (e) {
+      showError(e, '获取 Webhook 列表失败');
+    } finally { setLoading(false); }
+  }, [showError]);
 
-  useEffect(() => { fetchWebhooks(); }, []);
+  useEffect(() => { fetchWebhooks(); }, [fetchWebhooks]);
 
   const createWebhook = async () => {
     if (!form.name || !form.url || form.events.length === 0) { toastError('请填写完整'); return; }
     try {
-      const res = await fetch('/api/v1/admin/webhooks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setWebhooks(prev => [data.data, ...prev]);
+      const result = await apiPost<Webhook>('/api/v1/admin/webhooks', form);
+      if (result.success && result.data) {
+        setWebhooks(prev => [result.data!, ...prev]);
         setShowForm(false);
         setForm({ name: '', url: '', secret: '', events: [] });
         success('Webhook 创建成功');
+      } else {
+        showError(result.error, '创建失败');
       }
-    } catch { toastError('创建失败'); }
+    } catch (e) {
+      showError(e, '创建失败');
+    }
   };
 
   const updateWebhook = async (id: string) => {
     try {
-      const res = await fetch(`/api/v1/admin/webhooks/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setWebhooks(prev => prev.map(w => w.id === id ? data.data : w));
+      const result = await apiPut<Webhook>(`/api/v1/admin/webhooks/${id}`, form);
+      if (result.success && result.data) {
+        setWebhooks(prev => prev.map(w => w.id === id ? result.data! : w));
         setEditingId(null);
         setForm({ name: '', url: '', secret: '', events: [] });
         success('Webhook 更新成功');
+      } else {
+        showError(result.error, '更新失败');
       }
-    } catch { toastError('更新失败'); }
+    } catch (e) {
+      showError(e, '更新失败');
+    }
   };
 
   const deleteWebhook = async (id: string) => {
     try {
-      const res = await fetch(`/api/v1/admin/webhooks/${id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.success) {
+      const result = await apiDelete<{ id: string }>(`/api/v1/admin/webhooks/${id}`);
+      if (result.success) {
         setWebhooks(prev => prev.filter(w => w.id !== id));
         success('Webhook 已删除');
+      } else {
+        showError(result.error, '删除失败');
       }
-    } catch { toastError('删除失败'); }
+    } catch (e) {
+      showError(e, '删除失败');
+    }
   };
 
   const testWebhook = async (id: string) => {
     setTesting(id);
     setTestResult(prev => ({ ...prev, [id]: null }));
     try {
-      const res = await fetch(`/api/v1/admin/webhooks/${id}/test`, { method: 'POST' });
-      const data = await res.json();
-      setTestResult(prev => ({ ...prev, [id]: data.data }));
-    } catch { setTestResult(prev => ({ ...prev, [id]: { success: false, error: '请求失败' } })); }
-    finally { setTesting(null); }
+      const result = await apiPost<{ success: boolean; statusCode?: number; error?: string }>(`/api/v1/admin/webhooks/${id}/test`, {});
+      if (result.success && result.data) {
+        setTestResult(prev => ({ ...prev, [id]: result.data }));
+      } else {
+        showError(result.error, '测试失败');
+        setTestResult(prev => ({ ...prev, [id]: { success: false, error: result.error?.message || '测试失败' } }));
+      }
+    } catch (e) {
+      showError(e, '测试失败');
+      setTestResult(prev => ({ ...prev, [id]: { success: false, error: '请求失败' } }));
+    } finally { setTesting(null); }
   };
 
   const loadHistory = async (id: string) => {
     if (historyMap[id]) return;
     try {
-      const res = await fetch(`/api/v1/admin/webhooks/${id}/history`);
-      const data = await res.json();
-      setHistoryMap(prev => ({ ...prev, [id]: data.data?.list || [] }));
-    } catch { /* ignore */ }
+      const result = await apiGet<{ list: WebhookHistory[] }>(`/api/v1/admin/webhooks/${id}/history`);
+      if (result.success && result.data) {
+        setHistoryMap(prev => ({ ...prev, [id]: result.data!.list || [] }));
+      } else {
+        showError(result.error, '加载历史记录失败');
+      }
+    } catch (e) {
+      showError(e, '加载历史记录失败');
+    }
   };
 
   const startEdit = (wh: Webhook) => {
@@ -115,14 +134,15 @@ export default function WebhooksPage() {
   const toggleStatus = async (wh: Webhook) => {
     const newStatus = wh.status === 'active' ? 'paused' : 'active';
     try {
-      const res = await fetch(`/api/v1/admin/webhooks/${wh.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      const data = await res.json();
-      if (data.success) setWebhooks(prev => prev.map(w => w.id === wh.id ? data.data : w));
-    } catch { /* ignore */ }
+      const result = await apiPut<Webhook>(`/api/v1/admin/webhooks/${wh.id}`, { status: newStatus });
+      if (result.success && result.data) {
+        setWebhooks(prev => prev.map(w => w.id === wh.id ? result.data! : w));
+      } else {
+        showError(result.error, '切换状态失败');
+      }
+    } catch (e) {
+      showError(e, '切换状态失败');
+    }
   };
 
   const toggleEvent = (event: string) => {
