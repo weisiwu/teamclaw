@@ -348,3 +348,44 @@ a, button, input, select, textarea,
 .cn-toast {
   /* sonner toast class */
 }
+
+/* ============================================================
+   Sonner (shadcn toast) dark mode overrides
+   ============================================================ */
+/* Dark mode CSS vars for Sonner toaster group */
+.dark .toaster group {
+  --toast-bg: var(--card);
+  --toast-text: var(--card-foreground);
+  --toast-border: var(--border);
+}
+
+/* Sonner dark mode: toast backgrounds */
+.dark [data-sonner-toaster] [data-sonner-toast] {
+  background: var(--card) !important;
+  border-color: var(--border) !important;
+  color: var(--card-foreground) !important;
+}
+
+/* Success: green left border accent */
+.dark [data-sonner-toaster] [data-sonner-toast][data-type="success"],
+[data-sonner-toaster] [data-sonner-toast][data-type="success"] {
+  border-left: 3px solid #22c55e !important;
+}
+
+/* Error/destructive: red left border accent */
+.dark [data-sonner-toaster] [data-sonner-toast][data-type="error"],
+[data-sonner-toaster] [data-sonner-toast][data-type="error"] {
+  border-left: 3px solid #ef4444 !important;
+}
+
+/* Warning: amber left border accent */
+.dark [data-sonner-toaster] [data-sonner-toast][data-type="warning"],
+[data-sonner-toaster] [data-sonner-toast][data-type="warning"] {
+  border-left: 3px solid #f59e0b !important;
+}
+
+/* Info: blue left border accent */
+.dark [data-sonner-toaster] [data-sonner-toast][data-type="info"],
+[data-sonner-toaster] [data-sonner-toast][data-type="info"] {
+  border-left: 3px solid #3b82f6 !important;
+}
