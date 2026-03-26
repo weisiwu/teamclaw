@@ -5,8 +5,6 @@ import { usePathname } from "next/navigation";
 import { 
   Layers, 
   GitBranch, 
-  Zap, 
-  FileText, 
   Key, 
   Users,
   Settings,
@@ -22,8 +20,6 @@ const menuItems = [
   { href: "/tasks", label: "任务管理", icon: Layers },
   { href: "/versions", label: "版本管理", icon: GitBranch },
   { href: "/agent-team", label: "Agent 团队", icon: Bot },
-  { href: "/capabilities", label: "Tools & Skills", icon: Zap },
-  { href: "/docs", label: "文档中心", icon: FileText },
   { href: "/tokens", label: "Token 管理", icon: Key },
   { href: "/members", label: "成员管理", icon: Users },
   { href: "/settings", label: "设置", icon: Settings },
