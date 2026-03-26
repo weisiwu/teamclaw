@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ErrorAlert } from '@/components/ui/ErrorAlert';
 import { Badge } from '@/components/ui/badge';
 import { LegacySelect as Select } from '@/components/ui/select';
 import { PriorityBadge, StatusBadge, RoleBadge } from '@/components/messages/PriorityBadge';
@@ -109,16 +110,7 @@ function QueuePageContent() {
             <p className="text-gray-500 dark:text-gray-400 mt-1">实时消息处理状态</p>
           </div>
         </div>
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="py-8 text-center text-red-600">
-            <AlertTriangle className="w-8 h-8 mx-auto mb-2" />
-            <p>加载失败: {String(error)}</p>
-            <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-4">
-              <RefreshCw className="w-4 h-4 mr-2" />
-              重试
-            </Button>
-          </CardContent>
-        </Card>
+        <ErrorAlert error={error} showRetry onRetry={refetch} />
       </div>
     );
   }

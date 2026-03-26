@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
 import { 
   Plus, 
   Search, 
@@ -1117,20 +1118,7 @@ function TasksContent() {
             {isLoading ? (
               <Card><CardContent className="page-loading"><Loader2 className="w-5 h-5 animate-spin" /><span>加载中...</span></CardContent></Card>
             ) : error ? (
-              <Card><CardContent className="py-6">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-red-500 text-sm">
-                    <p className="font-medium">加载失败</p>
-                    <p className="text-xs opacity-75 mt-0.5">{(error as Error).message}</p>
-                  </div>
-                  <button
-                    onClick={() => refetch()}
-                    className="px-3 py-1.5 bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 text-xs font-medium rounded transition-colors shrink-0"
-                  >
-                    重试
-                  </button>
-                </div>
-              </CardContent></Card>
+              <ErrorAlert error={error} showRetry onRetry={refetch} />
             ) : data?.data.length === 0 ? (
               <EmptyState
                 icon={Target}
@@ -1219,22 +1207,7 @@ function TasksContent() {
               </CardContent>
             </Card>
           ) : error ? (
-            <Card>
-              <CardContent className="py-6">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-red-500 text-sm">
-                    <p className="font-medium">加载失败</p>
-                    <p className="text-xs opacity-75 mt-0.5">{(error as Error).message}</p>
-                  </div>
-                  <button
-                    onClick={() => refetch()}
-                    className="px-3 py-1.5 bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 text-xs font-medium rounded transition-colors shrink-0"
-                  >
-                    重试
-                  </button>
-                </div>
-              </CardContent>
-            </Card>
+            <ErrorAlert error={error} showRetry onRetry={refetch} />
           ) : data?.data.length === 0 ? (
             <Card>
               <EmptyState
