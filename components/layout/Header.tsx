@@ -10,7 +10,7 @@ interface HeaderProps {
 
 export function Header({ onMenuClick, showBreadcrumb = true }: HeaderProps) {
   return (
-    <header className="h-14 sm:h-16 border-b bg-white dark:bg-slate-800 dark:border-slate-700 flex items-center justify-between px-4 sm:px-6">
+    <header className="h-14 sm:h-16 border-b bg-white/80 dark:bg-slate-900/80 dark:border-slate-700/60 backdrop-blur-md flex items-center justify-between px-4 sm:px-6">
       <div className="flex items-center gap-3 sm:gap-4">
         <button
           onClick={onMenuClick}
@@ -19,7 +19,7 @@ export function Header({ onMenuClick, showBreadcrumb = true }: HeaderProps) {
         >
           <Menu className="w-5 h-5 text-gray-700 dark:text-slate-200" />
         </button>
-        <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">TeamClaw</h1>
+        <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">TeamClaw</h1>
         {showBreadcrumb && (
           <div className="hidden md:block ml-4">
             <Breadcrumb />

@@ -16,7 +16,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
+    <div className="min-h-screen bg-gray-50/80 dark:bg-slate-900/80 backdrop-blur-sm">
       <Header onMenuClick={() => setSidebarOpen(true)} />
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
